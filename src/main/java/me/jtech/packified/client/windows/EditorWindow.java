@@ -83,11 +83,40 @@ public class EditorWindow {
                 ImGui.endMenuBar();
             }
 
+            ImGui.beginChild("Toolbar", ImGui.getWindowWidth(), 40, false, ImGuiWindowFlags.HorizontalScrollbar);
+            ImGui.imageButton(ImGuiImplementation.loadTexture("textures/ui/neu_save.png"), 32, 32);
+            if (ImGui.isItemClicked()) {
+                // Logic to save the current file
+                if (currentFile != null) {
+                    FileUtils.saveFile(currentFile.getIdentifier(), FileUtils.getFileExtension(currentFile.getFileName()), currentFile.getTextEditorContent().get());
+                }
+            }
+            ImGui.sameLine();
+            ImGui.imageButton(ImGuiImplementation.loadTexture("textures/ui/neu_save-all.png"), 32, 32);
+            if (ImGui.isItemClicked()) {
+                // Logic to save all files
+                FileUtils.saveAllFiles();
+            }
+            ImGui.sameLine();
+            ImGui.imageButton(ImGuiImplementation.loadTexture("textures/ui/neu_reload.png"), 32, 32);
+            if (ImGui.isItemClicked()) {
+                // Logic to save all files
+                PackUtils.reloadPack();
+            }
+
+            ImGui.endChild();
+
             if (ImGui.beginTabBar("FileEditorTabs", ImGuiTabBarFlags.Reorderable | ImGuiTabBarFlags.AutoSelectNewTabs | ImGuiTabBarFlags.TabListPopupButton)) {
                 // Example of adding tabs dynamically
                 for (int i = 0; i < openFiles.size(); i++) {
                     if (ImGui.beginTabItem(openFiles.get(i).getFileName() + "##" + i, ImGuiTabItemFlags.None | (openFiles.get(i).isModified() ? ImGuiTabItemFlags.UnsavedDocument : 0))) {
                         if (openFiles.get(i).isModified()) {
+                            for (int j = 0; j < changedAssets.size(); j++) {
+                                if (changedAssets.get(j).getIdentifier().equals(openFiles.get(i).getIdentifier())) {
+                                    changedAssets.remove(j);
+                                    break;
+                                }
+                            }
                             changedAssets.add(openFiles.get(i));
                         }
                         currentFile = openFiles.get(i);

@@ -8,6 +8,7 @@ import me.jtech.packified.client.PackifiedClient;
 import me.jtech.packified.client.imgui.ImGuiImplementation;
 import me.jtech.packified.client.util.FileUtils;
 import me.jtech.packified.client.util.PackFile;
+import me.jtech.packified.client.util.PackUtils;
 import me.jtech.packified.packets.C2SRequestFullPack;
 import me.jtech.packified.packets.C2SSyncPackChanges;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
@@ -22,15 +23,13 @@ public class MultiplayerWindow {
         // Render the multiplayer window
         if (ImGui.begin("Multiplayer")) {
             if (ImGui.imageButton(ImGuiImplementation.loadTexture("textures/ui/neu_sync.png"), 14, 14)) {
+
+            }
+            if (ImGui.isItemClicked()) {
                 // Sync the pack to all the server players
+                System.out.println("Syncing pack to all players");
                 ResourcePackProfile pack = PackifiedClient.currentPack;
-                List<PackFile> changedFiles = EditorWindow.changedAssets;
-                List<SyncPacketData.AssetData> assets = new ArrayList<>();
-                for (PackFile file : changedFiles) {
-                    assets.add(new SyncPacketData.AssetData(file.getIdentifier(), file.getExtension().getExtension(), file.getTextContent())); //TODO make this work for all file types
-                }
-                SyncPacketData data = new SyncPacketData(pack.getDisplayName().getString(), assets, FileUtils.getMCMetaContent(pack));
-                ClientPlayNetworking.send(new C2SSyncPackChanges(data));
+                PackUtils.sendPackChangesToPlayers(pack);
             }
             if (ImGui.isItemHovered()) {
                 ImGui.setTooltip("Sync your pack to all the server players");

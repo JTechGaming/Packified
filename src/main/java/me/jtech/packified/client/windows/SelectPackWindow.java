@@ -14,11 +14,16 @@ public class SelectPackWindow {
         if (!open) {
             return;
         }
-        for (int i = 0; i < PackUtils.refresh().size(); i++) {
-            if (ImGui.menuItem(PackUtils.refresh().get(i).getDisplayName().getString())) {
-                PackifiedClient.currentPack = PackUtils.refresh().get(i);
-                open = false;
+        if (ImGui.begin("Select Pack")) {
+            for (int i = 0; i < PackUtils.refresh().size(); i++) {
+                if (ImGui.menuItem(PackUtils.refresh().get(i).getDisplayName().getString())) {
+                    EditorWindow.openFiles.clear();
+                    PackifiedClient.currentPack = PackUtils.refresh().get(i);
+                    PackUtils.checkPackType(PackUtils.refresh().get(i));
+                    open = false;
+                }
             }
         }
+        ImGui.end();
     }
 }

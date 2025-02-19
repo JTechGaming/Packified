@@ -24,7 +24,7 @@ public class Packified implements ModInitializer {
 
     public static List<UUID> moddedPlayers = new ArrayList<>();
 
-    public static boolean debugMode = true;
+    public static boolean debugMode = false;
 
     @Override
     public void onInitialize() {
@@ -43,6 +43,10 @@ public class Packified implements ModInitializer {
             // Send the pack changes to all players
             List<ServerPlayerEntity> players = context.server().getPlayerManager().getPlayerList();
             for (ServerPlayerEntity player : players) {
+                if (payload.markedPlayers().contains(player.getUuid())) {
+                    ServerPlayNetworking.send(context.player(), new S2CRequestFullPack(payload.packetData().getPackName(), player.getUuid()));
+                    continue;
+                }
                 ServerPlayNetworking.send(player, new S2CSyncPackChanges(payload.packetData(), context.player().getUuid()));
             }
         });
@@ -68,17 +72,24 @@ public class Packified implements ModInitializer {
         ServerPlayNetworking.registerGlobalReceiver(C2SHasMod.ID, (payload, context) -> {
             // Returns if the player has the mod installed
             moddedPlayers.add(context.player().getUuid());
+            for (UUID player : moddedPlayers) {
+                ServerPlayerEntity serverPlayer = context.server().getPlayerManager().getPlayer(player);
+                if (serverPlayer == null) {
+                    continue;
+                }
+                ServerPlayNetworking.send(serverPlayer, new S2CPlayerHasMod(moddedPlayers, context.player().getUuid()));
+            }
         });
 
         ServerPlayConnectionEvents.DISCONNECT.register((handler, listener) -> {
             // Remove the player from the list of modded players
-            moddedPlayers.remove(handler.player);
+            moddedPlayers.remove(handler.player.getUuid());
             for (UUID player : moddedPlayers) {
                 ServerPlayerEntity serverPlayer = listener.getPlayerManager().getPlayer(player);
                 if (serverPlayer == null) {
                     continue;
                 }
-                ServerPlayNetworking.send(serverPlayer, new S2CPlayerHasMod(moddedPlayers));
+                ServerPlayNetworking.send(serverPlayer, new S2CPlayerHasMod(moddedPlayers, handler.player.getUuid()));
             }
         });
     }

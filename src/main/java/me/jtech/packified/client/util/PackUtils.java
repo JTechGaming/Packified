@@ -1,6 +1,7 @@
 package me.jtech.packified.client.util;
 
 import me.jtech.packified.Packified;
+import me.jtech.packified.client.PackifiedClient;
 import me.jtech.packified.client.windows.EditorWindow;
 import me.jtech.packified.packets.C2SSyncPackChanges;
 import me.jtech.packified.SyncPacketData;
@@ -9,11 +10,13 @@ import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.resource.*;
 
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
 
 public class PackUtils {
     private static List<ResourcePackProfile> resourcePacks;
@@ -34,7 +37,7 @@ public class PackUtils {
         for (ResourcePackProfile resourcePack : resourcePacks) {
             if (resourcePack.getId().equals(pack.getId())) {
                 System.out.println(resourcePack.getId());
-                return FabricLoader.getInstance().getGameDir().resolve("resourcepacks").resolve(resourcePack.getId());
+                return FabricLoader.getInstance().getGameDir().resolve("resourcepacks").resolve(resourcePack.getDisplayName().getString());
             }
         }
         return null;
@@ -53,17 +56,20 @@ public class PackUtils {
     }
 
     public static void sendPackChangesToPlayers(ResourcePackProfile currentPack) {
+        if (currentPack == null) {
+            return;
+        }
         List<SyncPacketData.AssetData> changedAssets = new ArrayList<>();
-        for (PackFile asset : EditorWindow.changedAssets) {
+        for (PackFile asset : EditorWindow.changedAssets) { //TODO changedassets might be reset at this point
             changedAssets.add(new SyncPacketData.AssetData(asset.getIdentifier(), FileUtils.getFileExtension(asset.getFileName()), FileUtils.getContent(asset)));
         }
         SyncPacketData data = new SyncPacketData(currentPack.getDisplayName().getString(), changedAssets, FileUtils.getMCMetaContent(currentPack));
         Packified.LOGGER.info(data.toString());
-        ClientPlayNetworking.send(new C2SSyncPackChanges(data));
+        ClientPlayNetworking.send(new C2SSyncPackChanges(data, PackifiedClient.markedPlayers));
     }
 
     public static ResourcePackProfile getPack(String packName) {
-        for (ResourcePackProfile resourcePack : resourcePacks) {
+        for (ResourcePackProfile resourcePack : refresh()) {
             if (resourcePack.getDisplayName().getString().equals(packName)) {
                 return resourcePack;
             }
@@ -101,5 +107,33 @@ public class PackUtils {
                 throw new RuntimeException(e);
             }
         });
+    }
+
+    public static void checkPackType(ResourcePackProfile packProfile) {
+        File resourcePackFolder = new File("resourcepacks/" + packProfile.getDisplayName().getString());
+        if (FileUtils.isZipFile(resourcePackFolder)) {
+            ResourcePackManager resourcePackManager = MinecraftClient.getInstance().getResourcePackManager();
+            resourcePackManager.disable(packProfile.getId());
+            File tempDir = new File(resourcePackFolder.getParent(), resourcePackFolder.getName().replace(".zip", ""));
+            if (!tempDir.exists()) {
+                tempDir.mkdirs();
+            }
+            try {
+                FileUtils.unzipPack(resourcePackFolder, tempDir);
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        }
+    }
+
+    public static void loadPack(ResourcePackProfile currentPack) {
+        ResourcePackManager resourcePackManager = MinecraftClient.getInstance().getResourcePackManager();
+        resourcePackManager.enable(currentPack.getId());
+    }
+
+    public static void unloadPack(ResourcePackProfile currentPack) {
+        // unloads the pack from the game so that the packs files can be modified
+        ResourcePackManager resourcePackManager = MinecraftClient.getInstance().getResourcePackManager();
+        resourcePackManager.disable(currentPack.getId());
     }
 }

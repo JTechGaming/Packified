@@ -22,7 +22,9 @@ import org.lwjgl.glfw.GLFW;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 @Environment(EnvType.CLIENT)
@@ -38,6 +40,8 @@ public class PackifiedClient implements ClientModInitializer {
     public static ResourcePackProfile currentPack;
 
     AtomicBoolean tracker = new AtomicBoolean(false);
+
+    public static List<UUID> markedPlayers = new ArrayList<>();
 
     @Override
     public void onInitializeClient() {
@@ -62,8 +66,9 @@ public class PackifiedClient implements ClientModInitializer {
                         toggleVisibility();
                     }
                 } else {
-                    tracker.set(true); //TODO fix this
+                    tracker.set(true);
                 }
+                handleSaveKeyPress();
             }
         });
 
@@ -117,11 +122,41 @@ public class PackifiedClient implements ClientModInitializer {
 
         ClientPlayNetworking.registerGlobalReceiver(S2CPlayerHasMod.ID, (payload, context) -> {
             Packified.moddedPlayers = payload.moddedPlayers();
+            markedPlayers = payload.moddedPlayers();
+            if (payload.moddedPlayers().contains(payload.specificPlayer())) {
+                markedPlayers.add(payload.specificPlayer());
+            } else {
+                markedPlayers.remove(payload.specificPlayer());
+            }
         });
 
         ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> {
             ClientPlayNetworking.send(new C2SHasMod(version));
         });
+    }
+
+    private boolean isSaveKeyPressed() {
+        long windowHandle = MinecraftClient.getInstance().getWindow().getHandle();
+        boolean ctrlPressed = InputUtil.isKeyPressed(windowHandle, GLFW.GLFW_KEY_LEFT_CONTROL) || InputUtil.isKeyPressed(windowHandle, GLFW.GLFW_KEY_RIGHT_CONTROL);
+        boolean sPressed = InputUtil.isKeyPressed(windowHandle, GLFW.GLFW_KEY_S);
+        return ctrlPressed && sPressed;
+    }
+
+    private void handleSaveKeyPress() {
+        long windowHandle = MinecraftClient.getInstance().getWindow().getHandle();
+        boolean ctrlPressed = InputUtil.isKeyPressed(windowHandle, GLFW.GLFW_KEY_LEFT_CONTROL) || InputUtil.isKeyPressed(windowHandle, GLFW.GLFW_KEY_RIGHT_CONTROL);
+        boolean shiftPressed = InputUtil.isKeyPressed(windowHandle, GLFW.GLFW_KEY_LEFT_SHIFT) || InputUtil.isKeyPressed(windowHandle, GLFW.GLFW_KEY_RIGHT_SHIFT);
+        boolean sPressed = InputUtil.isKeyPressed(windowHandle, GLFW.GLFW_KEY_S);
+
+        if (ctrlPressed && sPressed) {
+            if (shiftPressed) {
+                // Handle Ctrl+Shift+S
+                LOGGER.info("Ctrl+Shift+S pressed");
+            } else {
+                // Handle Ctrl+S
+                LOGGER.info("Ctrl+S pressed");
+            }
+        }
     }
 
     private void toggleVisibility() {

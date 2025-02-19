@@ -12,10 +12,7 @@ import imgui.type.ImBoolean;
 import me.jtech.packified.Packified;
 import me.jtech.packified.client.uiElements.MenuBar;
 import me.jtech.packified.client.util.JsonFile;
-import me.jtech.packified.client.windows.EditorWindow;
-import me.jtech.packified.client.windows.FileHierarchy;
-import me.jtech.packified.client.windows.MultiplayerWindow;
-import me.jtech.packified.client.windows.SelectPackWindow;
+import me.jtech.packified.client.windows.*;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.minecraft.client.MinecraftClient;
@@ -178,8 +175,10 @@ public class ImGuiImplementation {
 
         EditorWindow.render();
         FileHierarchy.render();
+        BackupWindow.render();
         SelectPackWindow.render();
         MultiplayerWindow.render();
+        SelectFolderWindow.render();
 
         if (ImGui.isMouseClicked(GLFW.GLFW_MOUSE_BUTTON_LEFT)) {
             int key = -GLFW.GLFW_MOUSE_BUTTON_LEFT-1;
