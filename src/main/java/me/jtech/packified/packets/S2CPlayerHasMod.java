@@ -1,0 +1,24 @@
+package me.jtech.packified.packets;
+
+import me.jtech.packified.UuidList;
+import net.minecraft.network.RegistryByteBuf;
+import net.minecraft.network.codec.PacketCodec;
+import net.minecraft.network.codec.PacketCodecs;
+import net.minecraft.network.packet.CustomPayload;
+import net.minecraft.util.Uuids;
+
+import java.util.List;
+import java.util.UUID;
+
+public record S2CPlayerHasMod(List<UUID> moddedPlayers) implements CustomPayload {
+    public static final Id<S2CPlayerHasMod> ID = new Id<>(NetworkingConstants.S2C_PLAYER_HAS_MOD);
+    public static final PacketCodec<RegistryByteBuf, S2CPlayerHasMod> CODEC = PacketCodec.tuple(
+            UuidList.PACKET_CODEC, S2CPlayerHasMod::moddedPlayers,
+            S2CPlayerHasMod::new
+    );
+
+    @Override
+    public Id<? extends CustomPayload> getId() {
+        return ID;
+    }
+}

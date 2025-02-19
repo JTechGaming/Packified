@@ -1,0 +1,17 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "me.jtech.packified.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [
+    "compat.axiom.AxiomEditorUIMixin"
+  ],
+  "client": [
+    "FramebufferMixin",
+    "MinecraftClientMixin",
+    "MouseMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

@@ -1,0 +1,9 @@
+accessWidener v2 named
+
+accessible field net/minecraft/client/util/Window x I
+accessible field net/minecraft/client/util/Window y I
+accessible field net/minecraft/client/util/Window width I
+accessible field net/minecraft/client/util/Window height I
+accessible field net/minecraft/client/util/Window framebufferWidth I
+accessible field net/minecraft/client/util/Window framebufferHeight I
+accessible method net/minecraft/client/render/model/BakedModelManager reloadModels (Lnet/minecraft/resource/ResourceManager;Ljava/util/concurrent/Executor;)Ljava/util/concurrent/CompletableFuture;
