@@ -7,13 +7,13 @@ import me.jtech.packified.client.util.FileUtils;
 import me.jtech.packified.client.util.PackUtils;
 import me.jtech.packified.client.windows.BackupWindow;
 import me.jtech.packified.client.windows.EditorWindow;
+import me.jtech.packified.packets.C2SInfoPacket;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
+import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.MinecraftClient;
 
-import javax.imageio.ImageIO;
-import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Path;
@@ -23,8 +23,13 @@ public class MenuBar {
     public static void render() {
         if (ImGui.beginMainMenuBar()) {
             if (ImGui.beginMenu("File")) {
-                if (ImGui.menuItem("Something")) {
-                    System.out.println("Something clicked");
+                if (ImGui.beginMenu("New")) {
+                    if (ImGui.menuItem("Pack")) {
+                        EditorWindow.openFiles.clear();
+                        PackifiedClient.currentPack = null;
+                        PackUtils.createPack();
+                    }
+                    ImGui.endMenu();
                 }
                 ImGui.separator();
                 if (ImGui.beginMenu("Import")) {
@@ -70,7 +75,7 @@ public class MenuBar {
                                 Path folderPath = path.getParent();
                                 MinecraftClient.getInstance().submit(() -> {
                                     try {
-                                        FileUtils.zip(PackifiedClient.currentPack, folderPath.toFile(), path.getFileName().toString());
+                                        FileUtils.zip(folderPath.toFile(), path.getFileName().toString());
                                     } catch (IOException e) {
                                         e.printStackTrace();
                                     }
@@ -90,6 +95,9 @@ public class MenuBar {
                             EditorWindow.openFiles.clear();
                             PackifiedClient.currentPack = PackUtils.refresh().get(i);
                             PackUtils.checkPackType(PackUtils.refresh().get(i));
+                            if (PackifiedClient.currentPack != null) {
+                                ClientPlayNetworking.send(new C2SInfoPacket(PackifiedClient.currentPack.getDisplayName().getString(), MinecraftClient.getInstance().player.getUuid()));
+                            }
                         }
                     }
                     ImGui.endMenu();

@@ -8,15 +8,14 @@ import me.jtech.packified.SyncPacketData;
 import me.jtech.packified.client.windows.SelectFolderWindow;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.MinecraftClient;
-import net.minecraft.resource.ResourcePack;
-import net.minecraft.resource.ResourcePackManager;
-import net.minecraft.resource.ResourcePackProfile;
-import net.minecraft.resource.ResourceType;
+import net.minecraft.client.sound.OggAudioStream;
+import net.minecraft.resource.*;
 import net.minecraft.text.Text;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.InvalidIdentifierException;
 
 import javax.imageio.ImageIO;
+import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.io.*;
 import java.net.URI;
@@ -24,6 +23,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.text.SimpleDateFormat;
 import java.util.*;
+import java.util.List;
 
 public class FileUtils {
     public static String getFileExtension(String fileName) {
@@ -87,7 +87,12 @@ public class FileUtils {
         if (file.exists()) {
             if (file.isDirectory()) {
                 // Import folder
-                //TODO add import folder logic
+                String folderName = file.getName();
+                File[] files = file.listFiles();
+                if (files != null) {
+                    List<File> fileList = Arrays.asList(files);
+                    SelectFolderWindow.open(folderName, fileList);
+                }
             } else {
                 // Import file
                 String fileName = file.getName();
@@ -97,26 +102,75 @@ public class FileUtils {
                     return;
                 }
                 String content = null;
-                try {
-                    content = Files.readString(file.toPath());
-                } catch (IOException e) {
-                    e.printStackTrace();
+                BufferedImage image;
+                if (extension.equals(".png")) {
+                    try {
+                        image = ImageIO.read(file);
+                        if (image != null) {
+                            SelectFolderWindow.open(fileName, extension, encodeImageToBase64(image));
+                        } else {
+                            System.err.println("Failed to load image: " + fileName);
+                        }
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+                } else {
+                    try {
+                        content = Files.readString(file.toPath());
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+                    if (content == null) {
+                        System.err.println("Failed to read file: " + file.getAbsolutePath());
+                        return;
+                    }
+                    SelectFolderWindow.open(fileName, extension, content);
                 }
-                if (content == null) {
-                    System.err.println("Failed to read file: " + file.getAbsolutePath());
-                    return;
-                }
-
-                SelectFolderWindow.open(fileName, extension, content);
             }
         } else {
             System.err.println("File not found: " + file.getAbsolutePath());
         }
     }
 
-    public static void moveFile(Identifier identifier) {
+    public static void moveFile(Identifier identifier, String newPath) {
         // move file
-        //TODO add move file logic
+        EditorWindow.openFiles.removeIf(file -> file.getIdentifier().equals(identifier));
+        File file = new File("resourcepacks/" + PackifiedClient.currentPack.getDisplayName().getString() + "/assets/" + identifier.getNamespace() + "/" + identifier.getPath());
+        System.out.println(file.getPath());
+        if (file.exists()) {
+            if (file.canWrite()) {
+                try {
+                    //Rename the file
+                    File newFile = new File("resourcepacks/" + PackifiedClient.currentPack.getDisplayName().getString() + "/assets/" + identifier.getNamespace() + "/" + newPath);
+                    Files.move(file.toPath(), newFile.toPath());
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+        }
+    }
+
+    public static void renameFile(Identifier identifier, String newName) {
+        // rename file
+        if (newName.isEmpty()) {
+            System.out.println("New name is empty");
+            return;
+        }
+        System.out.println(newName);
+        EditorWindow.openFiles.removeIf(file -> file.getIdentifier().equals(identifier));
+        File file = new File("resourcepacks/" + PackifiedClient.currentPack.getDisplayName().getString() + "/assets/" + identifier.getNamespace() + "/" + identifier.getPath());
+        System.out.println(file.getPath());
+        if (file.exists()) {
+            if (file.canWrite()) {
+                try {
+                    //Rename the file
+                    File newFile = new File("resourcepacks/" + PackifiedClient.currentPack.getDisplayName().getString() + "/assets/" + identifier.getNamespace() + "/" + newName);
+                    Files.move(file.toPath(), newFile.toPath());
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+        }
     }
 
     public static void openFile(Identifier identifier, FileHierarchy.FileType fileType) {
@@ -196,14 +250,23 @@ public class FileUtils {
         }
     }
 
-    public static void saveAllFiles() { // TODO this doesn't work
-//        for (PackFile file : EditorWindow.changedAssets) {
-//            System.out.println(file.getFileName());
-//            saveFile(file.getIdentifier(), file.getExtension().getExtension(), getContent(file));
-//        }
+    public static void saveAllFiles() {
+        File resourcePackFolder = new File("resourcepacks/" + PackifiedClient.currentPack.getDisplayName().getString());
+        makePackBackup(resourcePackFolder);
+        for (PackFile file : EditorWindow.openFiles) {
+            System.out.println(file.getFileName());
+            saveFile(file.getIdentifier(), file.getExtension().getExtension(), getContent(file));
+        }
     }
 
-    public static void saveFile(Identifier identifier, String fileType, String content) {
+    public static void saveSingleFile(Identifier identifier, String fileType, String content) {
+        // Before saving, make a backup of the file
+        File resourcePackFolder = new File("resourcepacks/" + PackifiedClient.currentPack.getDisplayName().getString());
+        makePackBackup(resourcePackFolder);
+        saveFile(identifier, fileType, content);
+    }
+
+    private static void saveFile(Identifier identifier, String fileType, String content) {
         try {
             System.out.println(identifier);
             // Get the resource pack folder path
@@ -238,9 +301,6 @@ public class FileUtils {
                 // Ensure parent directories exist
                 targetFile.getParentFile().mkdirs();
 
-                // Before saving, make a backup of the file
-                makePackBackup(resourcePackFolder);
-
                 if (fileType.equals(".json")) {
                     // Save JSON file
                     Files.write(targetFile.toPath(), content.getBytes(StandardCharsets.UTF_8));
@@ -273,6 +333,17 @@ public class FileUtils {
         }
     }
 
+    public static void saveFolder(Identifier identifier) {
+        // Save folder
+        File folder = new File("resourcepacks/" + PackifiedClient.currentPack.getDisplayName().getString() + "/assets/" + identifier.getNamespace() + "/" + identifier.getPath());
+        if (folder.isDirectory()) {
+            if (!folder.exists()) {
+                // Save folder
+                folder.mkdirs();
+            }
+        }
+    }
+
     public static boolean isZipFile(File file) {
         return file.isFile() && file.getName().endsWith(".zip");
     }
@@ -302,7 +373,7 @@ public class FileUtils {
         resourcePackManager.enable(PackifiedClient.currentPack.getId());
     }
 
-    public static void zip(ResourcePackProfile packProfile, File targetDir, String fileName) throws IOException {
+    public static void zip(File targetDir, String fileName) throws IOException {
         // zips the resource pack
         File zipFile = new File(targetDir, fileName.replace(".zip", "") + ".zip");
         File folder = new File("resourcepacks/" + PackifiedClient.currentPack.getDisplayName().getString());
@@ -400,6 +471,7 @@ public class FileUtils {
         }
     }
 
+    // Not used
     public static void clearBackups() {
         // Clear backups
         Path dir = FabricLoader.getInstance().getConfigDir().resolve("packified-backups");
@@ -418,9 +490,13 @@ public class FileUtils {
             return 0;
         }
         try (ResourcePack resourcePack = PackifiedClient.currentPack.createResourcePack()) {
-            InputStream inputStream = Objects.requireNonNull(resourcePack.open(ResourceType.CLIENT_RESOURCES, identifier)).get();
+            InputSupplier<InputStream> opened = resourcePack.open(ResourceType.CLIENT_RESOURCES, identifier);
+            if (opened == null) {
+                return 0;
+            }
+            InputStream inputStream = opened.get();
             return inputStream.available();
-        } catch (IOException e) {
+        } catch (IOException | NullPointerException e) {
             e.printStackTrace();
             return 0;
         }
@@ -457,9 +533,9 @@ public class FileUtils {
 
     public static String getContent(PackFile file) {
         if (file.getExtension().getExtension().equals(FileHierarchy.FileType.JSON.getExtension())) {
-            return file.getTextContent();
+            return file.getTextEditorContent().get();
         } else if (file.getExtension().getExtension().equals(FileHierarchy.FileType.PNG.getExtension())) {
-            return encodeImageToBase64(file.getImageContent());
+            return encodeImageToBase64(file.getImageEditorContent());
         } else if (file.getExtension().getExtension().equals(FileHierarchy.FileType.OGG.getExtension())) {
             //return file.getSoundContent();
             return "";
@@ -478,20 +554,23 @@ public class FileUtils {
         }
     }
 
+    public static String encodeSoundToString(OggAudioStream audio) {
+        //TODO implement this
+        return "";
+    }
+
     public static String getMCMetaContent(ResourcePackProfile pack) {
-        try (ResourcePack resourcePack = pack.createResourcePack()) {
-            InputStream inputStream = Objects.requireNonNull(resourcePack.open(ResourceType.CLIENT_RESOURCES, Identifier.ofVanilla("pack.mcmeta"))).get();
-            String out = new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
-            System.out.println(out);
-            return out;
+        try {
+            File resourcePackFolder = new File("resourcepacks/" + pack.getDisplayName().getString());
+            File targetFile = new File(resourcePackFolder, "pack.mcmeta");
+            return Files.readString(targetFile.toPath());
         } catch (IOException e) {
-            e.printStackTrace();
-            return null;
+            throw new RuntimeException(e);
         }
     }
 
     public static void setMCMetaContent(ResourcePackProfile pack, String content) {
-        try (ResourcePack resourcePack = pack.createResourcePack()) {
+        try {
             File resourcePackFolder = new File("resourcepacks/" + pack.getDisplayName().getString());
             File targetFile = new File(resourcePackFolder, "pack.mcmeta");
             Files.write(targetFile.toPath(), content.getBytes(StandardCharsets.UTF_8));
@@ -558,6 +637,16 @@ public class FileUtils {
             return Identifier.of(path);
         } catch (InvalidIdentifierException e) {
             return null;
+        }
+    }
+
+    public static void openFileInExplorer(Identifier identifier) {
+        File file = new File("resourcepacks/" + PackifiedClient.currentPack.getDisplayName().getString() + "/assets/" + identifier.getNamespace() + "/" + identifier.getPath());
+        try {
+            ProcessBuilder processBuilder = new ProcessBuilder("explorer.exe", "/select,", file.getAbsolutePath());
+            processBuilder.start();
+        } catch (IOException e) {
+            e.printStackTrace();
         }
     }
 }

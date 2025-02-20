@@ -2,6 +2,7 @@ package me.jtech.packified.client.windows;
 
 import imgui.ImGui;
 import imgui.flag.ImGuiCol;
+import imgui.flag.ImGuiTableFlags;
 import me.jtech.packified.Packified;
 import me.jtech.packified.SyncPacketData;
 import me.jtech.packified.client.PackifiedClient;
@@ -37,35 +38,57 @@ public class MultiplayerWindow {
             // TODO add option to sync the pack to the server resource pack
             ImGui.separator();
 
-            MinecraftClient.getInstance().world.getPlayers().forEach(player -> {
-                boolean greyedOut = !Packified.moddedPlayers.contains(player.getUuid());
+            if (ImGui.beginTable("##multiplayer_table", 2, ImGuiTableFlags.RowBg | ImGuiTableFlags.Resizable | ImGuiTableFlags.NoBordersInBody
+                    | ImGuiTableFlags.BordersOuter | ImGuiTableFlags.ScrollX | ImGuiTableFlags.ScrollY)) {
+                ImGui.tableSetupColumn("Player");
+                ImGui.tableSetupColumn("Pack");
+                ImGui.tableHeadersRow();
+                ImGui.tableNextRow();
+                MinecraftClient.getInstance().world.getPlayers().forEach(player -> {
+                    ImGui.tableNextRow();
+                    ImGui.tableSetColumnIndex(0);
+                    boolean greyedOut = !Packified.moddedPlayers.contains(player.getUuid());
 
-                ImGui.pushStyleColor(ImGuiCol.Text, greyedOut ? ImGui.getColorU32(ImGuiCol.TextDisabled) : ImGui.getColorU32(ImGuiCol.Text));
-                ImGui.menuItem(player.getDisplayName().getString());
-                ImGui.popStyleColor();
-                if (ImGui.isItemHovered()) {
-                    if (greyedOut) {
-                        ImGui.setTooltip("Player does not have the mod installed");
+                    ImGui.pushStyleColor(ImGuiCol.Text, greyedOut ? ImGui.getColorU32(ImGuiCol.TextDisabled) : ImGui.getColorU32(ImGuiCol.Text));
+                    ImGui.menuItem(player.getDisplayName().getString());
+                    ImGui.popStyleColor();
+                    if (ImGui.isItemHovered()) {
+                        if (greyedOut) {
+                            ImGui.setTooltip("Player does not have the mod installed");
+                        } else {
+                            ImGui.setTooltip("Player has the mod installed");
+                        }
+                    }
+
+                    ImGui.tableSetColumnIndex(1);
+                    if (player.getUuid().equals(MinecraftClient.getInstance().player.getUuid())) {
+                        if (PackifiedClient.currentPack == null) {
+                            ImGui.text("Vanilla");
+                        } else {
+                            ImGui.text(PackifiedClient.currentPack.getDisplayName().getString());
+                        }
                     } else {
-                        ImGui.setTooltip("Player has the mod installed");
+                        ImGui.text(PackifiedClient.playerPacks.getOrDefault(player.getUuid(), "Vanilla"));
                     }
-                }
+                    ImGui.tableSetColumnIndex(0);
 
-                if (ImGui.beginPopupContextItem(player.getDisplayName().getString())) {
-                    if (ImGui.beginMenu("Request Pack")) {
-                        if (ImGui.menuItem("Full Pack")) {
-                            // Send a request for the full pack
-                            ClientPlayNetworking.send(new C2SRequestFullPack("!!currentpack!!", player.getUuid()));
+                    if (ImGui.beginPopupContextItem(player.getDisplayName().getString())) {
+                        if (ImGui.beginMenu("Request Pack")) {
+                            if (ImGui.menuItem("Full Pack")) {
+                                // Send a request for the full pack
+                                ClientPlayNetworking.send(new C2SRequestFullPack("!!currentpack!!", player.getUuid()));
+                            }
+                            if (ImGui.menuItem("Changes (not implemented)")) {
+                                // Send a request for the changes
+                                //Packified.sendChangesRequest(player.getUuid());
+                            }
+                            ImGui.endMenu();
                         }
-                        if (ImGui.menuItem("Changes (not implemented)")) {
-                            // Send a request for the changes
-                            //Packified.sendChangesRequest(player.getUuid());
-                        }
-                        ImGui.endMenu();
+                        ImGui.endPopup();
                     }
-                    ImGui.endPopup();
-                }
-            });
+                });
+                ImGui.endTable();
+            }
         }
         ImGui.end();
     }

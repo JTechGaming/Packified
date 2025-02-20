@@ -16,6 +16,7 @@ import net.minecraft.util.Identifier;
 
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
+import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -31,6 +32,8 @@ public class EditorWindow {
 
     private static float[] color = new float[]{1.0f, 1.0f, 1.0f};
 
+    private static int modifiedFiles = 0;
+
     public static List<PackFile> changedAssets = new ArrayList<>();
 
     private enum Tool {
@@ -42,7 +45,7 @@ public class EditorWindow {
 
     private static Tool currentTool = Tool.PEN;
 
-    private static PackFile currentFile;
+    public static PackFile currentFile;
 
     public static void render() {
         // Editor window code
@@ -88,7 +91,7 @@ public class EditorWindow {
             if (ImGui.isItemClicked()) {
                 // Logic to save the current file
                 if (currentFile != null) {
-                    FileUtils.saveFile(currentFile.getIdentifier(), FileUtils.getFileExtension(currentFile.getFileName()), currentFile.getTextEditorContent().get());
+                    FileUtils.saveSingleFile(currentFile.getIdentifier(), FileUtils.getFileExtension(currentFile.getFileName()), currentFile.getTextEditorContent().get());
                 }
             }
             ImGui.sameLine();
@@ -101,7 +104,9 @@ public class EditorWindow {
             ImGui.imageButton(ImGuiImplementation.loadTexture("textures/ui/neu_reload.png"), 32, 32);
             if (ImGui.isItemClicked()) {
                 // Logic to save all files
-                PackUtils.reloadPack();
+                if (modifiedFiles > 0) {
+                    PackUtils.reloadPack();
+                }
             }
 
             ImGui.endChild();
@@ -151,19 +156,66 @@ public class EditorWindow {
     private static void renderAudioFileEditor(PackFile audioFile) {
         // Logic to render the audio editor for the given file
         //TODO add audio editor tools, play, pause, stop, etc.
-        ImGui.text("Audio Editor");
+        ImGui.text("The OGG file type can not be edited yet.");
     }
 
     private static void renderTabPopup() {
-        if (ImGui.menuItem("Save")) { //TODO more file options
+        if (ImGui.menuItem("Save")) {
             // Logic to save the current JSON file
-            FileUtils.saveFile(openFiles.get(0).getIdentifier(), FileUtils.getFileExtension(openFiles.get(0).getFileName()), openFiles.get(0).getTextEditorContent().get());
-            //TODO make this work with all file types (not just string based)
+            if (currentFile == null) {
+                return;
+            }
+
+            if (currentFile.isModified()) {
+                switch (currentFile.getExtension()) {
+                    case JSON, MC_META, FSH, VSH, PROPERTIES, TEXT:
+                        FileUtils.saveSingleFile(currentFile.getIdentifier(), FileUtils.getFileExtension(currentFile.getFileName()), currentFile.getTextEditorContent().get());
+                        break;
+                    case PNG:
+                        FileUtils.saveSingleFile(currentFile.getIdentifier(), FileUtils.getFileExtension(currentFile.getFileName()), FileUtils.encodeImageToBase64(currentFile.getImageEditorContent()));
+                        break;
+                    case OGG:
+                        FileUtils.saveSingleFile(currentFile.getIdentifier(), FileUtils.getFileExtension(currentFile.getFileName()), FileUtils.encodeSoundToString(currentFile.getSoundEditorContent()));
+                        break;
+                }
+            }
         }
         if (ImGui.menuItem("Close")) {
             // Logic to close the current tab
+            if (currentFile.isModified()) {
+                ConfirmWindow.open("close this file", "Any unsaved changes might be lost.", () -> {
+                    modifiedFiles++;
+                    openFiles.remove(currentFile);
+                });
+                return;
+            }
+            modifiedFiles++;
             openFiles.remove(currentFile);
         }
+        if (openFiles.size() > 1) {
+            if (ImGui.menuItem("Close All")) {
+                // Logic to close all tabs
+                for (PackFile file : openFiles) {
+                    if (file.isModified()) {
+                        ConfirmWindow.open("close all files", "Any unsaved changes might be lost.", () -> {
+                            modifiedFiles += openFiles.size();
+                            openFiles.clear();
+                        });
+                        return;
+                    }
+                }
+                modifiedFiles += openFiles.size();
+                openFiles.clear();
+            }
+        }
+        if (ImGui.menuItem("Delete")) {
+            // Logic to delete the current file
+            ConfirmWindow.open("delete this file", "The file will be lost forever.", () -> {
+                openFiles.remove(currentFile);
+                FileUtils.deleteFile(currentFile.getIdentifier());
+            });
+        }
+        // Add copy & paste??
     }
 
     private static void renderTextFileEditor(PackFile file) {

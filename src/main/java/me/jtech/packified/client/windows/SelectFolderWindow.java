@@ -15,13 +15,27 @@ import net.fabricmc.api.Environment;
 import net.minecraft.resource.ResourcePack;
 import net.minecraft.util.Identifier;
 
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
 @Environment(EnvType.CLIENT)
 public class SelectFolderWindow {
     public static boolean open = false;
     private static String fileName = "";
     private static String extension = "";
     private static String content = "";
+    private static Map<File, String> files;
 
+    /**
+     * Open the select folder window with the given file name, extension, and content
+     * @param fileName
+     * @param extension
+     * @param content
+     */
     public static void open(String fileName, String extension, String content) {
         open = true;
         SelectFolderWindow.fileName = fileName;
@@ -29,15 +43,55 @@ public class SelectFolderWindow {
         SelectFolderWindow.content = content;
     }
 
+    /**
+     * Open the select folder window with the given folder name and its files
+     * @param folderName
+     * @param files
+     */
+    public static void open(String folderName, List<File> files) {
+        open = true;
+        SelectFolderWindow.fileName = folderName;
+        Map<File, String> fileMap = new HashMap<>();
+        for (File file : files) {
+            String extension = FileUtils.getFileExtensionName(folderName);
+            if (extension == null) {
+                System.err.println("Unsupported file extension: " + folderName);
+                return;
+            }
+            String content = null;
+            try {
+                content = Files.readString(file.toPath());
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+            if (content == null) {
+                System.err.println("Failed to read file: " + file.getAbsolutePath());
+                return;
+            }
+            fileMap.put(file, content);
+        }
+        SelectFolderWindow.files = fileMap;
+    }
+
     public static void close(Identifier identifier) {
         open = false;
         if (identifier == null) {
             return;
         }
+        if (files != null) {
+            for (File file : files.keySet()) {
+                String path = file.getPath();
+                String name = path.substring(path.lastIndexOf('/') + 1);
+                String newIdentifierPath = identifier.getPath().substring(0, identifier.getPath().lastIndexOf('/') + 1) + name;
+                Identifier newIdentifier = FileUtils.validateIdentifier(newIdentifierPath);
+                FileUtils.saveSingleFile(newIdentifier, FileUtils.getExtension(Identifier.of(name)).getExtension(), files.get(file));
+            }
+            return;
+        }
         String newIdentifierPath = identifier.getPath().substring(0, identifier.getPath().lastIndexOf('/') + 1) + fileName;
         Identifier newIdentifier = FileUtils.validateIdentifier(newIdentifierPath);
         System.out.println(newIdentifier);
-        FileUtils.saveFile(newIdentifier, extension, content);
+        FileUtils.saveSingleFile(newIdentifier, extension, content);
     }
 
     public static void render() {

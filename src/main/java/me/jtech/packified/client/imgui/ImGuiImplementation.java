@@ -11,6 +11,7 @@ import imgui.internal.ImGuiContext;
 import imgui.type.ImBoolean;
 import me.jtech.packified.Packified;
 import me.jtech.packified.client.uiElements.MenuBar;
+import me.jtech.packified.client.util.IniUtil;
 import me.jtech.packified.client.util.JsonFile;
 import me.jtech.packified.client.windows.*;
 import net.fabricmc.api.EnvType;
@@ -76,6 +77,8 @@ public class ImGuiImplementation {
 
         ImGui.createContext();
         ImPlot.createContext();
+
+        IniUtil.setupIni();
 
         final ImGuiIO data = ImGui.getIO();
         data.setIniFilename(Packified.MOD_ID + ".ini");
@@ -169,16 +172,15 @@ public class ImGuiImplementation {
 
         ImGui.end();
 
-
-        // other rendering
-        ImGui.showDemoWindow(new ImBoolean(false));
-
+        // Window rendering
         EditorWindow.render();
         FileHierarchy.render();
         BackupWindow.render();
         SelectPackWindow.render();
         MultiplayerWindow.render();
         SelectFolderWindow.render();
+        ModifyFileWindow.render();
+        ConfirmWindow.render();
 
         if (ImGui.isMouseClicked(GLFW.GLFW_MOUSE_BUTTON_LEFT)) {
             int key = -GLFW.GLFW_MOUSE_BUTTON_LEFT-1;

@@ -41,6 +41,7 @@ public class SyncPacketData {
             return assetData;
         }
 
+
         public static final PacketCodec<PacketByteBuf, AssetData> PACKET_CODEC = new PacketCodec<PacketByteBuf, AssetData>() {
             public AssetData decode(PacketByteBuf byteBuf) {
                 Identifier identifier = byteBuf.readIdentifier();
@@ -52,8 +53,8 @@ public class SyncPacketData {
 
             public void encode(PacketByteBuf byteBuf, AssetData assetData) {
                 byteBuf.writeIdentifier(assetData.identifier);
-                byteBuf.writeString(assetData.extension);
-                byteBuf.writeString(assetData.assetData);
+                byteBuf.writeString(assetData.extension.substring(0, Math.min(assetData.extension.length(), 32767)));
+                byteBuf.writeString(assetData.assetData.substring(0, Math.min(assetData.assetData.length(), 32767))); // TODO find a way to also send the rest of the data
             }
         };
 

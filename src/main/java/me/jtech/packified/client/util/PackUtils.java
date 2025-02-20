@@ -7,6 +7,7 @@ import me.jtech.packified.packets.C2SSyncPackChanges;
 import me.jtech.packified.SyncPacketData;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.fabricmc.loader.api.FabricLoader;
+import net.minecraft.SharedConstants;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.resource.*;
 
@@ -14,6 +15,7 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
@@ -44,8 +46,10 @@ public class PackUtils {
     }
 
     public static List<ResourcePackProfile> refresh() {
+        ResourcePackManager resourcePackManager = MinecraftClient.getInstance().getResourcePackManager();
+        resourcePackManager.scanPacks();
         Path resourcePacksPath = FabricLoader.getInstance().getGameDir().resolve("resourcepacks");
-        resourcePacks = MinecraftClient.getInstance().getResourcePackManager().getProfiles().stream()
+        resourcePacks = resourcePackManager.getProfiles().stream()
                 .filter(pack -> resourcePacksPath.resolve(legalizeName(pack.getDisplayName().getString())).toFile().exists() || pack.getDisplayName().getString().equalsIgnoreCase("Default"))
                 .toList();
         return resourcePacks;
@@ -135,5 +139,45 @@ public class PackUtils {
         // unloads the pack from the game so that the packs files can be modified
         ResourcePackManager resourcePackManager = MinecraftClient.getInstance().getResourcePackManager();
         resourcePackManager.disable(currentPack.getId());
+    }
+
+    public static void createPack() {
+        FileDialog.saveFileDialog(new File("resourcepacks/").getPath(), "New Pack.zip", "zip").thenAccept(pathStr -> {
+            if (pathStr != null) {
+                Path path = Path.of(pathStr);
+                File folder = new File("resourcepacks/" + path.getFileName().toString().replace(".zip", ""));
+                folder.mkdirs();
+                // make the pack.mcmeta file
+                File mcmeta = new File(folder, "pack.mcmeta");
+                try {
+                    mcmeta.createNewFile();
+                    String fileName = path.getFileName().toString().replace(".zip", "");
+                    String packMcmetaContent = "{\"pack\": {\"pack_format\": " + getCurrentPackFormat() + ",\"description\": \""+ fileName +"\"}}";
+                    Files.write(mcmeta.toPath(), packMcmetaContent.getBytes());
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+                File assetsFolder = new File(folder, "assets");
+                File mcAssetsRoot = new File(assetsFolder, ".mcassetsroot");
+                try {
+                    assetsFolder.mkdirs();
+                    mcAssetsRoot.createNewFile();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+                File minecraftFolder = new File(assetsFolder, "minecraft");
+                try {
+                    minecraftFolder.mkdirs();
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+
+                refresh();
+            }
+        });
+    }
+
+    public static int getCurrentPackFormat() {
+        return SharedConstants.getGameVersion().getResourceVersion(ResourceType.CLIENT_RESOURCES);
     }
 }
