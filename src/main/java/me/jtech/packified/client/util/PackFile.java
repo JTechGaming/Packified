@@ -1,6 +1,8 @@
 package me.jtech.packified.client.util;
 
+import imgui.extension.texteditor.TextEditor;
 import imgui.type.ImString;
+import me.jtech.packified.Packified;
 import me.jtech.packified.client.windows.FileHierarchy;
 import net.minecraft.client.sound.OggAudioStream;
 import net.minecraft.util.Identifier;
@@ -17,6 +19,7 @@ public class PackFile {
     private ImString textEditorContent;
     private OggAudioStream soundEditorContent;
     private Identifier identifier;
+    private TextEditor textEditor;
 
     public PackFile(Identifier identifier, BufferedImage content) {
         this.identifier = identifier;
@@ -33,19 +36,21 @@ public class PackFile {
         this.extension = FileHierarchy.FileType.PNG;
     }
 
-    public PackFile(Identifier identifier, String content, FileHierarchy.FileType extension) {
+    public PackFile(Identifier identifier, String content, FileHierarchy.FileType extension, TextEditor textEditor) {
         this.identifier = identifier;
         this.fileName = identifier.getPath();
         this.textContent = content;
-        this.textEditorContent = new ImString(content);
+        this.textEditorContent = new ImString(content, Packified.MAX_FILE_SIZE);
         this.extension = extension;
+        this.textEditor = textEditor;
     }
 
-    public PackFile(String fileName, String content, FileHierarchy.FileType extension) {
+    public PackFile(String fileName, String content, FileHierarchy.FileType extension, TextEditor textEditor) {
         this.fileName = fileName;
         this.textContent = content;
-        this.textEditorContent = new ImString(content);
+        this.textEditorContent = new ImString(content, Packified.MAX_FILE_SIZE);
         this.extension = extension;
+        this.textEditor = textEditor;
     }
 
     public PackFile(Identifier identifier, OggAudioStream content) {
@@ -112,7 +117,7 @@ public class PackFile {
     }
 
     public ImString getTextEditorContent() {
-        textEditorContent = new ImString(textEditorContent.get(), textEditorContent.getBufferSize() + 8);
+        //textEditorContent = new ImString(textEditorContent.get(), textEditorContent.getBufferSize() + 8);
         return textEditorContent;
     }
 
@@ -156,5 +161,9 @@ public class PackFile {
         } else if (extension == FileHierarchy.FileType.OGG) {
             soundContent = soundEditorContent;
         }
+    }
+
+    public TextEditor getTextEditor() {
+        return textEditor;
     }
 }

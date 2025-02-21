@@ -1,13 +1,10 @@
 package me.jtech.packified;
 
 import me.jtech.packified.packets.*;
-import net.fabricmc.api.EnvType;
-import net.fabricmc.api.Environment;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
-import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.server.network.ServerPlayerEntity;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -24,7 +21,10 @@ public class Packified implements ModInitializer {
 
     public static List<UUID> moddedPlayers = new ArrayList<>();
 
-    public static boolean debugMode = true;
+    public static boolean debugMode = false;
+
+    public static final int MAX_FILE_SIZE = 16384;
+    public static final int MAX_PACKET_SIZE = 32767;
 
     @Override
     public void onInitialize() {
@@ -47,7 +47,7 @@ public class Packified implements ModInitializer {
                 List<ServerPlayerEntity> players = context.server().getPlayerManager().getPlayerList();
                 for (ServerPlayerEntity player : players) {
                     if (payload.markedPlayers().contains(player.getUuid())) {
-                        ServerPlayNetworking.send(context.player(), new S2CRequestFullPack(payload.packetData().getPackName(), player.getUuid()));
+                        ServerPlayNetworking.send(context.player(), new S2CRequestFullPack(payload.packetData().packName(), player.getUuid()));
                         continue;
                     }
                     ServerPlayNetworking.send(player, new S2CSyncPackChanges(payload.packetData(), context.player().getUuid()));

@@ -3,6 +3,7 @@ package me.jtech.packified.client.util;
 import me.jtech.packified.Packified;
 import me.jtech.packified.client.PackifiedClient;
 import me.jtech.packified.client.windows.EditorWindow;
+import me.jtech.packified.packets.C2SSendFullPack;
 import me.jtech.packified.packets.C2SSyncPackChanges;
 import me.jtech.packified.SyncPacketData;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
@@ -11,6 +12,8 @@ import net.minecraft.SharedConstants;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.resource.*;
 
+import javax.imageio.ImageIO;
+import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
@@ -67,7 +70,7 @@ public class PackUtils {
         for (PackFile asset : EditorWindow.changedAssets) { //TODO changedassets might be reset at this point
             changedAssets.add(new SyncPacketData.AssetData(asset.getIdentifier(), FileUtils.getFileExtension(asset.getFileName()), FileUtils.getContent(asset)));
         }
-        SyncPacketData data = new SyncPacketData(currentPack.getDisplayName().getString(), changedAssets, FileUtils.getMCMetaContent(currentPack));
+        SyncPacketData data = new SyncPacketData(currentPack.getDisplayName().getString(), changedAssets, FileUtils.getMCMetaContent(currentPack), 1, 0);
         Packified.LOGGER.info(data.toString());
         ClientPlayNetworking.send(new C2SSyncPackChanges(data, PackifiedClient.markedPlayers));
     }
@@ -81,10 +84,11 @@ public class PackUtils {
         return null;
     }
 
-    private static List<SyncPacketData.AssetData> assets = new ArrayList<>();
-
-    public static List<SyncPacketData.AssetData> getAllAssets(ResourcePackProfile pack) {
+    private static List<List<SyncPacketData.AssetData>> assets = new ArrayList<>();
+    private static int currentChunk = 0;
+    public static List<List<SyncPacketData.AssetData>> getAllAssets(ResourcePackProfile pack) {
         ResourcePack resourcePack = pack.createResourcePack();
+        assets.add(new ArrayList<>());
         loadAssets(resourcePack, "atlases");
         loadAssets(resourcePack, "blockstates");
         loadAssets(resourcePack, "font");
@@ -95,8 +99,9 @@ public class PackUtils {
         loadAssets(resourcePack, "sounds");
         loadAssets(resourcePack, "texts");
         loadAssets(resourcePack, "textures");
-        List<SyncPacketData.AssetData> returnAssets = new ArrayList<>(assets);
+        List<List<SyncPacketData.AssetData>> returnAssets = new ArrayList<>(assets);
         assets.clear();
+        currentChunk = 0;
         return returnAssets;
     }
 
@@ -105,8 +110,26 @@ public class PackUtils {
         resourcePack.findResources(ResourceType.CLIENT_RESOURCES, namespace, prefix, (identifier, resourceSupplier) -> {
             try {
                 InputStream inputStream = Objects.requireNonNull(resourcePack.open(ResourceType.CLIENT_RESOURCES, identifier)).get();
-                String content = new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
-                assets.add(new SyncPacketData.AssetData(identifier, FileUtils.getFileExtension(identifier.getPath()), content));
+                String content;
+                if (FileUtils.getFileExtension(identifier.getPath()).equals(".png")) {
+                    BufferedImage image = ImageIO.read(inputStream);
+                    if (image == null) {
+                        System.out.println("Failed to read image: " + identifier);
+                        throw new IOException("Failed to read image");
+                    }
+                    content = FileUtils.encodeImageToBase64(image);
+                } else if (FileUtils.getFileExtension(identifier.getPath()).equals(".ogg")) {
+                    content = new String(inputStream.readAllBytes(), StandardCharsets.UTF_8); // TODO fix audio
+
+                } else{
+                    content = new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
+                }
+                // Check if the current data in the chunk is too big
+                if (content.length() + assets.get(currentChunk).stream().mapToInt(asset -> asset.assetData().length()).sum() > Packified.MAX_PACKET_SIZE) {
+                    currentChunk++;
+                    assets.add(new ArrayList<>());
+                }
+                assets.get(currentChunk).add(new SyncPacketData.AssetData(identifier, FileUtils.getFileExtension(identifier.getPath()), content));
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }
@@ -152,7 +175,7 @@ public class PackUtils {
                 try {
                     mcmeta.createNewFile();
                     String fileName = path.getFileName().toString().replace(".zip", "");
-                    String packMcmetaContent = "{\"pack\": {\"pack_format\": " + getCurrentPackFormat() + ",\"description\": \""+ fileName +"\"}}";
+                    String packMcmetaContent = "{\"pack\": {\"pack_format\": " + getCurrentPackFormat() + ",\"description\": \"" + fileName + "\"}}";
                     Files.write(mcmeta.toPath(), packMcmetaContent.getBytes());
                 } catch (IOException e) {
                     e.printStackTrace();
@@ -175,6 +198,15 @@ public class PackUtils {
                 refresh();
             }
         });
+    }
+
+    public static void sendFullPack(ResourcePackProfile pack, UUID player) {
+        List<List<SyncPacketData.AssetData>> assets = PackUtils.getAllAssets(pack);
+        System.out.println("Split the pack into " + assets.size() + " chunks");
+        for (int i = 0; i < assets.size(); i++) {
+            SyncPacketData data = new SyncPacketData(pack.getDisplayName().getString(), assets.get(i), FileUtils.getMCMetaContent(pack), assets.size(), i);
+            ClientPlayNetworking.send(new C2SSendFullPack(data, player));
+        }
     }
 
     public static int getCurrentPackFormat() {

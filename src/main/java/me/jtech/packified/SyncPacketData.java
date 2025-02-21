@@ -5,40 +5,19 @@ import net.minecraft.network.codec.PacketCodec;
 import net.minecraft.network.codec.PacketCodecs;
 import net.minecraft.util.Identifier;
 
+import java.util.ArrayList;
 import java.util.List;
 
-public class SyncPacketData {
-    private final String packName;
-    private final List<AssetData> assets;
-    private final String metadata;
+public record SyncPacketData(String packName, List<AssetData> assets, String metadata, int chunks, int chunkIndex) {
 
-    public SyncPacketData(String packName, List<AssetData> assets, String metadata) {
-        this.packName = packName;
-        this.assets = assets;
-        this.metadata = metadata;
-    }
+    public record AssetData(Identifier identifier, String extension, String assetData) {
 
-    public static class AssetData {
-        private final Identifier identifier;
-        private final String extension;
-        private final String assetData;
-
-        public AssetData(Identifier identifier, String extension, String assetData) {
-            this.identifier = identifier;
-            this.extension = extension;
-            this.assetData = assetData;
-        }
-
-        public Identifier getIdentifier() {
-            return identifier;
-        }
-
-        public String getExtension() {
-            return extension;
-        }
-
-        public String getAssetData() {
-            return assetData;
+        public List<String> splitAssetData(int chunkSize) {
+            List<String> chunks = new ArrayList<>();
+            for (int i = 0; i < assetData.length(); i += chunkSize) {
+                chunks.add(assetData.substring(i, Math.min(assetData.length(), i + chunkSize)));
+            }
+            return chunks;
         }
 
 
@@ -46,48 +25,49 @@ public class SyncPacketData {
             public AssetData decode(PacketByteBuf byteBuf) {
                 Identifier identifier = byteBuf.readIdentifier();
                 String extension = byteBuf.readString();
-                String assetData = byteBuf.readString();
-
+                int chunkCount = byteBuf.readInt();
+                StringBuilder assetDataBuilder = new StringBuilder();
+                for (int i = 0; i < chunkCount; i++) {
+                    assetDataBuilder.append(byteBuf.readString());
+                }
+                String assetData = assetDataBuilder.toString();
                 return new AssetData(identifier, extension, assetData);
             }
 
             public void encode(PacketByteBuf byteBuf, AssetData assetData) {
                 byteBuf.writeIdentifier(assetData.identifier);
                 byteBuf.writeString(assetData.extension.substring(0, Math.min(assetData.extension.length(), 32767)));
-                byteBuf.writeString(assetData.assetData.substring(0, Math.min(assetData.assetData.length(), 32767))); // TODO find a way to also send the rest of the data
+                //List<String> chunks = assetData.splitAssetData(32767);
+                List<String> chunks = assetData.splitAssetData(8192);
+                byteBuf.writeInt(chunks.size());
+                for (String chunk : chunks) {
+                    byteBuf.writeString(chunk);
+                }
             }
         };
 
         public static final PacketCodec<PacketByteBuf, List<AssetData>> LIST_PACKET_CODEC = PACKET_CODEC.collect(PacketCodecs.toList());
     }
-
+// TODO make this be sending the data in multiple packets instead of one big packet with multiple strings
     public static final PacketCodec<PacketByteBuf, SyncPacketData> PACKET_CODEC = new PacketCodec<PacketByteBuf, SyncPacketData>() {
         public SyncPacketData decode(PacketByteBuf byteBuf) {
             String packName = byteBuf.readString();
             List<AssetData> assets = byteBuf.readList(AssetData.PACKET_CODEC);
             String metadata = byteBuf.readString();
+            int chunks = byteBuf.readInt();
+            int chunkIndex = byteBuf.readInt();
 
-            return new SyncPacketData(packName, assets, metadata);
+            return new SyncPacketData(packName, assets, metadata, chunks, chunkIndex);
         }
 
         public void encode(PacketByteBuf byteBuf, SyncPacketData selectionData) {
             byteBuf.writeString(selectionData.packName);
             byteBuf.writeCollection(selectionData.assets, AssetData.PACKET_CODEC);
             byteBuf.writeString(selectionData.metadata);
+            byteBuf.writeInt(selectionData.chunks);
+            byteBuf.writeInt(selectionData.chunkIndex);
         }
     };
 
     public static final PacketCodec<PacketByteBuf, List<SyncPacketData>> LIST_PACKET_CODEC = PACKET_CODEC.collect(PacketCodecs.toList());
-
-    public String getPackName() {
-        return packName;
-    }
-
-    public List<AssetData> getAssets() {
-        return assets;
-    }
-
-    public String getMetadata() {
-        return metadata;
-    }
 }

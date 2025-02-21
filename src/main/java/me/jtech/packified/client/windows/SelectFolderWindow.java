@@ -8,8 +8,6 @@ import imgui.flag.ImGuiTableFlags;
 import imgui.type.ImString;
 import me.jtech.packified.client.PackifiedClient;
 import me.jtech.packified.client.util.FileUtils;
-import me.jtech.packified.client.util.JsonFile;
-import me.jtech.packified.client.util.PackUtils;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.minecraft.resource.ResourcePack;

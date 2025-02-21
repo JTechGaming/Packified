@@ -23,9 +23,7 @@ public class MultiplayerWindow {
     public static void render() {
         // Render the multiplayer window
         if (ImGui.begin("Multiplayer")) {
-            if (ImGui.imageButton(ImGuiImplementation.loadTexture("textures/ui/neu_sync.png"), 14, 14)) {
-
-            }
+            ImGui.imageButton(ImGuiImplementation.loadTexture("textures/ui/neu_sync.png"), 14, 14);
             if (ImGui.isItemClicked()) {
                 // Sync the pack to all the server players
                 System.out.println("Syncing pack to all players");
@@ -53,10 +51,14 @@ public class MultiplayerWindow {
                     ImGui.menuItem(player.getDisplayName().getString());
                     ImGui.popStyleColor();
                     if (ImGui.isItemHovered()) {
-                        if (greyedOut) {
-                            ImGui.setTooltip("Player does not have the mod installed");
+                        if (player.getUuid() != MinecraftClient.getInstance().player.getUuid()) {
+                            if (greyedOut) {
+                                ImGui.setTooltip("Player does not have the mod installed");
+                            } else {
+                                ImGui.setTooltip("Player has the mod installed");
+                            }
                         } else {
-                            ImGui.setTooltip("Player has the mod installed");
+                            ImGui.setTooltip("You");
                         }
                     }
 
@@ -72,19 +74,21 @@ public class MultiplayerWindow {
                     }
                     ImGui.tableSetColumnIndex(0);
 
-                    if (ImGui.beginPopupContextItem(player.getDisplayName().getString())) {
-                        if (ImGui.beginMenu("Request Pack")) {
-                            if (ImGui.menuItem("Full Pack")) {
-                                // Send a request for the full pack
-                                ClientPlayNetworking.send(new C2SRequestFullPack("!!currentpack!!", player.getUuid()));
+                    if (PackifiedClient.playerPacks.containsKey(player.getUuid()) && player.getUuid() != MinecraftClient.getInstance().player.getUuid()) {
+                        if (ImGui.beginPopupContextItem(player.getDisplayName().getString())) {
+                            if (ImGui.beginMenu("Request Pack")) {
+                                if (ImGui.menuItem("Full Pack")) {
+                                    // Send a request for the full pack
+                                    ClientPlayNetworking.send(new C2SRequestFullPack("!!currentpack!!", player.getUuid()));
+                                }
+                                if (ImGui.menuItem("Changes (not implemented)")) {
+                                    // Send a request for the changes
+                                    //Packified.sendChangesRequest(player.getUuid());
+                                }
+                                ImGui.endMenu();
                             }
-                            if (ImGui.menuItem("Changes (not implemented)")) {
-                                // Send a request for the changes
-                                //Packified.sendChangesRequest(player.getUuid());
-                            }
-                            ImGui.endMenu();
+                            ImGui.endPopup();
                         }
-                        ImGui.endPopup();
                     }
                 });
                 ImGui.endTable();

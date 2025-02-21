@@ -13,13 +13,19 @@ import net.fabricmc.api.Environment;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.resource.ResourcePackProfile;
 
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 
 @Environment(EnvType.CLIENT)
 public class MenuBar {
+    private static List<ResourcePackProfile> packs = new ArrayList<>();
+    private static boolean first = true;
+
     public static void render() {
         if (ImGui.beginMainMenuBar()) {
             if (ImGui.beginMenu("File")) {
@@ -90,17 +96,23 @@ public class MenuBar {
                 }
                 ImGui.separator();
                 if (ImGui.beginMenu("Open Pack")) {
-                    for (int i = 0; i < PackUtils.refresh().size(); i++) {
-                        if (ImGui.menuItem(PackUtils.refresh().get(i).getDisplayName().getString())) {
+                    if (first) {
+                        packs = PackUtils.refresh();
+                        first = false;
+                    }
+                    for (ResourcePackProfile pack : packs) {
+                        if (ImGui.menuItem(pack.getDisplayName().getString())) {
                             EditorWindow.openFiles.clear();
-                            PackifiedClient.currentPack = PackUtils.refresh().get(i);
-                            PackUtils.checkPackType(PackUtils.refresh().get(i));
+                            PackifiedClient.currentPack = pack;
+                            PackUtils.checkPackType(pack);
                             if (PackifiedClient.currentPack != null) {
                                 ClientPlayNetworking.send(new C2SInfoPacket(PackifiedClient.currentPack.getDisplayName().getString(), MinecraftClient.getInstance().player.getUuid()));
                             }
                         }
                     }
                     ImGui.endMenu();
+                } else {
+                    first = true;
                 }
                 ImGui.separator();
                 if (ImGui.menuItem("Exit")) {
@@ -109,19 +121,23 @@ public class MenuBar {
                 ImGui.endMenu();
             }
 
-            if (ImGui.beginMenu("Preferences")) {
-                if (ImGui.menuItem("Settings")) {
-                    System.out.println("Settings clicked");
+            if (ImGui.beginMenu("Edit")) {
+                if (ImGui.menuItem("Force Reload")) {
+                    PackUtils.reloadPack();
+                }
+                ImGui.separator();
+                if (ImGui.menuItem("Undo", "CTRL+Z")) { //TODO implement these
+                    System.out.println("Undo clicked");
+                }
+                if (ImGui.menuItem("Redo", "CTRL+Y")) { //TODO implement these
+                    System.out.println("Redo clicked");
                 }
                 ImGui.endMenu();
             }
 
-            if (ImGui.beginMenu("Edit")) {
-                if (ImGui.menuItem("Undo", "CTRL+Z")) {
-                    System.out.println("Undo clicked");
-                }
-                if (ImGui.menuItem("Redo", "CTRL+Y")) {
-                    System.out.println("Redo clicked");
+            if (ImGui.beginMenu("Preferences")) {
+                if (ImGui.menuItem("Settings")) {
+                    System.out.println("Settings clicked");
                 }
                 ImGui.endMenu();
             }

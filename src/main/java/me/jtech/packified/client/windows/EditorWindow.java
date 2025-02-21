@@ -1,6 +1,10 @@
 package me.jtech.packified.client.windows;
 
+import com.mojang.authlib.minecraft.client.ObjectMapper;
 import imgui.ImGui;
+import imgui.extension.texteditor.TextEditor;
+import imgui.extension.texteditor.TextEditorLanguageDefinition;
+import imgui.extension.texteditor.flag.TextEditorPaletteIndex;
 import imgui.flag.ImGuiTabBarFlags;
 import imgui.flag.ImGuiTabItemFlags;
 import imgui.flag.ImGuiWindowFlags;
@@ -20,9 +24,7 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.Base64;
-import java.util.List;
+import java.util.*;
 
 @Environment(EnvType.CLIENT)
 public class EditorWindow {
@@ -32,7 +34,7 @@ public class EditorWindow {
 
     private static float[] color = new float[]{1.0f, 1.0f, 1.0f};
 
-    private static int modifiedFiles = 0;
+    public static int modifiedFiles = 0;
 
     public static List<PackFile> changedAssets = new ArrayList<>();
 
@@ -64,12 +66,15 @@ public class EditorWindow {
                                             BufferedImage image = ImageIO.read(path.toFile());
                                             openFiles.add(new PackFile(path.getFileName().toString(), image));
                                         } else if (extension.equals(".json")) {
-                                            openFiles.add(new PackFile(path.getFileName().toString(), Files.readString(path), FileHierarchy.FileType.JSON));
+                                            String content = Files.readString(path);
+                                            TextEditor editor = new TextEditor();
+                                            editor.setText(content);
+                                            openFiles.add(new PackFile(path.getFileName().toString(), content, FileHierarchy.FileType.JSON, editor));
                                         } else if (extension.equals(".ogg")) {
                                             byte[] bytes = Files.readAllBytes(path);
                                             String base64 = Base64.getEncoder().encodeToString(bytes);
                                             String content = "data:audio/ogg;base64," + base64;
-                                            openFiles.add(new PackFile(path.getFileName().toString(), content, FileHierarchy.FileType.OGG)); //TODO add audio support
+                                            //openFiles.add(new PackFile(path.getFileName().toString(), content, FileHierarchy.FileType.OGG)); //TODO add audio support
                                         }
                                     } catch (IOException e) {
                                         throw new RuntimeException(e);
@@ -87,26 +92,33 @@ public class EditorWindow {
             }
 
             ImGui.beginChild("Toolbar", ImGui.getWindowWidth(), 40, false, ImGuiWindowFlags.HorizontalScrollbar);
-            ImGui.imageButton(ImGuiImplementation.loadTexture("textures/ui/neu_save.png"), 32, 32);
+            ImGui.imageButton(ImGuiImplementation.loadTexture("textures/ui/neu_save.png"), 24, 24);
             if (ImGui.isItemClicked()) {
                 // Logic to save the current file
                 if (currentFile != null) {
                     FileUtils.saveSingleFile(currentFile.getIdentifier(), FileUtils.getFileExtension(currentFile.getFileName()), currentFile.getTextEditorContent().get());
                 }
             }
+            if (ImGui.isItemHovered()) {
+                ImGui.setTooltip("Save (Ctrl+S)");
+            }
             ImGui.sameLine();
-            ImGui.imageButton(ImGuiImplementation.loadTexture("textures/ui/neu_save-all.png"), 32, 32);
+            ImGui.imageButton(ImGuiImplementation.loadTexture("textures/ui/neu_save-all.png"), 24, 24);
             if (ImGui.isItemClicked()) {
                 // Logic to save all files
                 FileUtils.saveAllFiles();
             }
+            if (ImGui.isItemHovered()) {
+                ImGui.setTooltip("Save All (Ctrl+Shift+S)");
+            }
             ImGui.sameLine();
-            ImGui.imageButton(ImGuiImplementation.loadTexture("textures/ui/neu_reload.png"), 32, 32);
+            ImGui.imageButton(ImGuiImplementation.loadTexture("textures/ui/neu_reload.png"), 24, 24);
             if (ImGui.isItemClicked()) {
                 // Logic to save all files
-                if (modifiedFiles > 0) {
-                    PackUtils.reloadPack();
-                }
+                PackUtils.reloadPack();
+            }
+            if (ImGui.isItemHovered()) {
+                ImGui.setTooltip("Reload Pack (Ctrl+R)");
             }
 
             ImGui.endChild();
@@ -133,9 +145,9 @@ public class EditorWindow {
                             case PNG:
                                 renderImageFileEditor(openFiles.get(i));
                                 break;
-                            case OGG:
-                                renderAudioFileEditor(openFiles.get(i));
-                                break;
+//                            case OGG:
+//                                renderAudioFileEditor(openFiles.get(i));
+//                                break;
                             default:
                                 ImGui.text("The " + openFiles.get(i).getExtension() + " file type can not be edited yet.");
                                 break;
@@ -160,12 +172,11 @@ public class EditorWindow {
     }
 
     private static void renderTabPopup() {
-        if (ImGui.menuItem("Save")) {
+        if (currentFile == null) {
+            return;
+        }
+        if (ImGui.menuItem("Save", "Ctrl+S")) {
             // Logic to save the current JSON file
-            if (currentFile == null) {
-                return;
-            }
-
             if (currentFile.isModified()) {
                 switch (currentFile.getExtension()) {
                     case JSON, MC_META, FSH, VSH, PROPERTIES, TEXT:
@@ -180,7 +191,17 @@ public class EditorWindow {
                 }
             }
         }
-        if (ImGui.menuItem("Close")) {
+        if (ImGui.menuItem("Undo", "Ctrl+Z") && currentFile.getTextEditor().canUndo()) {
+            currentFile.getTextEditor().undo(1);
+        }
+        if (ImGui.menuItem("Redo", "Ctrl+Y") && currentFile.getTextEditor().canRedo()) {
+            currentFile.getTextEditor().redo(1);
+        }
+        if (ImGui.menuItem("Save All", "Ctrl+Shift+S")) {
+            // Logic to save all JSON files
+            FileUtils.saveAllFiles();
+        }
+        if (ImGui.menuItem("Close", "Ctrl+W")) {
             // Logic to close the current tab
             if (currentFile.isModified()) {
                 ConfirmWindow.open("close this file", "Any unsaved changes might be lost.", () -> {
@@ -215,15 +236,35 @@ public class EditorWindow {
                 FileUtils.deleteFile(currentFile.getIdentifier());
             });
         }
-        // Add copy & paste??
     }
 
     private static void renderTextFileEditor(PackFile file) {
         // Logic to render the JSON editor for the given file
-        //TODO add text editor tools, highlight syntax, json validation, etc.
-        // can switch here to different editors based on file type,
-        // for example, a text editor for .txt files, a json editor for .json files, etc.
-        ImGui.inputTextMultiline("##source", file.getTextEditorContent(), ImGui.getWindowWidth() - 20, ImGui.getWindowHeight() - 40);
+        TextEditor textEditor = file.getTextEditor();
+
+        // Set syntax highlighting
+        switch (file.getExtension()) {
+            case JSON, MC_META:
+                textEditor.setLanguageDefinition(createJsonLanguageDefinition());
+                break;
+            case FSH, VSH:
+                textEditor.setLanguageDefinition(TextEditorLanguageDefinition.glsl());
+                break;
+            case PROPERTIES, TEXT:
+                textEditor.setLanguageDefinition(createTxtLanguageDefinition());
+                break;
+        }
+
+        // Set error markers
+        Map<Integer, String> errorMarkers = checkForErrors(file.getTextEditor().getText());
+        file.getTextEditorContent().set(file.getTextEditor().getText());
+        textEditor.setErrorMarkers(errorMarkers);
+
+        textEditor.setPalette(textEditor.getDarkPalette());
+
+        // Render the editor
+        textEditor.render("TextEditor");
+        //ImGui.inputTextMultiline("##source", file.getTextEditorContent(), ImGui.getWindowWidth() - 20, ImGui.getWindowHeight() - 40);
     }
 
     private static float[] zoomFactor = new float[]{1.0f};
@@ -334,7 +375,10 @@ public class EditorWindow {
         if (openFiles.stream().anyMatch(file -> file.getIdentifier().equals(identifier))) {
             return;
         }
-        openFiles.add(new PackFile(identifier, content, FileUtils.getExtension(identifier)));
+        TextEditor editor = new TextEditor();
+        editor.setText(content);
+        PackFile file = new PackFile(identifier, content, FileUtils.getExtension(identifier), editor);
+        openFiles.add(file);
         isOpen.set(true);
     }
 
@@ -344,5 +388,66 @@ public class EditorWindow {
         }
         openFiles.add(new PackFile(identifier, content));
         isOpen.set(true);
+    }
+
+    private static TextEditorLanguageDefinition createJsonLanguageDefinition() {
+        TextEditorLanguageDefinition lang = new TextEditorLanguageDefinition();
+        lang.setName("JSON");
+
+        // Define keywords
+        String[] keywords = new String[]{"elements", "name", "from", "to", "rotation", "faces"};
+        lang.setKeywords(keywords);
+
+        // Define identifiers
+        Map<String, String> identifiers = new HashMap<>();
+        identifiers.put("north", "north");
+        identifiers.put("east", "east");
+        identifiers.put("south", "south");
+        identifiers.put("west", "west");
+        identifiers.put("up", "up");
+        identifiers.put("down", "down");
+        identifiers.put("uv", "uv");
+        identifiers.put("texture", "texture");
+        lang.setIdentifiers(identifiers);
+
+        // Define token regex strings for symbols
+        Map<String, Integer> tokenRegexStrings = new HashMap<>();
+        //tokenRegexStrings.put("\"[^\"]*\"", TextEditorPaletteIndex.String);
+        tokenRegexStrings.put("[{}\\[\\]:,]", TextEditorPaletteIndex.Punctuation);
+        lang.setTokenRegexStrings(tokenRegexStrings);
+
+        lang.setAutoIdentation(true);
+        return lang;
+    }
+
+    private static TextEditorLanguageDefinition createTxtLanguageDefinition() {
+        TextEditorLanguageDefinition lang = new TextEditorLanguageDefinition();
+        lang.setName("Text");
+        String[] keywords = new String[]{};
+        lang.setKeywords(keywords);
+        Map<String, String> identifiers = new HashMap<>();
+        lang.setIdentifiers(identifiers);
+        Map<String, String> preprocIdentifiers = new HashMap<>();
+        lang.setPreprocIdentifiers(preprocIdentifiers);
+        Map<String, Integer> tokenRegexStrings = new HashMap<>();
+        lang.setTokenRegexStrings(tokenRegexStrings);
+        lang.setAutoIdentation(false);
+        return lang;
+    }
+
+    private static Map<Integer, String> checkForErrors(String content) {
+        Map<Integer, String> errorMarkers = new HashMap<>();
+        try {
+            new com.google.gson.JsonParser().parse(content);
+        } catch (com.google.gson.JsonSyntaxException e) {
+            System.out.println(e.getMessage());
+            // get the line number of the error
+            // the line number is the first number in the error message
+            String number = e.getMessage().replaceAll("[^0-9 ]","");
+            int lineNumber = Integer.parseInt(number.split(" ")[5]);
+            String errorMessage = e.getMessage().split(" ")[0];
+            errorMarkers.put(lineNumber, errorMessage);
+        }
+        return errorMarkers;
     }
 }

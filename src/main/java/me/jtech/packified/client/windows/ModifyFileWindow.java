@@ -25,6 +25,7 @@ public class ModifyFileWindow {
     public static void render() {
         if (!open) return;
         if (ImGui.begin("ModifyFilePopup")) {
+            fileName = new ImString(fileName.get(), fileName.getLength() + 8);
             ImGui.inputText("File Name:", fileName);
             ImGui.sameLine();
             if (ImGui.button(text)) {

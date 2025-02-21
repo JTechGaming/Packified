@@ -4,7 +4,6 @@
   "package": "me.jtech.packified.mixin",
   "compatibilityLevel": "JAVA_21",
   "mixins": [
-    "compat.axiom.AxiomEditorUIMixin"
   ],
   "client": [
     "FramebufferMixin",

@@ -15,7 +15,6 @@ import net.minecraft.util.Identifier;
 import net.minecraft.util.InvalidIdentifierException;
 
 import javax.imageio.ImageIO;
-import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.io.*;
 import java.net.URI;
@@ -104,6 +103,7 @@ public class FileUtils {
                 String content = null;
                 BufferedImage image;
                 if (extension.equals(".png")) {
+                    System.out.println("Importing image: " + fileName);
                     try {
                         image = ImageIO.read(file);
                         if (image != null) {
@@ -251,6 +251,10 @@ public class FileUtils {
     }
 
     public static void saveAllFiles() {
+        if (PackifiedClient.currentPack == null) {
+            System.err.println("No pack selected");
+            return;
+        }
         File resourcePackFolder = new File("resourcepacks/" + PackifiedClient.currentPack.getDisplayName().getString());
         makePackBackup(resourcePackFolder);
         for (PackFile file : EditorWindow.openFiles) {
@@ -308,8 +312,8 @@ public class FileUtils {
                 } else if (fileType.equals(".png")) {
                     // Save PNG image
                     //BufferedImage image = EditorWindow.getEditedImage(identifier); // Get edited image from UI
-                    //TODO get edited image from UI
-                    BufferedImage image = null;
+                    //TODO get edited image from UI (if the image is edited) <- image editor not implemented yet
+                    BufferedImage image = FileUtils.decodeBase64ToImage(content);
                     if (image != null) {
                         ImageIO.write(image, "png", targetFile);
                         sendDebugChatMessage("Image saved: " + targetFile.getAbsolutePath());
@@ -540,7 +544,8 @@ public class FileUtils {
             //return file.getSoundContent();
             return "";
         } else {
-            throw new IllegalArgumentException("Unsupported file type: " + file.getExtension().getExtension());
+            Packified.LOGGER.error("Unsupported file type: {}", file.getExtension().getExtension());
+            return "";
         }
     }
 
@@ -548,6 +553,17 @@ public class FileUtils {
         try (ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
             ImageIO.write(image, "png", outputStream);
             return Base64.getEncoder().encodeToString(outputStream.toByteArray());
+        } catch (IOException e) {
+            e.printStackTrace();
+            return null;
+        }
+    }
+
+    private static BufferedImage decodeBase64ToImage(String content) {
+        try {
+            byte[] imageBytes = Base64.getDecoder().decode(content);
+            ByteArrayInputStream inputStream = new ByteArrayInputStream(imageBytes);
+            return ImageIO.read(inputStream);
         } catch (IOException e) {
             e.printStackTrace();
             return null;
@@ -591,6 +607,7 @@ public class FileUtils {
     }
 
     public static void createPack(String packName, List<SyncPacketData.AssetData> assets, String metadata) {
+        System.out.println("Creating pack: " + packName);
         // Create the resource pack folder
         File resourcePackFolder = new File("resourcepacks/" + packName);
         if (!resourcePackFolder.exists()) {
@@ -603,6 +620,12 @@ public class FileUtils {
             assetsFolder.mkdirs();
         }
 
+        // Create the minecraft folder
+        File minecraftFolder = new File(assetsFolder, "minecraft");
+        if (!minecraftFolder.exists()) {
+            minecraftFolder.mkdirs();
+        }
+
         // Create the pack.mcmeta file
         File mcmetaFile = new File(resourcePackFolder, "pack.mcmeta");
         try {
@@ -613,11 +636,31 @@ public class FileUtils {
 
         // Create the assets
         for (SyncPacketData.AssetData asset : assets) {
-            File targetFile = new File(assetsFolder, asset.getIdentifier().getPath());
-            try {
-                Files.write(targetFile.toPath(), asset.getAssetData().getBytes(StandardCharsets.UTF_8));
-            } catch (IOException e) {
-                e.printStackTrace();
+            File targetFile = new File(minecraftFolder, asset.identifier().getPath());
+            targetFile.getParentFile().mkdirs();
+            //Files.write(targetFile.toPath(), asset.assetData().getBytes(StandardCharsets.UTF_8));
+            if (asset.extension().equals(".json")) {
+                // Save JSON file
+                try {
+                    Files.write(targetFile.toPath(), asset.assetData().getBytes(StandardCharsets.UTF_8));
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
+                sendDebugChatMessage("JSON content saved: " + asset.assetData());
+            } else if (asset.extension().equals(".png")) {
+                // Save PNG image
+                BufferedImage image = FileUtils.decodeBase64ToImage(asset.assetData());
+                if (image != null) {
+                    try {
+                        ImageIO.write(image, "png", targetFile);
+                    } catch (IOException e) {
+                        throw new RuntimeException(e);
+                    }
+                    sendDebugChatMessage("Image saved: " + targetFile.getAbsolutePath());
+                } else {
+                    System.err.println("No image found for: " + asset.identifier());
+                    sendDebugChatMessage("No image found for: " + asset.identifier());
+                }
             }
         }
 

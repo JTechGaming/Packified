@@ -99,6 +99,7 @@ public class FileHierarchy {
                 for (Map.Entry<String, FileHierarchy> entry : children.entrySet()) {
                     entry.getValue().renderTree(entry.getKey(), selecting);
                 }
+
                 ImGui.treePop();
             }
 
@@ -150,9 +151,9 @@ public class FileHierarchy {
             if (ImGui.beginMenu("New")) {
                 if (ImGui.menuItem("File")) {
                     // Create a new file
-                    ModifyFileWindow.open("Create File", identifier, (fileName) -> {
+                    ModifyFileWindow.open("Create File", identifier, (fileIdentifier) -> {
                         // Create the file
-                        System.out.println("fileName: " + fileName);
+                        String fileName = fileIdentifier.substring(fileIdentifier.lastIndexOf('/') + 1);
                         String newIdentifierPath = identifier.getPath().substring(0, identifier.getPath().lastIndexOf('/') + 1) + fileName;
                         System.out.println("newIdentifierPath: " + newIdentifierPath);
                         Identifier newIdentifier = FileUtils.validateIdentifier(newIdentifierPath);
@@ -161,9 +162,10 @@ public class FileHierarchy {
                 }
                 if (ImGui.menuItem("Folder")) {
                     // Create a new folder
-                    ModifyFileWindow.open("Create Folder", identifier, (fileName) -> {
+                    ModifyFileWindow.open("Create Folder", identifier, (folderIdentifier) -> {
                         // Create the folder
-                        String newIdentifierPath = identifier.getPath().substring(0, identifier.getPath().lastIndexOf('/') + 1) + fileName;
+                        String folderName = folderIdentifier.substring(folderIdentifier.lastIndexOf('/') + 1);
+                        String newIdentifierPath = identifier.getPath().substring(0, identifier.getPath().lastIndexOf('/') + 1) + folderName;
                         Identifier newIdentifier = FileUtils.validateIdentifier(newIdentifierPath);
                         if (newIdentifier == null) {
                             return;
@@ -216,7 +218,8 @@ public class FileHierarchy {
                         // Copy the file identifier to the players clipboard
                         // Example: "minecraft:textures/block/dirt.png"
                         // Would copy: "block/dirt.png" to the clipboard
-                        MinecraftClient.getInstance().keyboard.setClipboard(identifier.getPath().substring(identifier.getPath().indexOf('/') + 1));
+                        String id = identifier.getPath().substring(identifier.getPath().indexOf('/') + 1);
+                        MinecraftClient.getInstance().keyboard.setClipboard(id.substring(0, id.lastIndexOf('.')));
                     }
                     ImGui.endMenu();
                 }

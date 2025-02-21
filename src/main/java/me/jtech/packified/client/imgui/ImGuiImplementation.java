@@ -12,7 +12,6 @@ import imgui.type.ImBoolean;
 import me.jtech.packified.Packified;
 import me.jtech.packified.client.uiElements.MenuBar;
 import me.jtech.packified.client.util.IniUtil;
-import me.jtech.packified.client.util.JsonFile;
 import me.jtech.packified.client.windows.*;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;

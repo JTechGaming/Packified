@@ -76,6 +76,11 @@ public class BackupWindow {
                                         e.printStackTrace();
                                     }
                                 }
+                                ImGui.separator();
+                                if (ImGui.menuItem("Delete All")) {
+                                    // Delete file
+                                    ConfirmWindow.open("delete all backups", "They will be lost forever", FileUtils::clearBackups);
+                                }
                                 ImGui.endPopup();
                             }
                         });
