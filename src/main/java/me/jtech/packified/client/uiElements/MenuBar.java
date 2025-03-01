@@ -1,6 +1,7 @@
 package me.jtech.packified.client.uiElements;
 
 import imgui.ImGui;
+import me.jtech.packified.Packified;
 import me.jtech.packified.client.PackifiedClient;
 import me.jtech.packified.client.util.FileDialog;
 import me.jtech.packified.client.util.FileUtils;
@@ -126,11 +127,15 @@ public class MenuBar {
                     PackUtils.reloadPack();
                 }
                 ImGui.separator();
-                if (ImGui.menuItem("Undo", "CTRL+Z")) { //TODO implement these
-                    System.out.println("Undo clicked");
+                if (ImGui.menuItem("Undo", "CTRL+Z")) {
+                    if (EditorWindow.currentFile != null) {
+                        EditorWindow.currentFile.getTextEditor().undo(1);
+                    }
                 }
-                if (ImGui.menuItem("Redo", "CTRL+Y")) { //TODO implement these
-                    System.out.println("Redo clicked");
+                if (ImGui.menuItem("Redo", "CTRL+Y")) {
+                    if (EditorWindow.currentFile != null) {
+                        EditorWindow.currentFile.getTextEditor().redo(1);
+                    }
                 }
                 ImGui.endMenu();
             }
@@ -145,6 +150,14 @@ public class MenuBar {
             if (ImGui.beginMenu("Help")) {
                 if (ImGui.menuItem("About")) {
                     System.out.println("Show About Window");
+                }
+                if (ImGui.menuItem("Toggle Debug Mode")) {
+                    Packified.debugMode = !Packified.debugMode;
+                }
+                if (ImGui.isItemHovered()) {
+                    ImGui.beginTooltip();
+                    ImGui.text("Is: " + Packified.debugMode);
+                    ImGui.endTooltip();
                 }
                 ImGui.endMenu();
             }

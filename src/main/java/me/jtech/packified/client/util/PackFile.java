@@ -16,7 +16,6 @@ public class PackFile {
     private OggAudioStream soundContent;
     private FileHierarchy.FileType extension;
     private BufferedImage imageEditorContent;
-    private ImString textEditorContent;
     private OggAudioStream soundEditorContent;
     private Identifier identifier;
     private TextEditor textEditor;
@@ -40,7 +39,6 @@ public class PackFile {
         this.identifier = identifier;
         this.fileName = identifier.getPath();
         this.textContent = content;
-        this.textEditorContent = new ImString(content, Packified.MAX_FILE_SIZE);
         this.extension = extension;
         this.textEditor = textEditor;
     }
@@ -48,7 +46,6 @@ public class PackFile {
     public PackFile(String fileName, String content, FileHierarchy.FileType extension, TextEditor textEditor) {
         this.fileName = fileName;
         this.textContent = content;
-        this.textEditorContent = new ImString(content, Packified.MAX_FILE_SIZE);
         this.extension = extension;
         this.textEditor = textEditor;
     }
@@ -109,20 +106,11 @@ public class PackFile {
         if (extension == FileHierarchy.FileType.PNG) {
             return !imageContent.equals(imageEditorContent);
         } else if (extension == FileHierarchy.FileType.JSON) {
-            return !textContent.equals(textEditorContent.get());
+            return !textContent.equals(textEditor.getText());
         } else if (extension == FileHierarchy.FileType.OGG) {
             return !soundContent.equals(soundEditorContent);
         }
         return false;
-    }
-
-    public ImString getTextEditorContent() {
-        //textEditorContent = new ImString(textEditorContent.get(), textEditorContent.getBufferSize() + 8);
-        return textEditorContent;
-    }
-
-    public void setEditorContent(String editorContent) {
-        this.textEditorContent.set(editorContent);
     }
 
     public String getTextContent() {
@@ -157,7 +145,7 @@ public class PackFile {
         if (extension == FileHierarchy.FileType.PNG) {
             imageContent = imageEditorContent;
         } else if (extension == FileHierarchy.FileType.JSON) {
-            textContent = textEditorContent.get();
+            textContent = textEditor.getText();
         } else if (extension == FileHierarchy.FileType.OGG) {
             soundContent = soundEditorContent;
         }

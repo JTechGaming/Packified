@@ -26,14 +26,21 @@ public class MultiplayerWindow {
             ImGui.imageButton(ImGuiImplementation.loadTexture("textures/ui/neu_sync.png"), 14, 14);
             if (ImGui.isItemClicked()) {
                 // Sync the pack to all the server players
-                System.out.println("Syncing pack to all players");
                 ResourcePackProfile pack = PackifiedClient.currentPack;
                 PackUtils.sendPackChangesToPlayers(pack);
             }
             if (ImGui.isItemHovered()) {
                 ImGui.setTooltip("Sync your pack to all the server players");
             }
-            // TODO add option to sync the pack to the server resource pack
+            ImGui.imageButton(ImGuiImplementation.loadTexture("textures/ui/neu_upload.png"), 14, 14);
+            if (ImGui.isItemClicked()) {
+                // Upload the pack to the server
+                ResourcePackProfile pack = PackifiedClient.currentPack;
+                PackUtils.sendPackAsServerPack(pack);
+            }
+            if (ImGui.isItemHovered()) {
+                ImGui.setTooltip("Upload your pack to the server");
+            }
             ImGui.separator();
 
             if (ImGui.beginTable("##multiplayer_table", 2, ImGuiTableFlags.RowBg | ImGuiTableFlags.Resizable | ImGuiTableFlags.NoBordersInBody

@@ -96,7 +96,7 @@ public class EditorWindow {
             if (ImGui.isItemClicked()) {
                 // Logic to save the current file
                 if (currentFile != null) {
-                    FileUtils.saveSingleFile(currentFile.getIdentifier(), FileUtils.getFileExtension(currentFile.getFileName()), currentFile.getTextEditorContent().get());
+                    FileUtils.saveSingleFile(currentFile.getIdentifier(), FileUtils.getFileExtension(currentFile.getFileName()), currentFile.getTextEditor().getText());
                 }
             }
             if (ImGui.isItemHovered()) {
@@ -180,7 +180,7 @@ public class EditorWindow {
             if (currentFile.isModified()) {
                 switch (currentFile.getExtension()) {
                     case JSON, MC_META, FSH, VSH, PROPERTIES, TEXT:
-                        FileUtils.saveSingleFile(currentFile.getIdentifier(), FileUtils.getFileExtension(currentFile.getFileName()), currentFile.getTextEditorContent().get());
+                        FileUtils.saveSingleFile(currentFile.getIdentifier(), FileUtils.getFileExtension(currentFile.getFileName()), currentFile.getTextEditor().getText());
                         break;
                     case PNG:
                         FileUtils.saveSingleFile(currentFile.getIdentifier(), FileUtils.getFileExtension(currentFile.getFileName()), FileUtils.encodeImageToBase64(currentFile.getImageEditorContent()));
@@ -257,7 +257,7 @@ public class EditorWindow {
 
         // Set error markers
         Map<Integer, String> errorMarkers = checkForErrors(file.getTextEditor().getText());
-        file.getTextEditorContent().set(file.getTextEditor().getText());
+        //file.getTextEditorContent().set(file.getTextEditor().getText());
         textEditor.setErrorMarkers(errorMarkers);
 
         textEditor.setPalette(textEditor.getDarkPalette());
@@ -440,13 +440,16 @@ public class EditorWindow {
         try {
             new com.google.gson.JsonParser().parse(content);
         } catch (com.google.gson.JsonSyntaxException e) {
-            System.out.println(e.getMessage());
             // get the line number of the error
             // the line number is the first number in the error message
-            String number = e.getMessage().replaceAll("[^0-9 ]","");
-            int lineNumber = Integer.parseInt(number.split(" ")[5]);
-            String errorMessage = e.getMessage().split(" ")[0];
-            errorMarkers.put(lineNumber, errorMessage);
+            try {
+                String number = e.getMessage().replaceAll("[^0-9 ]", "");
+                int lineNumber = Integer.parseInt(number.split(" ")[5]);
+                String errorMessage = e.getMessage().split(" ")[0];
+                errorMarkers.put(lineNumber, errorMessage);
+            } catch (NumberFormatException ex) {
+                System.err.println("Failed to parse error message: " + e.getMessage());
+            }
         }
         return errorMarkers;
     }

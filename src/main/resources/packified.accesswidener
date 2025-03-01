@@ -7,3 +7,9 @@ accessible field net/minecraft/client/util/Window height I
 accessible field net/minecraft/client/util/Window framebufferWidth I
 accessible field net/minecraft/client/util/Window framebufferHeight I
 accessible method net/minecraft/client/render/model/BakedModelManager reloadModels (Lnet/minecraft/resource/ResourceManager;Ljava/util/concurrent/Executor;)Ljava/util/concurrent/CompletableFuture;
+accessible field net/minecraft/client/MinecraftClient resourceReloadLogger Lnet/minecraft/client/resource/ResourceReloadLogger;
+accessible field net/minecraft/client/MinecraftClient resourceManager Lnet/minecraft/resource/ReloadableResourceManagerImpl;
+accessible field net/minecraft/client/MinecraftClient serverResourcePackLoader Lnet/minecraft/client/resource/server/ServerResourcePackLoader;
+accessible method net/minecraft/client/MinecraftClient onFinishedLoading (Lnet/minecraft/client/MinecraftClient$LoadingContext;)V
+accessible field net/minecraft/client/MinecraftClient COMPLETED_UNIT_FUTURE Ljava/util/concurrent/CompletableFuture;
+accessible field net/minecraft/client/MinecraftClient resourcePackManager Lnet/minecraft/resource/ResourcePackManager;

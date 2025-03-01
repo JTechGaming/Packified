@@ -297,17 +297,22 @@ public class FileUtils {
                 removeZipFileFromOptions(zipFolder);
                 // Save to folder
                 File targetFile = new File(resourcePackFolder, targetFilePath);
+
+                // Ensure parent directories exist
+                targetFile.getParentFile().mkdirs();
+
                 if (!targetFile.exists()) {
                     sendDebugChatMessage("Target file not found, creating a new one: " + targetFile.getAbsolutePath());
                     targetFile.createNewFile();
                 }
 
-                // Ensure parent directories exist
-                targetFile.getParentFile().mkdirs();
-
                 if (fileType.equals(".json")) {
                     // Save JSON file
-                    Files.write(targetFile.toPath(), content.getBytes(StandardCharsets.UTF_8));
+                    try {
+                        Files.write(targetFile.toPath(), content.getBytes(StandardCharsets.UTF_8));
+                    } catch (IOException e) {
+                        throw new RuntimeException(e);
+                    }
                     sendDebugChatMessage("JSON content saved: " + content);
                 } else if (fileType.equals(".png")) {
                     // Save PNG image
@@ -315,11 +320,15 @@ public class FileUtils {
                     //TODO get edited image from UI (if the image is edited) <- image editor not implemented yet
                     BufferedImage image = FileUtils.decodeBase64ToImage(content);
                     if (image != null) {
-                        ImageIO.write(image, "png", targetFile);
+                        try {
+                            ImageIO.write(image, "png", targetFile);
+                        } catch (IOException e) {
+                            throw new RuntimeException(e);
+                        }
                         sendDebugChatMessage("Image saved: " + targetFile.getAbsolutePath());
                     } else {
-                        System.err.println("No edited image found for: " + identifier);
-                        sendDebugChatMessage("No edited image found for: " + identifier);
+                        System.err.println("No image found for: " + identifier);
+                        sendDebugChatMessage("No image found for: " + identifier);
                     }
                 }
             }
@@ -537,7 +546,7 @@ public class FileUtils {
 
     public static String getContent(PackFile file) {
         if (file.getExtension().getExtension().equals(FileHierarchy.FileType.JSON.getExtension())) {
-            return file.getTextEditorContent().get();
+            return file.getTextEditor().getText();
         } else if (file.getExtension().getExtension().equals(FileHierarchy.FileType.PNG.getExtension())) {
             return encodeImageToBase64(file.getImageEditorContent());
         } else if (file.getExtension().getExtension().equals(FileHierarchy.FileType.OGG.getExtension())) {
@@ -664,8 +673,19 @@ public class FileUtils {
             }
         }
 
-        // Put the pack in the resource pack list
-        PackUtils.refresh();
+        sendDebugChatMessage("Resource pack created: " + packName);
+
+        List<ResourcePackProfile> profiles = PackUtils.refresh();
+        for (ResourcePackProfile profile : profiles) {
+            if (profile.getDisplayName().getString().equals(packName)) {
+                PackifiedClient.currentPack = profile;
+                sendDebugChatMessage("Resource pack loaded: " + packName);
+                break;
+            }
+        }
+        if (!Objects.equals(PackifiedClient.currentPack.getDisplayName().getString(), packName)) {
+            sendDebugChatMessage("Resource pack not found: " + packName);
+        }
 
         // Reload the resource packs
         PackUtils.reloadPack();

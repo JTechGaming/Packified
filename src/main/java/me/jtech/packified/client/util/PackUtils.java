@@ -10,7 +10,10 @@ import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.SharedConstants;
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.resource.ResourceReloadLogger;
 import net.minecraft.resource.*;
+import net.minecraft.util.Identifier;
+import net.minecraft.util.Util;
 
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
@@ -21,7 +24,6 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
-import java.util.concurrent.CompletableFuture;
 
 public class PackUtils {
     private static List<ResourcePackProfile> resourcePacks;
@@ -35,7 +37,14 @@ public class PackUtils {
     }
 
     public static void reloadPack() {
-        MinecraftClient.getInstance().reloadResources();
+        MinecraftClient client = MinecraftClient.getInstance();
+        client.getResourcePackManager().scanPacks();
+        List<ResourcePack> list = client.resourcePackManager.createResourcePacks();
+        client.resourceReloadLogger.reload(ResourceReloadLogger.ReloadReason.UNKNOWN, list);
+        client.resourceManager.reload(Util.getMainWorkerExecutor(), client, MinecraftClient.COMPLETED_UNIT_FUTURE, list);
+        client.worldRenderer.reload();
+        client.resourceReloadLogger.finish();
+        client.serverResourcePackLoader.onReloadSuccess();
     }
 
     public static Path getPackFolder(ResourcePack pack) {
@@ -62,17 +71,58 @@ public class PackUtils {
         return name.replaceAll("[^a-zA-Z0-9._-]", "_");
     }
 
+    public static void sendPackAsServerPack(ResourcePackProfile currentPack) {
+        if (currentPack == null) {
+            return;
+        }
+        List<PackFile> changedAssets = EditorWindow.changedAssets;
+        accumulatePacketData(currentPack, changedAssets, data -> {
+            ClientPlayNetworking.send(new C2SSyncPackChanges(data, List.of(new UUID(0, 0))));
+        });
+    }
+
     public static void sendPackChangesToPlayers(ResourcePackProfile currentPack) {
         if (currentPack == null) {
             return;
         }
-        List<SyncPacketData.AssetData> changedAssets = new ArrayList<>();
-        for (PackFile asset : EditorWindow.changedAssets) { //TODO changedassets might be reset at this point
-            changedAssets.add(new SyncPacketData.AssetData(asset.getIdentifier(), FileUtils.getFileExtension(asset.getFileName()), FileUtils.getContent(asset)));
+        List<PackFile> changedAssets = EditorWindow.changedAssets;
+        accumulatePacketData(currentPack, changedAssets, data -> {
+            ClientPlayNetworking.send(new C2SSyncPackChanges(data, PackifiedClient.markedPlayers));
+        });
+    }
+
+    private static void accumulatePacketData(ResourcePackProfile currentPack, List<PackFile> changedAssets, PacketAction action) {
+        List<SyncPacketData.AssetData> assets = new ArrayList<>();
+        for (int i = 0; i < changedAssets.size(); i++) {
+            PackFile asset = changedAssets.get(i);
+            String content = FileUtils.getContent(asset);
+            Identifier identifier = asset.getIdentifier();
+            String extension = FileUtils.getFileExtension(identifier.getPath());
+            boolean finalAsset = i == changedAssets.size() - 1;
+            if (content.length() + assets.stream().mapToInt(cAsset -> cAsset.assetData().length()).sum() > Packified.MAX_PACKET_SIZE) {
+                SyncPacketData data = new SyncPacketData(currentPack.getDisplayName().getString(), assets, FileUtils.getMCMetaContent(currentPack), finalAsset);
+                action.execute(data);
+                assets.clear();
+            }
+            if (content.length() > Packified.MAX_PACKET_SIZE) {
+                // split the asset into multiple chunks
+                int requiredChunks = (int) Math.ceil((double) content.length() / Packified.MAX_PACKET_SIZE);
+                for (int a = 0; a < requiredChunks; a++) {
+                    int start = a * Packified.MAX_PACKET_SIZE;
+                    int end = Math.min((a + 1) * Packified.MAX_PACKET_SIZE, content.length());
+                    String chunk = content.substring(start, end);
+                    SyncPacketData data = new SyncPacketData(currentPack.getDisplayName().getString(), List.of(new SyncPacketData.AssetData(identifier, extension, chunk, a == requiredChunks - 1)), FileUtils.getMCMetaContent(currentPack), (a == requiredChunks - 1) && finalAsset);
+                    action.execute(data);
+                }
+                continue;
+            }
+            assets.add(new SyncPacketData.AssetData(identifier, extension, content, true));
+            if (finalAsset) {
+                SyncPacketData data = new SyncPacketData(currentPack.getDisplayName().getString(), assets, FileUtils.getMCMetaContent(currentPack), true);
+                action.execute(data);
+                assets.clear();
+            }
         }
-        SyncPacketData data = new SyncPacketData(currentPack.getDisplayName().getString(), changedAssets, FileUtils.getMCMetaContent(currentPack), 1, 0);
-        Packified.LOGGER.info(data.toString());
-        ClientPlayNetworking.send(new C2SSyncPackChanges(data, PackifiedClient.markedPlayers));
     }
 
     public static ResourcePackProfile getPack(String packName) {
@@ -84,33 +134,32 @@ public class PackUtils {
         return null;
     }
 
-    private static List<List<SyncPacketData.AssetData>> assets = new ArrayList<>();
-    private static int currentChunk = 0;
-    public static List<List<SyncPacketData.AssetData>> getAllAssets(ResourcePackProfile pack) {
-        ResourcePack resourcePack = pack.createResourcePack();
-        assets.add(new ArrayList<>());
-        loadAssets(resourcePack, "atlases");
-        loadAssets(resourcePack, "blockstates");
-        loadAssets(resourcePack, "font");
-        loadAssets(resourcePack, "lang");
-        loadAssets(resourcePack, "models");
-        loadAssets(resourcePack, "particles");
-        loadAssets(resourcePack, "shaders");
-        loadAssets(resourcePack, "sounds");
-        loadAssets(resourcePack, "texts");
-        loadAssets(resourcePack, "textures");
-        List<List<SyncPacketData.AssetData>> returnAssets = new ArrayList<>(assets);
+    public static void sendFullPack(ResourcePackProfile pack, UUID player) {
+        List<SyncPacketData.AssetData> assets = new ArrayList<>();
+
+        loadAssets(pack, "atlases", player, assets);
+        loadAssets(pack, "blockstates", player, assets);
+        loadAssets(pack, "font", player, assets);
+        loadAssets(pack, "lang", player, assets);
+        loadAssets(pack, "models", player, assets);
+        loadAssets(pack, "particles", player, assets);
+        loadAssets(pack, "shaders", player, assets);
+        loadAssets(pack, "sounds", player, assets);
+        loadAssets(pack, "texts", player, assets);
+        loadAssets(pack, "textures", player, assets);
+        SyncPacketData data = new SyncPacketData(pack.getDisplayName().getString(), assets, FileUtils.getMCMetaContent(pack), true);
+        ClientPlayNetworking.send(new C2SSendFullPack(data, player));
         assets.clear();
-        currentChunk = 0;
-        return returnAssets;
     }
 
-    private static void loadAssets(ResourcePack resourcePack, String prefix) {
+    private static void loadAssets(ResourcePackProfile currentPack, String prefix, UUID player, List<SyncPacketData.AssetData> assets) {
         String namespace = "minecraft";
+        ResourcePack resourcePack = currentPack.createResourcePack();
         resourcePack.findResources(ResourceType.CLIENT_RESOURCES, namespace, prefix, (identifier, resourceSupplier) -> {
             try {
                 InputStream inputStream = Objects.requireNonNull(resourcePack.open(ResourceType.CLIENT_RESOURCES, identifier)).get();
                 String content;
+
                 if (FileUtils.getFileExtension(identifier.getPath()).equals(".png")) {
                     BufferedImage image = ImageIO.read(inputStream);
                     if (image == null) {
@@ -121,15 +170,29 @@ public class PackUtils {
                 } else if (FileUtils.getFileExtension(identifier.getPath()).equals(".ogg")) {
                     content = new String(inputStream.readAllBytes(), StandardCharsets.UTF_8); // TODO fix audio
 
-                } else{
+                } else {
                     content = new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
                 }
-                // Check if the current data in the chunk is too big
-                if (content.length() + assets.get(currentChunk).stream().mapToInt(asset -> asset.assetData().length()).sum() > Packified.MAX_PACKET_SIZE) {
-                    currentChunk++;
-                    assets.add(new ArrayList<>());
+
+                String extension = FileUtils.getFileExtension(identifier.getPath());
+                if (content.length() + assets.stream().mapToInt(cAsset -> cAsset.assetData().length()).sum() > Packified.MAX_PACKET_SIZE) {
+                    SyncPacketData data = new SyncPacketData(currentPack.getDisplayName().getString(), assets, FileUtils.getMCMetaContent(currentPack), false);
+                    ClientPlayNetworking.send(new C2SSendFullPack(data, player));
+                    assets.clear();
                 }
-                assets.get(currentChunk).add(new SyncPacketData.AssetData(identifier, FileUtils.getFileExtension(identifier.getPath()), content));
+                if (content.length() > Packified.MAX_PACKET_SIZE) {
+                    // split the asset into multiple chunks
+                    int requiredChunks = (int) Math.ceil((double) content.length() / Packified.MAX_PACKET_SIZE);
+                    for (int a = 0; a < requiredChunks; a++) {
+                        int start = a * Packified.MAX_PACKET_SIZE;
+                        int end = Math.min((a + 1) * Packified.MAX_PACKET_SIZE, content.length());
+                        String chunk = content.substring(start, end);
+                        SyncPacketData data = new SyncPacketData(currentPack.getDisplayName().getString(), List.of(new SyncPacketData.AssetData(identifier, extension, chunk, a == requiredChunks - 1)), FileUtils.getMCMetaContent(currentPack), false);
+                        ClientPlayNetworking.send(new C2SSendFullPack(data, player));
+                    }
+                    return;
+                }
+                assets.add(new SyncPacketData.AssetData(identifier, extension, content, true));
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }
@@ -200,16 +263,12 @@ public class PackUtils {
         });
     }
 
-    public static void sendFullPack(ResourcePackProfile pack, UUID player) {
-        List<List<SyncPacketData.AssetData>> assets = PackUtils.getAllAssets(pack);
-        System.out.println("Split the pack into " + assets.size() + " chunks");
-        for (int i = 0; i < assets.size(); i++) {
-            SyncPacketData data = new SyncPacketData(pack.getDisplayName().getString(), assets.get(i), FileUtils.getMCMetaContent(pack), assets.size(), i);
-            ClientPlayNetworking.send(new C2SSendFullPack(data, player));
-        }
-    }
-
     public static int getCurrentPackFormat() {
         return SharedConstants.getGameVersion().getResourceVersion(ResourceType.CLIENT_RESOURCES);
+    }
+
+    @FunctionalInterface
+    public interface PacketAction {
+        void execute(SyncPacketData data);
     }
 }

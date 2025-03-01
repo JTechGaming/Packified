@@ -23,7 +23,6 @@ public class Packified implements ModInitializer {
 
     public static boolean debugMode = false;
 
-    public static final int MAX_FILE_SIZE = 16384;
     public static final int MAX_PACKET_SIZE = 32767;
 
     @Override
@@ -43,6 +42,11 @@ public class Packified implements ModInitializer {
 
         ServerPlayNetworking.registerGlobalReceiver(C2SSyncPackChanges.ID, (payload, context) -> {
             context.server().execute(() -> {
+                if (payload.markedPlayers().getFirst().getLeastSignificantBits() == 0 && payload.markedPlayers().getFirst().getMostSignificantBits() == 0) {
+                    // Store the pack on the server
+                    //TODO Store the pack on the server
+                    return;
+                }
                 // Send the pack changes to all players
                 List<ServerPlayerEntity> players = context.server().getPlayerManager().getPlayerList();
                 for (ServerPlayerEntity player : players) {

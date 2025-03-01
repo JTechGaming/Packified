@@ -17,18 +17,23 @@ import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gui.screen.GameModeSelectionScreen;
 import net.minecraft.client.network.ClientPlayerInteractionManager;
 import net.minecraft.client.option.KeyBinding;
+import net.minecraft.client.render.block.BlockRenderManager;
+import net.minecraft.client.render.item.ItemRenderer;
+import net.minecraft.client.resource.ResourceReloadLogger;
 import net.minecraft.client.util.InputUtil;
+import net.minecraft.resource.ResourceManager;
+import net.minecraft.resource.ResourcePack;
 import net.minecraft.resource.ResourcePackProfile;
+import net.minecraft.util.Identifier;
+import net.minecraft.util.Util;
 import net.minecraft.world.GameMode;
 import org.lwjgl.glfw.GLFW;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.*;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 @Environment(EnvType.CLIENT)
 public class PackifiedClient implements ClientModInitializer {
@@ -45,11 +50,11 @@ public class PackifiedClient implements ClientModInitializer {
     public static List<UUID> markedPlayers = new ArrayList<>();
     public static Map<UUID, String> playerPacks = new HashMap<>();
 
-    private static final List<List<SyncPacketData.AssetData>> chunkedAssetsBuffer = new ArrayList<>();
+    private static final List<SyncPacketData.AssetData> chunkedAssetsBuffer = new ArrayList<>();
+    private static boolean isFirstPacket = true;
     //TODO fix known incompatibility: shared resources mod
-    //TODO fix known incompatibility: ImmediatelyFast
-    //TODO file->new file creates a malformed path with a duplicate namespace
-    //TODO fix the select pack screen being extremely laggy
+    //TODO fix known incompatibility: ImmediatelyFast ???
+    //TODO fix known incompatibility: Essential Mod
 
     @Override
     public void onInitializeClient() {
@@ -84,45 +89,22 @@ public class PackifiedClient implements ClientModInitializer {
                 ClientPlayNetworking.send(new C2SRequestFullPack(payload.packetData().packName(), payload.player()));
                 return;
             }
-            ResourcePackProfile oldPack = currentPack;
             currentPack = pack;
-            List<SyncPacketData.AssetData> assets = payload.packetData().assets();
-            for (SyncPacketData.AssetData asset : assets) {
-                FileUtils.saveSingleFile(asset.identifier(), asset.extension(), asset.assetData());
-            }
-            FileUtils.setMCMetaContent(pack, payload.packetData().metadata());
 
-            // Reload the pack
-            PackUtils.reloadPack();
-
-            currentPack = oldPack;
+            SyncPacketData data = payload.packetData();
+            accumulativeAssetDownload(data, pack);
         });
 
         ClientPlayNetworking.registerGlobalReceiver(S2CSendFullPack.ID, (payload, context) -> {
             // Logic to fully download, add and apply the pack
             SyncPacketData data = payload.packetData();
-
-            if (data.chunks() > 1) {
-                chunkedAssetsBuffer.add(new ArrayList<>());
-                chunkedAssetsBuffer.get(data.chunkIndex()).addAll(data.assets());
-                if (chunkedAssetsBuffer.get(data.chunkIndex()).size() == data.assets().size()) {
-                    if (data.chunkIndex() == data.chunks() - 1) {
-                        List<SyncPacketData.AssetData> assets = new ArrayList<>();
-                        for (List<SyncPacketData.AssetData> chunk : chunkedAssetsBuffer) {
-                            assets.addAll(chunk);
-                        }
-                        chunkedAssetsBuffer.clear();
-                        data = new SyncPacketData(data.packName(), assets, data.metadata(), 1, 0);
-                    } else {
-                        return;
-                    }
-                } else {
-                    return;
-                }
+            if (isFirstPacket) {
+                isFirstPacket = false;
+                // Create the pack
+                FileUtils.createPack(data.packName(), List.of(), data.metadata());
             }
 
-            // Create the pack
-            FileUtils.createPack(data.packName(), data.assets(), data.metadata());
+            accumulativeAssetDownload(data, currentPack);
         });
 
         ClientPlayNetworking.registerGlobalReceiver(S2CRequestFullPack.ID, (payload, context) -> {
@@ -158,6 +140,54 @@ public class PackifiedClient implements ClientModInitializer {
         ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> {
             ClientPlayNetworking.send(new C2SHasMod(version));
         });
+    }
+
+    private static void accumulativeAssetDownload(SyncPacketData data, ResourcePackProfile pack) {
+        for (SyncPacketData.AssetData asset : data.assets()) {
+            if (!asset.finalChunk()) {
+                if (bufferContainsAsset(asset.identifier())) {
+                    int index = bufferGetAsset(asset.identifier());
+                    chunkedAssetsBuffer.get(index).setAssetData(chunkedAssetsBuffer.get(index).assetData() + asset.assetData());
+                } else {
+                    chunkedAssetsBuffer.add(asset);
+                }
+                continue;
+            }
+            SyncPacketData.AssetData assetData;
+            if (bufferContainsAsset(asset.identifier())) {
+                int index = bufferGetAsset(asset.identifier());
+                assetData = chunkedAssetsBuffer.get(index);
+                assetData.setAssetData(assetData.assetData() + asset.assetData());
+                chunkedAssetsBuffer.remove(index);
+            } else {
+                assetData = asset;
+            }
+            FileUtils.saveSingleFile(assetData.identifier(), assetData.extension(), assetData.assetData());
+        }
+        if (data.finalChunk()) {
+            FileUtils.setMCMetaContent(pack, data.metadata());
+            PackUtils.reloadPack();
+            chunkedAssetsBuffer.clear();
+            isFirstPacket = true;
+        }
+    }
+
+    public static int bufferGetAsset(Identifier identifier) {
+        for (SyncPacketData.AssetData asset : chunkedAssetsBuffer) {
+            if (asset.identifier().equals(identifier)) {
+                return chunkedAssetsBuffer.indexOf(asset);
+            }
+        }
+        return 0;
+    }
+
+    public static boolean bufferContainsAsset(Identifier identifier) {
+        for (SyncPacketData.AssetData asset : chunkedAssetsBuffer) {
+            if (asset.identifier().equals(identifier)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private boolean isSaveKeyPressed() {
