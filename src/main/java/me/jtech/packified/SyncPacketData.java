@@ -3,11 +3,9 @@ package me.jtech.packified;
 import net.minecraft.network.PacketByteBuf;
 import net.minecraft.network.codec.PacketCodec;
 import net.minecraft.network.codec.PacketCodecs;
-import net.minecraft.util.Identifier;
 
-import java.util.ArrayList;
+import java.nio.file.Path;
 import java.util.List;
-import java.util.Objects;
 
 public record SyncPacketData(String packName, List<AssetData> assets, String metadata, boolean finalChunk) {
 
@@ -15,15 +13,15 @@ public record SyncPacketData(String packName, List<AssetData> assets, String met
 
         public static final PacketCodec<PacketByteBuf, AssetData> PACKET_CODEC = new PacketCodec<PacketByteBuf, AssetData>() {
             public AssetData decode(PacketByteBuf byteBuf) {
-                Identifier identifier = byteBuf.readIdentifier();
+                Path path = Path.of(byteBuf.readString());
                 String extension = byteBuf.readString();
                 String assetData = byteBuf.readString();
                 boolean finalChunk = byteBuf.readBoolean();
-                return new AssetData(identifier, extension, assetData, finalChunk);
+                return new AssetData(path, extension, assetData, finalChunk);
             }
 
             public void encode(PacketByteBuf byteBuf, AssetData assetData) {
-                byteBuf.writeIdentifier(assetData.identifier);
+                byteBuf.writeString(assetData.path.toString());
                 byteBuf.writeString(assetData.extension);
                 byteBuf.writeString(assetData.assetData);
                 byteBuf.writeBoolean(assetData.finalChunk);
@@ -32,20 +30,20 @@ public record SyncPacketData(String packName, List<AssetData> assets, String met
 
 
         public static final PacketCodec<PacketByteBuf, List<AssetData>> LIST_PACKET_CODEC = PACKET_CODEC.collect(PacketCodecs.toList());
-        private final Identifier identifier;
+        private final Path path;
         private final String extension;
         private String assetData;
         private boolean finalChunk;
 
-        public AssetData(Identifier identifier, String extension, String assetData, boolean finalChunk) {
-            this.identifier = identifier;
+        public AssetData(Path path, String extension, String assetData, boolean finalChunk) {
+            this.path = path;
             this.extension = extension;
             this.assetData = assetData;
             this.finalChunk = finalChunk;
         }
 
-        public Identifier identifier() {
-            return identifier;
+        public Path path() {
+            return path;
         }
 
         public String extension() {

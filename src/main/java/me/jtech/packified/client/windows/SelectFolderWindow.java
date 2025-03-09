@@ -1,24 +1,19 @@
 package me.jtech.packified.client.windows;
 
 import imgui.ImGui;
-import imgui.flag.ImGuiDragDropFlags;
-import imgui.flag.ImGuiSelectableFlags;
-import imgui.flag.ImGuiTabItemFlags;
 import imgui.flag.ImGuiTableFlags;
 import imgui.type.ImString;
 import me.jtech.packified.client.PackifiedClient;
 import me.jtech.packified.client.util.FileUtils;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
-import net.minecraft.resource.ResourcePack;
-import net.minecraft.util.Identifier;
+import net.fabricmc.loader.api.FabricLoader;
 
-import java.io.File;
 import java.io.IOException;
-import java.nio.file.Files;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.nio.file.*;
+import java.util.*;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 @Environment(EnvType.CLIENT)
 public class SelectFolderWindow {
@@ -26,13 +21,13 @@ public class SelectFolderWindow {
     private static String fileName = "";
     private static String extension = "";
     private static String content = "";
-    private static Map<File, String> files;
+    private static Map<Path, String> files = new HashMap<>();
+
+    private final Path filePath;
+    private final Map<String, SelectFolderWindow> children = new HashMap<>();
 
     /**
      * Open the select folder window with the given file name, extension, and content
-     * @param fileName
-     * @param extension
-     * @param content
      */
     public static void open(String fileName, String extension, String content) {
         open = true;
@@ -43,114 +38,140 @@ public class SelectFolderWindow {
 
     /**
      * Open the select folder window with the given folder name and its files
-     * @param folderName
-     * @param files
      */
-    public static void open(String folderName, List<File> files) {
+    public static void open(String folderName, List<Path> filePaths) {
         open = true;
         SelectFolderWindow.fileName = folderName;
-        Map<File, String> fileMap = new HashMap<>();
-        for (File file : files) {
-            String extension = FileUtils.getFileExtensionName(folderName);
-            if (extension == null) {
-                System.err.println("Unsupported file extension: " + folderName);
-                return;
-            }
-            String content = null;
+        Map<Path, String> fileMap = new HashMap<>();
+
+        for (Path file : filePaths) {
             try {
-                content = Files.readString(file.toPath());
+                String content = Files.readString(file);
+                fileMap.put(file, content);
             } catch (IOException e) {
                 e.printStackTrace();
             }
-            if (content == null) {
-                System.err.println("Failed to read file: " + file.getAbsolutePath());
-                return;
-            }
-            fileMap.put(file, content);
         }
         SelectFolderWindow.files = fileMap;
     }
 
-    public static void close(Identifier identifier) {
+    public static void close(Path selectedFolder) {
+        if (!open) return; // Prevent multiple executions
         open = false;
-        if (identifier == null) {
-            return;
-        }
-        if (files != null) {
-            for (File file : files.keySet()) {
-                String path = file.getPath();
-                String name = path.substring(path.lastIndexOf('/') + 1);
-                String newIdentifierPath = identifier.getPath().substring(0, identifier.getPath().lastIndexOf('/') + 1) + name;
-                Identifier newIdentifier = FileUtils.validateIdentifier(newIdentifierPath);
-                FileUtils.saveSingleFile(newIdentifier, FileUtils.getExtension(Identifier.of(name)).getExtension(), files.get(file));
+
+        if (selectedFolder == null) return;
+
+        System.out.println("Final Selected Folder: " + selectedFolder);
+
+        if (!files.isEmpty()) {
+            for (Map.Entry<Path, String> entry : files.entrySet()) {
+                Path file = entry.getKey();
+                String content = entry.getValue();
+
+                Path targetPath = selectedFolder.resolve(file.getFileName());
+                System.out.println("Saving file to: " + targetPath);
+                FileUtils.saveSingleFile(targetPath, FileUtils.getFileExtension(file.getFileName().toString()), content);
             }
-            return;
+        } else {
+            Path targetPath = selectedFolder.resolve(fileName);
+            System.out.println("Saving single file to: " + targetPath);
+            FileUtils.saveSingleFile(targetPath, extension, content);
         }
-        String newIdentifierPath = identifier.getPath().substring(0, identifier.getPath().lastIndexOf('/') + 1) + fileName;
-        Identifier newIdentifier = FileUtils.validateIdentifier(newIdentifierPath);
-        System.out.println(newIdentifier);
-        FileUtils.saveSingleFile(newIdentifier, extension, content);
+    }
+
+    public SelectFolderWindow(Path filePath) {
+        this.filePath = filePath;
+    }
+
+    /**
+     * Recursively adds files and folders to their correct place in the hierarchy.
+     */
+    public void addFile(Path path) {
+        Path relativePath = filePath.relativize(path); // Get relative path from root
+        List<String> parts = new ArrayList<>();
+
+        for (Path p : relativePath) {
+            if (!p.toString().isEmpty()) {
+                parts.add(p.toString());
+            }
+        }
+
+        if (parts.isEmpty()) return;
+
+        SelectFolderWindow current = this;
+        for (int i = 0; i < parts.size(); i++) {
+            String part = parts.get(i);
+            if (i == parts.size() - 1 && Files.isRegularFile(path)) {
+                current.children.putIfAbsent(part, new SelectFolderWindow(path));
+            } else {
+                current.children.putIfAbsent(part, new SelectFolderWindow(filePath.resolve(part)));
+                current = current.children.get(part); // Navigate deeper
+            }
+        }
+    }
+
+    public void renderTree(String name) {
+        if (!Files.isRegularFile(filePath)) {// It's a folder
+            ImGui.tableNextRow();
+            ImGui.tableSetColumnIndex(0);
+            boolean isOpen = ImGui.treeNode(name);
+            if (ImGui.isMouseDoubleClicked(0)) {
+                close(filePath);
+            }
+            if (isOpen) {
+                for (Map.Entry<String, SelectFolderWindow> entry : children.entrySet()) {
+                    entry.getValue().renderTree(entry.getKey());
+                }
+                ImGui.treePop();
+            }
+        }
     }
 
     public static void render() {
-        if (!open) {
-            return;
-        }
+        if (!open) return;
+
         if (ImGui.begin("Select Folder")) {
-            if (ImGui.beginTable("FileHierarchyTable", 3, ImGuiTableFlags.RowBg | ImGuiTableFlags.Resizable | ImGuiTableFlags.NoBordersInBody
-                    | ImGuiTableFlags.BordersOuter | ImGuiTableFlags.ScrollX | ImGuiTableFlags.ScrollY)) {
+            if (ImGui.beginTable("SelectFolderTable", 3, ImGuiTableFlags.RowBg | ImGuiTableFlags.Resizable | ImGuiTableFlags.ScrollX | ImGuiTableFlags.ScrollY)) {
                 ImGui.tableSetupColumn("Name");
                 ImGui.tableSetupColumn("Size");
                 ImGui.tableSetupColumn("Type");
                 ImGui.tableHeadersRow();
-                ImGui.tableNextRow();
-                drawFolder();
-                if (ImGui.treeNode(PackifiedClient.currentPack.getDisplayName().getString())) {
-                    if (ImGui.isMouseDoubleClicked(0)) {
-                        close(null);
-                    }
-                    ImGui.tableNextRow();
-                    drawFolder();
-                    if (ImGui.treeNode("assets")) {
-                        if (ImGui.isMouseDoubleClicked(0)) {
-                            close(null);
-                        }
-                        try (ResourcePack resourcePack = PackifiedClient.currentPack.createResourcePack()) {
-                            String namespace = "minecraft";
 
-                            // Build the hierarchy structure
-                            FileHierarchy root = new FileHierarchy();
-
-                            FileHierarchy.find(resourcePack, namespace, root, "atlases");
-                            FileHierarchy.find(resourcePack, namespace, root, "blockstates");
-                            FileHierarchy.find(resourcePack, namespace, root, "font");
-                            FileHierarchy.find(resourcePack, namespace, root, "lang");
-                            FileHierarchy.find(resourcePack, namespace, root, "models");
-                            FileHierarchy.find(resourcePack, namespace, root, "particles");
-                            FileHierarchy.find(resourcePack, namespace, root, "shaders");
-                            FileHierarchy.find(resourcePack, namespace, root, "sounds");
-                            FileHierarchy.find(resourcePack, namespace, root, "texts");
-                            FileHierarchy.find(resourcePack, namespace, root, "textures");
-
-                            // Render the hierarchy
-                            root.renderTree(namespace, true);
-
-                            ImGui.treePop(); // Close "assets"
-                        }
-                    }
-                    ImGui.treePop(); // Close pack name
+                // Load actual resource pack folder path
+                Path packPath = getPackFolderPath();
+                if (packPath != null && Files.exists(packPath)) {
+                    SelectFolderWindow root = SelectFolderWindow.buildFileHierarchy(packPath);
+                    root.renderTree(packPath.getFileName().toString());
+                } else {
+                    ImGui.text("No valid pack folder found.");
                 }
+
                 ImGui.endTable();
             }
         }
         ImGui.end();
     }
 
-    public static void drawFolder() {
-        ImGui.tableSetColumnIndex(1);
-        ImGui.text("---");
-        ImGui.tableSetColumnIndex(2);
-        ImGui.text("Folder");
-        ImGui.tableSetColumnIndex(0);
+    public static Path getPackFolderPath() {
+        if (PackifiedClient.currentPack == null) return null;
+        return FabricLoader.getInstance().getGameDir()
+                .resolve("resourcepacks")
+                .resolve(PackifiedClient.currentPack.getDisplayName().getString());
+    }
+
+    public static SelectFolderWindow buildFileHierarchy(Path rootPath) {
+        SelectFolderWindow root = new SelectFolderWindow(rootPath);
+        try (Stream<Path> paths = Files.walk(rootPath)) {
+            List<Path> sortedPaths = paths
+                    .filter(Files::exists)
+                    .sorted(Comparator.comparing(Path::toString))
+                    .collect(Collectors.toList());
+            for (Path path : sortedPaths) {
+                root.addFile(path);
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        return root;
     }
 }

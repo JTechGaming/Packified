@@ -1,77 +1,75 @@
 package me.jtech.packified.client.util;
 
 import imgui.extension.texteditor.TextEditor;
-import imgui.type.ImString;
-import me.jtech.packified.Packified;
-import me.jtech.packified.client.windows.FileHierarchy;
 import net.minecraft.client.sound.OggAudioStream;
 import net.minecraft.util.Identifier;
 
 import java.awt.image.BufferedImage;
+import java.nio.file.Path;
 
 public class PackFile {
     private String fileName;
     private BufferedImage imageContent;
     private String textContent;
-    private OggAudioStream soundContent;
-    private FileHierarchy.FileType extension;
+    private byte[] soundContent;
+    private String extension;
     private BufferedImage imageEditorContent;
-    private OggAudioStream soundEditorContent;
-    private Identifier identifier;
+    private byte[] soundEditorContent;
+    private Path path;
     private TextEditor textEditor;
 
-    public PackFile(Identifier identifier, BufferedImage content) {
-        this.identifier = identifier;
-        this.fileName = identifier.getPath();
+    public PackFile(Path path, BufferedImage content) {
+        this.path = path;
+        this.fileName = path.getFileName().toString();
         this.imageContent = content;
         this.imageEditorContent = content;
-        this.extension = FileHierarchy.FileType.PNG;
+        this.extension = ".png";
     }
 
     public PackFile(String fileName, BufferedImage content) {
         this.fileName = fileName;
         this.imageContent = content;
         this.imageEditorContent = content;
-        this.extension = FileHierarchy.FileType.PNG;
+        this.extension = ".png";
     }
 
-    public PackFile(Identifier identifier, String content, FileHierarchy.FileType extension, TextEditor textEditor) {
-        this.identifier = identifier;
-        this.fileName = identifier.getPath();
+    public PackFile(Path path, String content, String extension, TextEditor textEditor) {
+        this.path = path;
+        this.fileName = path.getFileName().toString();
         this.textContent = content;
         this.extension = extension;
         this.textEditor = textEditor;
     }
 
-    public PackFile(String fileName, String content, FileHierarchy.FileType extension, TextEditor textEditor) {
+    public PackFile(String fileName, String content, String extension, TextEditor textEditor) {
         this.fileName = fileName;
         this.textContent = content;
         this.extension = extension;
         this.textEditor = textEditor;
     }
 
-    public PackFile(Identifier identifier, OggAudioStream content) {
-        this.identifier = identifier;
-        this.fileName = identifier.getPath();
+    public PackFile(Path path, byte[] content) {
+        this.path = path;
+        this.fileName = this.path.getFileName().toString();
         this.soundContent = content;
         this.soundEditorContent = content;
-        this.extension = FileHierarchy.FileType.OGG;
+        this.extension = ".ogg";
     }
 
-    public PackFile(String fileName, OggAudioStream content) {
+    public PackFile(String fileName, byte[] content) {
         this.fileName = fileName;
         this.soundContent = content;
         this.soundEditorContent = content;
-        this.extension = FileHierarchy.FileType.OGG;
+        this.extension = ".ogg";
     }
 
-    public Identifier getIdentifier() {
-        return identifier;
+    public Path getPath() {
+        return path;
     }
 
-    public void setIdentifier(Identifier identifier) {
-        this.identifier = identifier;
-        this.fileName = identifier.getPath();
+    public void setPath(Path path) {
+        this.path = path;
+        this.fileName = path.getFileName().toString();
     }
 
     public String getFileName() {
@@ -90,7 +88,7 @@ public class PackFile {
         this.imageContent = content;
     }
 
-    public FileHierarchy.FileType getExtension() {
+    public String getExtension() {
         return extension;
     }
 
@@ -103,14 +101,12 @@ public class PackFile {
     }
 
     public boolean isModified() {
-        if (extension == FileHierarchy.FileType.PNG) {
-            return !imageContent.equals(imageEditorContent);
-        } else if (extension == FileHierarchy.FileType.JSON) {
-            return !textContent.equals(textEditor.getText());
-        } else if (extension == FileHierarchy.FileType.OGG) {
-            return !soundContent.equals(soundEditorContent);
-        }
-        return false;
+        return switch (extension) {
+            case ".png" -> !imageContent.equals(imageEditorContent);
+            case ".json" -> !textContent.equals(textEditor.getText());
+            case ".ogg" -> !soundContent.equals(soundEditorContent);
+            default -> false;
+        };
     }
 
     public String getTextContent() {
@@ -121,19 +117,19 @@ public class PackFile {
         this.textContent = textContent;
     }
 
-    public OggAudioStream getSoundContent() {
+    public byte[] getSoundContent() {
         return soundContent;
     }
 
-    public void setSoundContent(OggAudioStream soundContent) {
+    public void setSoundContent(byte[] soundContent) {
         this.soundContent = soundContent;
     }
 
-    public OggAudioStream getSoundEditorContent() {
+    public byte[] getSoundEditorContent() {
         return soundEditorContent;
     }
 
-    public void setSoundEditorContent(OggAudioStream soundEditorContent) {
+    public void setSoundEditorContent(byte[] soundEditorContent) {
         this.soundEditorContent = soundEditorContent;
     }
 
@@ -142,16 +138,18 @@ public class PackFile {
     }
 
     public void saveFile() {
-        if (extension == FileHierarchy.FileType.PNG) {
-            imageContent = imageEditorContent;
-        } else if (extension == FileHierarchy.FileType.JSON) {
-            textContent = textEditor.getText();
-        } else if (extension == FileHierarchy.FileType.OGG) {
-            soundContent = soundEditorContent;
+        switch (extension) {
+            case ".png" -> imageContent = imageEditorContent;
+            case ".json" -> textContent = textEditor.getText();
+            case ".ogg" -> soundContent = soundEditorContent;
         }
     }
 
     public TextEditor getTextEditor() {
         return textEditor;
+    }
+
+    public void setImageEditorContent(String content) {
+        this.imageEditorContent = FileUtils.decodeBase64ToImage(content);
     }
 }

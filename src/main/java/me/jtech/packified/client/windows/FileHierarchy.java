@@ -2,8 +2,6 @@ package me.jtech.packified.client.windows;
 
 import imgui.ImGui;
 import imgui.flag.ImGuiDragDropFlags;
-import imgui.flag.ImGuiSelectableFlags;
-import imgui.flag.ImGuiTabItemFlags;
 import imgui.flag.ImGuiTableFlags;
 import imgui.type.ImString;
 import me.jtech.packified.client.PackifiedClient;
@@ -14,247 +12,115 @@ import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.MinecraftClient;
-import net.minecraft.resource.ResourcePack;
-import net.minecraft.resource.ResourceType;
-import net.minecraft.util.Identifier;
 
 import java.io.IOException;
-import java.io.InputStream;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Path;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Objects;
+import java.nio.file.*;
+import java.util.*;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 @Environment(EnvType.CLIENT)
 public class FileHierarchy {
+    private final Path filePath;
     private final Map<String, FileHierarchy> children = new HashMap<>();
-    private Identifier identifier;
 
     private static ImString searchQuery = new ImString();
     private static String selectedExtension = "none";
-    private static String selectedName = "";
-    private static Identifier selectedIdentifier;
-    private static String[] extensions = {
+    private static Path selectedFile;
+    public static final String[] extensions = {
             "none", ".png", ".json", ".ogg", ".mcmeta", ".txt", ".properties", ".vsh", ".fsh", ".bbmodel", ".bbmodel.json"
     };
 
-    private enum FileTypeComboOptions {
-        NONE, PNG, JSON, OGG, MC_META, TEXT, PROPERTIES, VSH, FSH, BB_MODEL, BB_MODEL_JSON
+    public FileHierarchy(Path filePath) {
+        this.filePath = filePath;
     }
 
-    public enum FileType {
-        PNG(".png"), JSON(".json"), OGG(".ogg"), MC_META(".mcmeta"), TEXT(".txt"), PROPERTIES(".properties"), VSH(".vsh"), FSH(".fsh"), BB_MODEL(".bbmodel"), BB_MODEL_JSON(".bbmodel.json");
+    /**
+     * Recursively adds files and folders to their correct place in the hierarchy.
+     */
+    public void addFile(Path path) {
+        Path relativePath = filePath.relativize(path); // Get relative path from root
+        List<String> parts = new ArrayList<>();
 
-        private final String extension;
-
-        FileType(String extension) {
-            this.extension = extension;
-        }
-
-        public static FileType fromExtension(String extension) {
-            for (FileType fileType : values()) {
-                if (fileType.extension.equals(extension)) {
-                    return fileType;
-                }
+        for (Path p : relativePath) {
+            if (!p.toString().isEmpty()) {
+                parts.add(p.toString());
             }
-            return null;
         }
 
-        public String getExtension() {
-            return extension;
+        if (parts.isEmpty()) return;
+
+        FileHierarchy current = this;
+        for (int i = 0; i < parts.size(); i++) {
+            String part = parts.get(i);
+            if (i == parts.size() - 1 && Files.isRegularFile(path)) {
+                current.children.putIfAbsent(part, new FileHierarchy(path));
+            } else {
+                current.children.putIfAbsent(part, new FileHierarchy(filePath.resolve(part)));
+                current = current.children.get(part); // Navigate deeper
+            }
         }
     }
 
-    public static String[] supportedFileExtensions = {
-            ".png", ".json", ".ogg", ".mcmeta", ".txt", ".properties", ".vsh", ".fsh", ".bbmodel", ".bbmodel.json"
-    };
-
-    public void addPath(String[] pathParts, int index, Identifier identifier) {
-        if (index >= pathParts.length) return;
-        FileHierarchy child = new FileHierarchy();
-        child.identifier = identifier;
-        children.putIfAbsent(pathParts[index], child);
-        children.get(pathParts[index]).addPath(pathParts, index + 1, identifier);
-    }
-
-    public void renderTree(String name, boolean selecting) {
+    public void renderTree(String name) {
         ImGui.tableNextRow();
         ImGui.tableSetColumnIndex(0);
-        if (children.isEmpty()) { // File
-            if (selecting) return;
-            for (String extension : supportedFileExtensions) {
-                if (name.endsWith(extension)) { // Supported file type
-                    drawFile(name, identifier);
-                    return;
+
+        if (Files.isRegularFile(filePath)) { // It's a file
+            drawFile(name, filePath);
+        } else { // It's a folder
+            boolean isOpen = ImGui.treeNode(name);
+
+            renderRightClickPopup(name, filePath, true);
+
+            if (!isOpen) {
+                // Enable Drag & Drop Target for Folders
+                if (ImGui.beginDragDropTarget()) {
+                    String payload = ImGui.acceptDragDropPayload("DND_FILE");
+                    if (payload != null) {
+                        Path draggedFile = Path.of(payload);
+                        FileUtils.moveFile(draggedFile, FileUtils.getRelativePackPath(filePath, draggedFile.getFileName().toString()));
+                    }
+                    ImGui.endDragDropTarget();
                 }
             }
-            drawFile(name, identifier); // Unsupported file type
-            if (ImGui.isItemHovered()) {
-                ImGui.setTooltip("Unsupported file type");
-            }
-        } else { // Folder
-            if (ImGui.treeNode(name)) {
-                drawFolder(identifier, selecting);
+
+            if (isOpen) {
                 for (Map.Entry<String, FileHierarchy> entry : children.entrySet()) {
-                    entry.getValue().renderTree(entry.getKey(), selecting);
+                    entry.getValue().renderTree(entry.getKey());
                 }
-
                 ImGui.treePop();
-            }
-
-            renderRightClickPopup(name, identifier, true);
-
-            if (ImGui.beginDragDropTarget()) {
-                String payload = ImGui.acceptDragDropPayload("DND_FILE");
-                if (payload != null) {
-                    // Logic to move the file to the new location
-                    FileUtils.sendDebugChatMessage("Moving file " + payload + " to " + identifier);
-                    moveFile(payload, identifier);
-                }
-                ImGui.endDragDropTarget();
             }
         }
     }
 
-    private static void drawFile(String name, Identifier identifier) {
-        if (identifier == null) return;
-        if (ImGui.selectable(name, selectedName.equals(name), ImGuiSelectableFlags.AllowDoubleClick | ImGuiDragDropFlags.SourceExtern | ImGuiTabItemFlags.UnsavedDocument)) {
-            if (ImGui.isMouseDoubleClicked(0)) {
-                selectedName = name;
-                selectedIdentifier = identifier;
-                // Open file
-                FileUtils.openFile(identifier, FileUtils.getExtension(identifier));
-            }
+    private static void drawFile(String name, Path filePath) {
+        if (filePath == null) return;
+        if (ImGui.selectable(name, Objects.equals(selectedFile, filePath))) {
+            selectedFile = filePath;
+            FileUtils.openFile(filePath);
         }
 
-        renderRightClickPopup(name, identifier, false);
+        renderRightClickPopup(name, filePath, false);
 
         if (ImGui.beginDragDropSource(ImGuiDragDropFlags.None)) {
-            ImGui.setDragDropPayload("DND_FILE", identifier.toString());
+            ImGui.setDragDropPayload("DND_FILE", filePath.toString());
             ImGui.text(name);
             ImGui.endDragDropSource();
         }
 
         ImGui.tableSetColumnIndex(1);
-        ImGui.text(FileUtils.formatFileSize(FileUtils.getFileSize(identifier)));
+        ImGui.text(FileUtils.formatFileSize(FileUtils.getFileSize(filePath)));
         ImGui.tableSetColumnIndex(2);
         ImGui.text(FileUtils.formatExtension(FileUtils.getFileExtension(name)));
         ImGui.tableSetColumnIndex(0);
     }
 
-    private static void renderRightClickPopup(String name, Identifier identifier, boolean isFolder) {
-        if (ImGui.beginPopupContextItem(name)) {
-            selectedName = name;
-            selectedIdentifier = identifier;
-            // Open file
-            if (ImGui.beginMenu("New")) {
-                if (ImGui.menuItem("File")) {
-                    // Create a new file
-                    ModifyFileWindow.open("Create File", identifier, (fileIdentifier) -> {
-                        // Create the file
-                        String fileName = fileIdentifier.substring(fileIdentifier.lastIndexOf('/') + 1);
-                        String newIdentifierPath = identifier.getPath().substring(0, identifier.getPath().lastIndexOf('/') + 1) + fileName;
-                        System.out.println("newIdentifierPath: " + newIdentifierPath);
-                        Identifier newIdentifier = FileUtils.validateIdentifier(newIdentifierPath);
-                        FileUtils.saveSingleFile(newIdentifier, FileUtils.getFileExtension(fileName), "");
-                    });
-                }
-                if (ImGui.menuItem("Folder")) {
-                    // Create a new folder
-                    ModifyFileWindow.open("Create Folder", identifier, (folderIdentifier) -> {
-                        // Create the folder
-                        String folderName = folderIdentifier.substring(folderIdentifier.lastIndexOf('/') + 1);
-                        String newIdentifierPath = identifier.getPath().substring(0, identifier.getPath().lastIndexOf('/') + 1) + folderName;
-                        Identifier newIdentifier = FileUtils.validateIdentifier(newIdentifierPath);
-                        if (newIdentifier == null) {
-                            return;
-                        }
-                        FileUtils.saveFolder(newIdentifier);
-                    });
-                }
-                ImGui.endMenu();
-            }
-            if (ImGui.menuItem("Load Pack")) {
-                selectedName = name;
-                selectedIdentifier = identifier;
-                // Open the select pack window
-                SelectPackWindow.open = true;
-            }
-            if (!isFolder) {
-                if (ImGui.menuItem("Open")) {
-                    selectedName = name;
-                    selectedIdentifier = identifier;
-                    // Open file
-                    FileUtils.openFile(identifier, FileUtils.getExtension(identifier));
-                }
-                ImGui.separator();
-                if (ImGui.beginMenu("Refactor")) {
-                    if (ImGui.menuItem("Rename")) {
-                        // Create a new file
-                        System.out.println("Rename");
-                        ModifyFileWindow.open("Rename", identifier, (fileName) -> {
-                            // Create the file
-                            FileUtils.renameFile(identifier, fileName);
-                        });
-                    }
-                    if (ImGui.menuItem("Move")) {
-                        // Create a new folder
-                        System.out.println("Move");
-                        ModifyFileWindow.open("Move", identifier, (fileName) -> {
-                            // Create the file
-                            FileUtils.moveFile(identifier, fileName);
-                        });
-                    }
-                    ImGui.endMenu();
-                }
-                ImGui.separator();
-                if (ImGui.beginMenu("Copy")) {
-                    if (ImGui.menuItem("Name")) {
-                        // Copy the file name to the players clipboard
-                        MinecraftClient.getInstance().keyboard.setClipboard(selectedName);
-                    }
-                    if (ImGui.menuItem("Identifier")) {
-                        // Copy the file identifier to the players clipboard
-                        // Example: "minecraft:textures/block/dirt.png"
-                        // Would copy: "block/dirt.png" to the clipboard
-                        String id = identifier.getPath().substring(identifier.getPath().indexOf('/') + 1);
-                        MinecraftClient.getInstance().keyboard.setClipboard(id.substring(0, id.lastIndexOf('.')));
-                    }
-                    ImGui.endMenu();
-                }
-                ImGui.separator();
-                if (ImGui.menuItem("Open In Explorer")) {
-                    selectedName = name;
-                    selectedIdentifier = identifier;
-
-                    // Open the file in the system file explorer
-                    FileUtils.openFileInExplorer(identifier);
-                }
-                ImGui.separator();
-                if (ImGui.menuItem("Delete")) {
-                    // Delete file
-                    ConfirmWindow.open("delete this file", "The file will be lost forever.", () -> {
-                        FileUtils.deleteFile(identifier);
-                    });
-                }
-            }
-            ImGui.endPopup();
-        }
-    }
-
-    public static void moveFile(String sourceIdentifier, Identifier targetIdentifier) {
-        // Logic to move the file from sourceIdentifier to targetIdentifier
-        FileUtils.moveFile(Identifier.of(sourceIdentifier), targetIdentifier.getPath());
-    }
-
     public static void render() {
         ImGui.begin("File Hierarchy");
 
-        // Search bar
         ImGui.inputText("Search", searchQuery);
 
-        // Filter options
         if (ImGui.beginCombo("Filter by extension", selectedExtension)) {
             for (String extension : extensions) {
                 boolean isSelected = selectedExtension.equals(extension);
@@ -267,8 +133,9 @@ public class FileHierarchy {
             }
             ImGui.endCombo();
         }
+
         if (PackifiedClient.currentPack != null) {
-            // Import and Delete buttons
+
             ImGui.imageButton(ImGuiImplementation.loadTexture("textures/ui/neu_import.png"), 14, 14);
             if (ImGui.isItemClicked()) {
                 // Logic to import a file
@@ -287,78 +154,26 @@ public class FileHierarchy {
             if (ImGui.isItemClicked()) {
                 // Logic to delete a file
                 ConfirmWindow.open("delete this file", "The file will be lost forever.", () -> {
-                    FileUtils.deleteFile(selectedIdentifier);
+                    FileUtils.deleteFile(selectedFile);
                 });
             }
-            if (ImGui.beginTable("FileHierarchyTable", 3, ImGuiTableFlags.RowBg | ImGuiTableFlags.Resizable | ImGuiTableFlags.NoBordersInBody
-                    | ImGuiTableFlags.BordersOuter | ImGuiTableFlags.ScrollX | ImGuiTableFlags.ScrollY)) {
-                ImGui.tableSetupColumn("Name");
-                ImGui.tableSetupColumn("Size");
-                ImGui.tableSetupColumn("Type");
-                ImGui.tableHeadersRow();
-                ImGui.tableNextRow();
-                drawFolder(null, false);
-                if (ImGui.treeNode(PackifiedClient.currentPack.getDisplayName().getString())) {
-                    ImGui.tableNextRow();
-                    drawFolder(null, false);
-                    if (ImGui.treeNode("assets")) {
-                        try (ResourcePack resourcePack = PackifiedClient.currentPack.createResourcePack()) {
-                            String namespace = "minecraft";
 
-                            // Build the hierarchy structure
-                            FileHierarchy root = new FileHierarchy();
+            Path packPath = getPackFolderPath();
+            if (packPath != null && Files.exists(packPath)) {
+                FileHierarchy root = buildFileHierarchy(packPath);
+                if (ImGui.beginTable("FileHierarchyTable", 3, ImGuiTableFlags.RowBg | ImGuiTableFlags.Resizable | ImGuiTableFlags.ScrollX | ImGuiTableFlags.ScrollY)) {
+                    ImGui.tableSetupColumn("Name");
+                    ImGui.tableSetupColumn("Size");
+                    ImGui.tableSetupColumn("Type");
+                    ImGui.tableHeadersRow();
 
-                            find(resourcePack, namespace, root, "atlases");
-                            find(resourcePack, namespace, root, "blockstates");
-                            find(resourcePack, namespace, root, "font");
-                            find(resourcePack, namespace, root, "lang");
-                            find(resourcePack, namespace, root, "models");
-                            find(resourcePack, namespace, root, "particles");
-                            find(resourcePack, namespace, root, "shaders");
-                            find(resourcePack, namespace, root, "sounds");
-                            find(resourcePack, namespace, root, "texts");
-                            find(resourcePack, namespace, root, "textures");
+                    // Render File Hierarchy Tree
+                    root.renderTree(packPath.getFileName().toString());
 
-                            // Render the hierarchy
-                            root.renderTree(namespace, false);
-
-                            ImGui.treePop(); // Close "assets"
-                        }
-                    }
-                    ImGui.tableNextRow();
-                    ImGui.tableSetColumnIndex(0);
-                    String mcmeta = "pack.mcmeta";
-                    if (ImGui.selectable(mcmeta, selectedName.equals(mcmeta), ImGuiSelectableFlags.AllowDoubleClick | ImGuiDragDropFlags.SourceExtern)) {
-                        if (ImGui.isMouseDoubleClicked(0)) {
-                            selectedName = mcmeta;
-                            selectedIdentifier = Identifier.of("pack.mcmeta");
-                            // Open file
-                            //FileUtils.openFile(selectedIdentifier, FileType.MC_META); //TODO: Implement pack.mcmeta
-                        }
-                    }
-                    ImGui.tableSetColumnIndex(1);
-                    ImGui.text("---");
-                    ImGui.tableSetColumnIndex(2);
-                    ImGui.text("Meta");
-                    ImGui.tableNextRow();
-                    ImGui.tableSetColumnIndex(0);
-                    String packpng = "pack.png";
-                    if (ImGui.selectable(packpng, selectedName.equals(packpng), ImGuiSelectableFlags.AllowDoubleClick | ImGuiDragDropFlags.SourceExtern)) {
-                        if (ImGui.isMouseDoubleClicked(0)) {
-                            selectedName = packpng;
-                            selectedIdentifier = Identifier.of("pack.png");
-                            // Open file
-                            //FileUtils.openFile(selectedIdentifier, FileType.PNG); //TODO: Implement pack.png
-                        }
-                    }
-                    ImGui.tableSetColumnIndex(1);
-                    ImGui.text("---");
-                    ImGui.tableSetColumnIndex(2);
-                    ImGui.text("Image");
-                    ImGui.tableSetColumnIndex(0);
-                    ImGui.treePop(); // Close pack name
+                    ImGui.endTable();
                 }
-                ImGui.endTable();
+            } else {
+                ImGui.setCursorPos((ImGui.getWindowWidth() - ImGui.calcTextSize("No pack loaded").x) / 2, (ImGui.getWindowHeight() - ImGui.getTextLineHeightWithSpacing()) / 2);
             }
         } else {
             // Centered text to indicate that no pack is loaded
@@ -374,26 +189,125 @@ public class FileHierarchy {
         ImGui.end();
     }
 
-    public static void find(ResourcePack resourcePack, String namespace, FileHierarchy root, String prefix) {
-        resourcePack.findResources(ResourceType.CLIENT_RESOURCES, namespace, prefix, (identifier, resourceSupplier) -> {
-            if ((!searchQuery.get().isBlank() && !identifier.getPath().contains(searchQuery.get())) || (!selectedExtension.equals("none") && !identifier.getPath().contains(selectedExtension))) {
-                return;
-            }
-            String[] parts = identifier.getPath().split("/"); // Split into folder structure
-            root.addPath(parts, 0, identifier);
-        });
+    public static Path getPackFolderPath() {
+        if (PackifiedClient.currentPack == null) return null;
+        return FabricLoader.getInstance().getGameDir()
+                .resolve("resourcepacks")
+                .resolve(PackifiedClient.currentPack.getDisplayName().getString());
     }
 
-    public static void drawFolder(Identifier identifier, boolean selecting) {
-        if (ImGui.isMouseDoubleClicked(0) && identifier != null && selecting) {
-            SelectFolderWindow.close(identifier);
-            //TODO fix that this also gets called for any parent folder and their other subfolders
+    public static FileHierarchy buildFileHierarchy(Path rootPath) {
+        FileHierarchy root = new FileHierarchy(rootPath);
+        try (Stream<Path> paths = Files.walk(rootPath)) {
+            List<Path> sortedPaths = paths
+                    .filter(Files::exists)
+                    .filter(path -> searchQuery.get().isEmpty() || path.toString().toLowerCase().contains(searchQuery.get().toLowerCase()))
+                    .filter(path -> selectedExtension.equals("none") || path.toString().toLowerCase().endsWith(selectedExtension.toLowerCase()))
+                    .sorted(Comparator.comparing(Path::toString))
+                    .collect(Collectors.toList());
+            for (Path path : sortedPaths) {
+                root.addFile(path);
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
         }
-        ImGui.tableSetColumnIndex(1);
-        ImGui.text("---");
-        ImGui.tableSetColumnIndex(2);
-        ImGui.text("Folder");
-        ImGui.tableSetColumnIndex(0);
+        return root;
+    }
+
+    private static void renderRightClickPopup(String name, Path path, boolean isFolder) {
+        if (ImGui.beginPopupContextItem(name)) {
+            selectedFile = path;
+            // Open file
+            if (ImGui.beginMenu("New")) {
+                if (ImGui.menuItem("File")) {
+                    // Create a new file
+                    ModifyFileWindow.open("Create File", path, (fileIdentifier) -> {
+                        // Create the file
+                        String fileName = fileIdentifier.substring(fileIdentifier.lastIndexOf('/') + 1);
+                        String newIdentifierPath = path.toString().substring(0, path.toString().lastIndexOf('/') + 1) + fileName;
+                        Path newPath = FileUtils.validateIdentifier(newIdentifierPath);
+                        FileUtils.saveSingleFile(newPath, FileUtils.getFileExtension(fileName), "");
+                    });
+                }
+                if (ImGui.menuItem("Folder")) {
+                    // Create a new folder
+                    ModifyFileWindow.open("Create Folder", path, (folderIdentifier) -> {
+                        // Create the folder
+                        String folderName = folderIdentifier.substring(folderIdentifier.lastIndexOf('/') + 1);
+                        String newIdentifierPath = path.toString().substring(0, path.toString().lastIndexOf('/') + 1) + folderName;
+                        Path newPath = FileUtils.validateIdentifier(newIdentifierPath);
+                        if (newPath == null) {
+                            return;
+                        }
+                        FileUtils.saveFolder(newPath);
+                    });
+                }
+                ImGui.endMenu();
+            }
+            if (ImGui.menuItem("Load Pack")) {
+                selectedFile = path;
+                // Open the select pack window
+                SelectPackWindow.open = true;
+            }
+            if (!isFolder) {
+                if (ImGui.menuItem("Open")) {
+                    selectedFile = path;
+
+                    // Open file
+                    FileUtils.openFile(path);
+                }
+                ImGui.separator();
+                if (ImGui.beginMenu("Refactor")) {
+                    if (ImGui.menuItem("Rename")) {
+                        // Create a new file
+                        System.out.println("Rename");
+                        ModifyFileWindow.open("Rename", path, (fileName) -> {
+                            // Create the file
+                            FileUtils.renameFile(path, fileName);
+                        });
+                    }
+                    if (ImGui.menuItem("Move")) {
+                        // Create a new folder
+                        System.out.println("Move");
+                        ModifyFileWindow.open("Move", path, (fileName) -> {
+                            // Create the file
+                            FileUtils.moveFile(path, fileName);
+                        });
+                    }
+                    ImGui.endMenu();
+                }
+                ImGui.separator();
+                if (ImGui.beginMenu("Copy")) {
+                    if (ImGui.menuItem("Name")) {
+                        // Copy the file name to the players clipboard
+                        MinecraftClient.getInstance().keyboard.setClipboard(selectedFile.getFileName().toString());
+                    }
+                    if (ImGui.menuItem("Identifier")) {
+                        // Copy the file identifier to the players clipboard
+                        // Example: "minecraft:textures/block/dirt.png"
+                        // Would copy: "block/dirt.png" to the clipboard
+                        String id = path.getFileName().toString().substring(path.getFileName().toString().indexOf('/') + 1);
+                        MinecraftClient.getInstance().keyboard.setClipboard(id.substring(0, id.lastIndexOf('.')));
+                    }
+                    ImGui.endMenu();
+                }
+            }
+            ImGui.separator();
+            if (ImGui.menuItem("Open In Explorer")) {
+                selectedFile = path;
+
+                // Open the file in the system file explorer
+                FileUtils.openFileInExplorer(path);
+            }
+            ImGui.separator();
+            if (ImGui.menuItem("Delete")) {
+                // Delete file
+                ConfirmWindow.open("delete this file", "The file will be lost forever.", () -> {
+                    FileUtils.deleteFile(path);
+                });
+            }
+            ImGui.endPopup();
+        }
     }
 
     @FunctionalInterface

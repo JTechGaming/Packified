@@ -24,6 +24,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
+import java.util.stream.Stream;
 
 public class PackUtils {
     private static List<ResourcePackProfile> resourcePacks;
@@ -96,8 +97,8 @@ public class PackUtils {
         for (int i = 0; i < changedAssets.size(); i++) {
             PackFile asset = changedAssets.get(i);
             String content = FileUtils.getContent(asset);
-            Identifier identifier = asset.getIdentifier();
-            String extension = FileUtils.getFileExtension(identifier.getPath());
+            Path path = asset.getPath();
+            String extension = FileUtils.getFileExtension(path.getFileName().toString());
             boolean finalAsset = i == changedAssets.size() - 1;
             if (content.length() + assets.stream().mapToInt(cAsset -> cAsset.assetData().length()).sum() > Packified.MAX_PACKET_SIZE) {
                 SyncPacketData data = new SyncPacketData(currentPack.getDisplayName().getString(), assets, FileUtils.getMCMetaContent(currentPack), finalAsset);
@@ -111,12 +112,12 @@ public class PackUtils {
                     int start = a * Packified.MAX_PACKET_SIZE;
                     int end = Math.min((a + 1) * Packified.MAX_PACKET_SIZE, content.length());
                     String chunk = content.substring(start, end);
-                    SyncPacketData data = new SyncPacketData(currentPack.getDisplayName().getString(), List.of(new SyncPacketData.AssetData(identifier, extension, chunk, a == requiredChunks - 1)), FileUtils.getMCMetaContent(currentPack), (a == requiredChunks - 1) && finalAsset);
+                    SyncPacketData data = new SyncPacketData(currentPack.getDisplayName().getString(), List.of(new SyncPacketData.AssetData(path, extension, chunk, a == requiredChunks - 1)), FileUtils.getMCMetaContent(currentPack), (a == requiredChunks - 1) && finalAsset);
                     action.execute(data);
                 }
                 continue;
             }
-            assets.add(new SyncPacketData.AssetData(identifier, extension, content, true));
+            assets.add(new SyncPacketData.AssetData(path, extension, content, true));
             if (finalAsset) {
                 SyncPacketData data = new SyncPacketData(currentPack.getDisplayName().getString(), assets, FileUtils.getMCMetaContent(currentPack), true);
                 action.execute(data);
@@ -153,50 +154,68 @@ public class PackUtils {
     }
 
     private static void loadAssets(ResourcePackProfile currentPack, String prefix, UUID player, List<SyncPacketData.AssetData> assets) {
-        String namespace = "minecraft";
-        ResourcePack resourcePack = currentPack.createResourcePack();
-        resourcePack.findResources(ResourceType.CLIENT_RESOURCES, namespace, prefix, (identifier, resourceSupplier) -> {
-            try {
-                InputStream inputStream = Objects.requireNonNull(resourcePack.open(ResourceType.CLIENT_RESOURCES, identifier)).get();
-                String content;
+        Path packPath = getPackFolderPath(currentPack);
 
-                if (FileUtils.getFileExtension(identifier.getPath()).equals(".png")) {
-                    BufferedImage image = ImageIO.read(inputStream);
-                    if (image == null) {
-                        System.out.println("Failed to read image: " + identifier);
-                        throw new IOException("Failed to read image");
+        if (packPath == null || !Files.exists(packPath)) {
+            System.err.println("Invalid resource pack path: " + packPath);
+            return;
+        }
+
+        try (Stream<Path> paths = Files.walk(packPath.resolve(prefix))) {
+            for (Path path : (Iterable<Path>) paths::iterator) {
+                if (!Files.isRegularFile(path)) continue;
+
+                try (InputStream inputStream = Files.newInputStream(path)) {
+                    String content;
+                    String extension = FileUtils.getFileExtension(path.getFileName().toString());
+
+                    if (extension.equals(".png")) {
+                        BufferedImage image = ImageIO.read(inputStream);
+                        if (image == null) {
+                            System.err.println("Failed to read image: " + path);
+                            throw new IOException("Failed to read image");
+                        }
+                        content = FileUtils.encodeImageToBase64(image);
+                    } else if (extension.equals(".ogg")) {
+                        content = new String(inputStream.readAllBytes(), StandardCharsets.UTF_8); // TODO: Handle audio properly
+                    } else {
+                        content = new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
                     }
-                    content = FileUtils.encodeImageToBase64(image);
-                } else if (FileUtils.getFileExtension(identifier.getPath()).equals(".ogg")) {
-                    content = new String(inputStream.readAllBytes(), StandardCharsets.UTF_8); // TODO fix audio
 
-                } else {
-                    content = new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
-                }
-
-                String extension = FileUtils.getFileExtension(identifier.getPath());
-                if (content.length() + assets.stream().mapToInt(cAsset -> cAsset.assetData().length()).sum() > Packified.MAX_PACKET_SIZE) {
-                    SyncPacketData data = new SyncPacketData(currentPack.getDisplayName().getString(), assets, FileUtils.getMCMetaContent(currentPack), false);
-                    ClientPlayNetworking.send(new C2SSendFullPack(data, player));
-                    assets.clear();
-                }
-                if (content.length() > Packified.MAX_PACKET_SIZE) {
-                    // split the asset into multiple chunks
-                    int requiredChunks = (int) Math.ceil((double) content.length() / Packified.MAX_PACKET_SIZE);
-                    for (int a = 0; a < requiredChunks; a++) {
-                        int start = a * Packified.MAX_PACKET_SIZE;
-                        int end = Math.min((a + 1) * Packified.MAX_PACKET_SIZE, content.length());
-                        String chunk = content.substring(start, end);
-                        SyncPacketData data = new SyncPacketData(currentPack.getDisplayName().getString(), List.of(new SyncPacketData.AssetData(identifier, extension, chunk, a == requiredChunks - 1)), FileUtils.getMCMetaContent(currentPack), false);
+                    if (content.length() + assets.stream().mapToInt(cAsset -> cAsset.assetData().length()).sum() > Packified.MAX_PACKET_SIZE) {
+                        SyncPacketData data = new SyncPacketData(currentPack.getDisplayName().getString(), assets, FileUtils.getMCMetaContent(currentPack), false);
                         ClientPlayNetworking.send(new C2SSendFullPack(data, player));
+                        assets.clear();
                     }
-                    return;
+
+                    if (content.length() > Packified.MAX_PACKET_SIZE) {
+                        // Split the asset into multiple chunks
+                        int requiredChunks = (int) Math.ceil((double) content.length() / Packified.MAX_PACKET_SIZE);
+                        for (int a = 0; a < requiredChunks; a++) {
+                            int start = a * Packified.MAX_PACKET_SIZE;
+                            int end = Math.min((a + 1) * Packified.MAX_PACKET_SIZE, content.length());
+                            String chunk = content.substring(start, end);
+                            SyncPacketData data = new SyncPacketData(currentPack.getDisplayName().getString(), List.of(new SyncPacketData.AssetData(path, extension, chunk, a == requiredChunks - 1)), FileUtils.getMCMetaContent(currentPack), false);
+                            ClientPlayNetworking.send(new C2SSendFullPack(data, player));
+                        }
+                        return;
+                    }
+
+                    assets.add(new SyncPacketData.AssetData(path, extension, content, true));
+                } catch (IOException e) {
+                    System.err.println("Error processing file: " + path);
+                    e.printStackTrace();
                 }
-                assets.add(new SyncPacketData.AssetData(identifier, extension, content, true));
-            } catch (IOException e) {
-                throw new RuntimeException(e);
             }
-        });
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to load assets", e);
+        }
+    }
+
+    private static Path getPackFolderPath(ResourcePackProfile packProfile) {
+        return FabricLoader.getInstance().getGameDir()
+                .resolve("resourcepacks")
+                .resolve(packProfile.getDisplayName().getString());
     }
 
     public static void checkPackType(ResourcePackProfile packProfile) {

@@ -43,12 +43,12 @@ public class FileUtils {
         return null;
     }
 
-    public static FileHierarchy.FileType getExtension(Identifier identifier) {
-        return FileHierarchy.FileType.fromExtension(getFileExtension(identifier.getPath()));
+    public static String getExtension(Path path) {
+        return getFileExtension(path.getFileName().toString());
     }
 
     public static String getFileExtensionName(String fileName) {
-        return getFileExtensionName(fileName, FileHierarchy.supportedFileExtensions);
+        return getFileExtensionName(fileName, FileHierarchy.extensions);
     }
 
     public static boolean isSupportedFileExtension(String fileName, String[] supportedExtensions) {
@@ -62,15 +62,25 @@ public class FileUtils {
     }
 
     public static boolean isSupportedFileExtension(String fileName) {
-        return isSupportedFileExtension(fileName, FileHierarchy.supportedFileExtensions);
+        return isSupportedFileExtension(fileName, FileHierarchy.extensions);
     }
 
-    public static void deleteFile(Identifier identifier) {
+    public static void deleteFile(Path path) {
         // delete file
-        File file = new File("resourcepacks/" + PackifiedClient.currentPack.getDisplayName().getString() + "/assets/" + identifier.getNamespace() + "/" + identifier.getPath());
+        EditorWindow.openFiles.removeIf(file -> file.getPath().equals(path));
+        File file = path.toFile();
         System.out.println(file.getPath());
         if (file.exists()) {
             if (file.canWrite()) {
+                if (file.isDirectory()) {
+                    // Delete folder
+                    File[] files = file.listFiles();
+                    if (files != null) {
+                        for (File f : files) {
+                            deleteFile(f.toPath());
+                        }
+                    }
+                }
                 try {
                     Files.delete(file.toPath());
                 } catch (IOException e) {
@@ -89,7 +99,7 @@ public class FileUtils {
                 String folderName = file.getName();
                 File[] files = file.listFiles();
                 if (files != null) {
-                    List<File> fileList = Arrays.asList(files);
+                    List<Path> fileList = Arrays.stream(files).map(File::toPath).toList();
                     SelectFolderWindow.open(folderName, fileList);
                 }
             } else {
@@ -132,112 +142,39 @@ public class FileUtils {
         }
     }
 
-    public static void moveFile(Identifier identifier, String newPath) {
-        // move file
-        EditorWindow.openFiles.removeIf(file -> file.getIdentifier().equals(identifier));
-        File file = new File("resourcepacks/" + PackifiedClient.currentPack.getDisplayName().getString() + "/assets/" + identifier.getNamespace() + "/" + identifier.getPath());
-        System.out.println(file.getPath());
-        if (file.exists()) {
-            if (file.canWrite()) {
-                try {
-                    //Rename the file
-                    File newFile = new File("resourcepacks/" + PackifiedClient.currentPack.getDisplayName().getString() + "/assets/" + identifier.getNamespace() + "/" + newPath);
-                    Files.move(file.toPath(), newFile.toPath());
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-            }
-        }
-    }
-
-    public static void renameFile(Identifier identifier, String newName) {
-        // rename file
-        if (newName.isEmpty()) {
-            System.out.println("New name is empty");
+    public static void openFile(Path filePath) {
+        if (filePath == null || !Files.exists(filePath)) {
+            System.err.println("File not found: " + filePath);
             return;
         }
-        System.out.println(newName);
-        EditorWindow.openFiles.removeIf(file -> file.getIdentifier().equals(identifier));
-        File file = new File("resourcepacks/" + PackifiedClient.currentPack.getDisplayName().getString() + "/assets/" + identifier.getNamespace() + "/" + identifier.getPath());
-        System.out.println(file.getPath());
-        if (file.exists()) {
-            if (file.canWrite()) {
-                try {
-                    //Rename the file
-                    File newFile = new File("resourcepacks/" + PackifiedClient.currentPack.getDisplayName().getString() + "/assets/" + identifier.getNamespace() + "/" + newName);
-                    Files.move(file.toPath(), newFile.toPath());
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-            }
-        }
-    }
 
-    public static void openFile(Identifier identifier, FileHierarchy.FileType fileType) {
-        // Get the asset content from the PackifiedClient.currentPack
-        try (ResourcePack resourcePack = PackifiedClient.currentPack.createResourcePack()) {
-            InputStream inputStream = Objects.requireNonNull(resourcePack.open(ResourceType.CLIENT_RESOURCES, identifier)).get();
-            if (fileType == null) {
-                System.err.println("Unsupported Filetype: " + identifier);
-                return;
-            }
+        String extension = getFileExtension(filePath.getFileName().toString());
+
+        if (extension == null) {
+            System.err.println("Unsupported Filetype: " + filePath);
+            return;
+        }
+
+        try (InputStream inputStream = Files.newInputStream(filePath)) {
             String content = "";
-            switch (fileType) {
-                case JSON:
-                    // open JSON file
+            switch (extension) {
+                case ".json", ".txt", ".mcmeta", ".properties", ".vsh", ".fsh", ".bbmodel", ".bbmodel.json" -> {
                     content = new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
-                    EditorWindow.openTextFile(identifier, content);
-                    break;
-                case PNG:
-                    // open PNG file
+                    EditorWindow.openTextFile(filePath, content);
+                }
+                case ".png" -> {
                     BufferedImage image = ImageIO.read(inputStream);
                     if (image != null) {
-                        EditorWindow.openImageFile(identifier, image);
+                        EditorWindow.openImageFile(filePath, image);
                     } else {
-                        System.err.println("Failed to load image: " + identifier);
+                        System.err.println("Failed to load image: " + filePath);
                     }
-                    break;
-                case OGG:
-                    // open OGG file
-                    //TODO implement this
-                    break;
-                case TEXT:
-                    // open TEXT file
-                    content = new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
-                    EditorWindow.openTextFile(identifier, content);
-                    break;
-                case PROPERTIES:
-                    // open PROPERTIES file
-                    content = new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
-                    EditorWindow.openTextFile(identifier, content);
-                    break;
-                case VSH:
-                    // open VSH file
-                    content = new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
-                    EditorWindow.openTextFile(identifier, content);
-                    break;
-                case FSH:
-                    // open FSH file
-                    content = new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
-                    EditorWindow.openTextFile(identifier, content);
-                    break;
-                case BB_MODEL:
-                    // open BB_MODEL file
-                    content = new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
-                    EditorWindow.openTextFile(identifier, content);
-                    break;
-                case BB_MODEL_JSON:
-                    // open BB_MODEL_JSON file
-                    content = new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
-                    EditorWindow.openTextFile(identifier, content);
-                    break;
-                case MC_META:
-                    content = new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
-                    // open MC_META file
-                    EditorWindow.openTextFile(identifier, content);
-                    break;
-                default:
-                    System.err.println("Unsupported file type: " + fileType);
+                }
+                case ".ogg" -> {
+                    byte[] audioData = Files.readAllBytes(filePath);
+                    EditorWindow.openAudioFile(filePath, audioData);
+                }
+                default -> System.err.println("Unsupported file type: " + extension);
             }
         } catch (IOException e) {
             e.printStackTrace();
@@ -259,84 +196,68 @@ public class FileUtils {
         makePackBackup(resourcePackFolder);
         for (PackFile file : EditorWindow.openFiles) {
             System.out.println(file.getFileName());
-            saveFile(file.getIdentifier(), file.getExtension().getExtension(), getContent(file));
+            saveFile(file.getPath(), file.getExtension(), getContent(file));
         }
     }
 
-    public static void saveSingleFile(Identifier identifier, String fileType, String content) {
+    public static void saveSingleFile(Path path, String fileType, String content) {
         // Before saving, make a backup of the file
         File resourcePackFolder = new File("resourcepacks/" + PackifiedClient.currentPack.getDisplayName().getString());
         makePackBackup(resourcePackFolder);
-        saveFile(identifier, fileType, content);
+        saveFile(path, fileType, content);
     }
 
-    private static void saveFile(Identifier identifier, String fileType, String content) {
+    private static void saveFile(Path path, String fileType, String content) {
         try {
-            System.out.println(identifier);
             // Get the resource pack folder path
-            File resourcePackFolder = new File("resourcepacks/" + PackifiedClient.currentPack.getDisplayName().getString());
-            sendDebugChatMessage("Resource pack folder: " + resourcePackFolder.getAbsolutePath());
+            Path resourcePackFolder = getPackFolderPath();
+            sendDebugChatMessage("Resource pack folder: " + resourcePackFolder);
 
-            if (!resourcePackFolder.exists()) {
-                System.err.println("Resource pack folder not found: " + resourcePackFolder.getAbsolutePath());
-                sendDebugChatMessage("Resource pack folder not found: " + resourcePackFolder.getAbsolutePath());
+            if (resourcePackFolder == null || !Files.exists(resourcePackFolder)) {
+                System.err.println("Resource pack folder not found: " + resourcePackFolder);
+                sendDebugChatMessage("Resource pack folder not found: " + resourcePackFolder);
                 return;
             }
-            sendDebugChatMessage("Resource pack folder found: " + resourcePackFolder.getAbsolutePath());
+            sendDebugChatMessage("Resource pack folder found: " + resourcePackFolder);
 
-            // Convert identifier to file path (e.g., "assets/minecraft/textures/block/stone.png")
-            String targetFilePath = "assets/" + identifier.getNamespace() + "/" + identifier.getPath();
-            sendDebugChatMessage("Target file: " + targetFilePath);
-
-            if (isZipFile(resourcePackFolder)) {
-                //maybe don't do this, but it's the best solution for now
-                sendDebugChatMessage("Resource pack is a zip file, cannot save to it: " + resourcePackFolder.getAbsolutePath());
+            // Check if the pack is a ZIP file
+            if (isZipFile(resourcePackFolder.toFile())) {
+                sendDebugChatMessage("Resource pack is a zip file, cannot save to it: " + resourcePackFolder);
                 return;
-            } else {
-                File zipFolder = new File("resourcepacks/" + PackifiedClient.currentPack.getDisplayName().getString() + ".zip");
-                removeZipFileFromOptions(zipFolder);
-                // Save to folder
-                File targetFile = new File(resourcePackFolder, targetFilePath);
+            }
 
-                // Ensure parent directories exist
-                targetFile.getParentFile().mkdirs();
+            // Determine the actual file path inside the pack
+            Path targetFile = resourcePackFolder.resolve(path);
+            sendDebugChatMessage("Target file: " + targetFile);
 
-                if (!targetFile.exists()) {
-                    sendDebugChatMessage("Target file not found, creating a new one: " + targetFile.getAbsolutePath());
-                    targetFile.createNewFile();
-                }
+            // Ensure parent directories exist
+            Files.createDirectories(targetFile.getParent());
 
-                if (fileType.equals(".json")) {
-                    // Save JSON file
-                    try {
-                        Files.write(targetFile.toPath(), content.getBytes(StandardCharsets.UTF_8));
-                    } catch (IOException e) {
-                        throw new RuntimeException(e);
-                    }
-                    sendDebugChatMessage("JSON content saved: " + content);
-                } else if (fileType.equals(".png")) {
-                    // Save PNG image
-                    //BufferedImage image = EditorWindow.getEditedImage(identifier); // Get edited image from UI
-                    //TODO get edited image from UI (if the image is edited) <- image editor not implemented yet
-                    BufferedImage image = FileUtils.decodeBase64ToImage(content);
-                    if (image != null) {
-                        try {
-                            ImageIO.write(image, "png", targetFile);
-                        } catch (IOException e) {
-                            throw new RuntimeException(e);
-                        }
-                        sendDebugChatMessage("Image saved: " + targetFile.getAbsolutePath());
-                    } else {
-                        System.err.println("No image found for: " + identifier);
-                        sendDebugChatMessage("No image found for: " + identifier);
-                    }
+            if (!Files.exists(targetFile)) {
+                sendDebugChatMessage("Target file not found, creating a new one: " + targetFile);
+                Files.createFile(targetFile);
+            }
+
+            // Handle different file types
+            if (fileType.equals(".json")) {
+                Files.write(targetFile, content.getBytes(StandardCharsets.UTF_8));
+                sendDebugChatMessage("JSON content saved: " + content);
+            } else if (fileType.equals(".png")) {
+                BufferedImage image = FileUtils.decodeBase64ToImage(content);
+                if (image != null) {
+                    ImageIO.write(image, "png", targetFile.toFile());
+                    sendDebugChatMessage("Image saved: " + targetFile);
+                } else {
+                    System.err.println("No image found for: " + path);
+                    sendDebugChatMessage("No image found for: " + path);
                 }
             }
 
-            sendDebugChatMessage("File saved: " + targetFilePath);
+            sendDebugChatMessage("File successfully saved: " + targetFile);
 
+            // Update the file in the editor if it's open
             for (PackFile file : EditorWindow.openFiles) {
-                if (file.getIdentifier().equals(identifier)) {
+                if (file.getPath().equals(path)) {
                     file.saveFile();
                     break;
                 }
@@ -346,9 +267,16 @@ public class FileUtils {
         }
     }
 
-    public static void saveFolder(Identifier identifier) {
+    private static Path getPackFolderPath() {
+        if (PackifiedClient.currentPack == null) return null;
+        return FabricLoader.getInstance().getGameDir()
+                .resolve("resourcepacks")
+                .resolve(PackifiedClient.currentPack.getDisplayName().getString());
+    }
+
+    public static void saveFolder(Path path) {
         // Save folder
-        File folder = new File("resourcepacks/" + PackifiedClient.currentPack.getDisplayName().getString() + "/assets/" + identifier.getNamespace() + "/" + identifier.getPath());
+        File folder = path.toFile();
         if (folder.isDirectory()) {
             if (!folder.exists()) {
                 // Save folder
@@ -497,22 +425,16 @@ public class FileUtils {
         }
     }
 
-    public static int getFileSize(Identifier identifier) {
+    public static int getFileSize(Path path) {
         // Get the asset content from the PackifiedClient.currentPack
-        if (identifier == null) {
+        if (path == null) {
             return 0;
         }
-        try (ResourcePack resourcePack = PackifiedClient.currentPack.createResourcePack()) {
-            InputSupplier<InputStream> opened = resourcePack.open(ResourceType.CLIENT_RESOURCES, identifier);
-            if (opened == null) {
-                return 0;
-            }
-            InputStream inputStream = opened.get();
-            return inputStream.available();
-        } catch (IOException | NullPointerException e) {
-            e.printStackTrace();
-            return 0;
+        File file = path.toFile();
+        if (file.exists()) {
+            return (int) file.length();
         }
+        return 0;
     }
 
     public static String formatFileSize(int size) {
@@ -526,34 +448,34 @@ public class FileUtils {
     }
 
     public static String formatExtension(String extension) {
-        FileHierarchy.FileType fileType = FileHierarchy.FileType.fromExtension(extension);
-        if (fileType == null) {
-            return "Unknown";
-        }
-        return switch (fileType) {
-            case JSON -> "Json";
-            case PNG -> "Image";
-            case OGG -> "Sound";
-            case MC_META -> "Meta";
-            case TEXT -> "Text";
-            case PROPERTIES -> "PROPERTIES";
-            case VSH -> "Vertex Shader";
-            case FSH -> "Fragment Shader";
-            case BB_MODEL -> "Blockbench Model";
-            case BB_MODEL_JSON -> "Blockbench Model Json";
+        return switch (extension) {
+            case ".json" -> "JSON";
+            case ".png" -> "Image";
+            case ".ogg" -> "Sound";
+            case ".mcmeta" -> "Meta";
+            case ".txt" -> "Text";
+            case ".properties" -> "Properties";
+            case ".vsh" -> "Vertex Shader";
+            case ".fsh" -> "Fragment Shader";
+            case ".bbmodel" -> "Blockbench Model";
+            case ".bbmodel.json" -> "Blockbench Model JSON";
+            default -> "Unknown";
         };
     }
 
+
+
     public static String getContent(PackFile file) {
-        if (file.getExtension().getExtension().equals(FileHierarchy.FileType.JSON.getExtension())) {
+        String extension = file.getExtension();
+
+        if (extension.equals(".json") || extension.equals(".txt") || extension.equals(".mcmeta")) {
             return file.getTextEditor().getText();
-        } else if (file.getExtension().getExtension().equals(FileHierarchy.FileType.PNG.getExtension())) {
+        } else if (extension.equals(".png")) {
             return encodeImageToBase64(file.getImageEditorContent());
-        } else if (file.getExtension().getExtension().equals(FileHierarchy.FileType.OGG.getExtension())) {
-            //return file.getSoundContent();
-            return "";
+        } else if (extension.equals(".ogg")) {
+            return ""; // TODO: Handle sound content if needed
         } else {
-            Packified.LOGGER.error("Unsupported file type: {}", file.getExtension().getExtension());
+            Packified.LOGGER.error("Unsupported file type: {}", extension);
             return "";
         }
     }
@@ -568,7 +490,7 @@ public class FileUtils {
         }
     }
 
-    private static BufferedImage decodeBase64ToImage(String content) {
+    public static BufferedImage decodeBase64ToImage(String content) {
         try {
             byte[] imageBytes = Base64.getDecoder().decode(content);
             ByteArrayInputStream inputStream = new ByteArrayInputStream(imageBytes);
@@ -579,9 +501,12 @@ public class FileUtils {
         }
     }
 
-    public static String encodeSoundToString(OggAudioStream audio) {
-        //TODO implement this
-        return "";
+    public static String encodeSoundToString(byte[] audio) {
+        if (audio == null || audio.length == 0) {
+            System.err.println("Error: Audio data is empty or null.");
+            return "";
+        }
+        return Base64.getEncoder().encodeToString(audio);
     }
 
     public static String getMCMetaContent(ResourcePackProfile pack) {
@@ -645,7 +570,7 @@ public class FileUtils {
 
         // Create the assets
         for (SyncPacketData.AssetData asset : assets) {
-            File targetFile = new File(minecraftFolder, asset.identifier().getPath());
+            File targetFile = asset.path().toFile();
             targetFile.getParentFile().mkdirs();
             //Files.write(targetFile.toPath(), asset.assetData().getBytes(StandardCharsets.UTF_8));
             if (asset.extension().equals(".json")) {
@@ -667,8 +592,8 @@ public class FileUtils {
                     }
                     sendDebugChatMessage("Image saved: " + targetFile.getAbsolutePath());
                 } else {
-                    System.err.println("No image found for: " + asset.identifier());
-                    sendDebugChatMessage("No image found for: " + asset.identifier());
+                    System.err.println("No image found for: " + asset.path());
+                    sendDebugChatMessage("No image found for: " + asset.path());
                 }
             }
         }
@@ -691,25 +616,131 @@ public class FileUtils {
         PackUtils.reloadPack();
     }
 
-    public static Identifier validateIdentifier(String path) {
+    public static Path validateIdentifier(String path) {
         try {
             if (path == null) {
                 return null;
             }
             path = path.toLowerCase().replaceAll("[^a-z0-9/._-]", "_");
-            return Identifier.of(path);
+            return Path.of(path);
         } catch (InvalidIdentifierException e) {
-            return null;
+            return Path.of(path);
         }
     }
 
-    public static void openFileInExplorer(Identifier identifier) {
-        File file = new File("resourcepacks/" + PackifiedClient.currentPack.getDisplayName().getString() + "/assets/" + identifier.getNamespace() + "/" + identifier.getPath());
+    public static void openFileInExplorer(Path path) {
+        File file = path.toFile();
         try {
             ProcessBuilder processBuilder = new ProcessBuilder("explorer.exe", "/select,", file.getAbsolutePath());
             processBuilder.start();
         } catch (IOException e) {
             e.printStackTrace();
         }
+    }
+
+    public static void moveFile(Path originalPath, String newRelativePath) {
+        // move file
+        EditorWindow.openFiles.removeIf(file -> file.getPath().equals(originalPath));
+        if (newRelativePath.isEmpty()) {
+            System.out.println("New path is empty");
+            return;
+        }
+
+        Path packFolderPath = getPackFolderPath();
+        if (packFolderPath == null) {
+            System.err.println("Resource pack folder is not set.");
+            return;
+        }
+
+        // Ensure newRelativePath is converted back to a full path inside the resource pack
+        Path newFilePath = packFolderPath.resolve(newRelativePath);
+
+        try {
+            // Ensure new file does not already exist
+            if (Files.exists(newFilePath)) {
+                System.err.println("Cannot move: File with new path already exists -> " + newFilePath);
+                return;
+            }
+
+            // Create parent directories if needed
+            Files.createDirectories(newFilePath.getParent());
+
+            // Rename the file safely
+            Files.move(originalPath, newFilePath, StandardCopyOption.ATOMIC_MOVE);
+
+            // Update open files in the editor
+            EditorWindow.openFiles.removeIf(file -> file.getPath().equals(originalPath));
+
+        } catch (IOException e) {
+            System.err.println("Failed to move file: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
+    public static void renameFile(Path originalPath, String newRelativePath) {
+        EditorWindow.openFiles.removeIf(file -> file.getPath().equals(originalPath));
+        if (newRelativePath.isEmpty()) {
+            System.out.println("New name is empty");
+            return;
+        }
+
+        Path packFolderPath = getPackFolderPath();
+        if (packFolderPath == null) {
+            System.err.println("Resource pack folder is not set.");
+            return;
+        }
+
+        // Ensure newRelativePath is converted back to a full path inside the resource pack
+        Path newFilePath = packFolderPath.resolve(newRelativePath);
+
+        try {
+            // Ensure new file does not already exist
+            if (Files.exists(newFilePath)) {
+                System.err.println("Cannot rename: File with new name already exists -> " + newFilePath);
+                return;
+            }
+
+            // Create parent directories if needed
+            Files.createDirectories(newFilePath.getParent());
+
+            // Rename the file safely
+            Files.move(originalPath, newFilePath, StandardCopyOption.ATOMIC_MOVE);
+
+            // Update open files in the editor
+            EditorWindow.openFiles.removeIf(file -> file.getPath().equals(originalPath));
+
+            openFile(newFilePath);
+        } catch (IOException e) {
+            System.err.println("Failed to rename file: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
+    public static String getRelativePackPath(Path filePath) {
+        Path packFolderPath = getPackFolderPath();
+
+        if (packFolderPath == null) {
+            System.err.println("Resource pack folder is not set.");
+            return filePath.toString();
+        }
+
+        return packFolderPath.relativize(filePath).toString();
+    }
+
+    public static String getRelativePackPath(Path filePath, String name) {
+        Path packFolderPath = getPackFolderPath();
+
+        if (packFolderPath == null) {
+            System.err.println("Resource pack folder is not set.");
+            return filePath.toString();
+        }
+        return packFolderPath.relativize(filePath).resolve(name).toString();
+    }
+
+    public static void updateTexture(BufferedImage image, PackFile imageFile) {
+        // Update the texture
+        String content = encodeImageToBase64(image);
+        imageFile.setImageEditorContent(content);
+        imageFile.saveFile();
     }
 }

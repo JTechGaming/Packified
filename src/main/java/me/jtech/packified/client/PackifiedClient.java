@@ -1,5 +1,6 @@
 package me.jtech.packified.client;
 
+import imgui.ImGui;
 import me.jtech.packified.Packified;
 import me.jtech.packified.SyncPacketData;
 import me.jtech.packified.client.imgui.ImGuiImplementation;
@@ -19,20 +20,15 @@ import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.network.ClientPlayerInteractionManager;
 import net.minecraft.client.option.KeyBinding;
-import net.minecraft.client.render.block.BlockRenderManager;
-import net.minecraft.client.render.item.ItemRenderer;
-import net.minecraft.client.resource.ResourceReloadLogger;
 import net.minecraft.client.util.InputUtil;
-import net.minecraft.resource.ResourceManager;
-import net.minecraft.resource.ResourcePack;
 import net.minecraft.resource.ResourcePackProfile;
 import net.minecraft.util.Identifier;
-import net.minecraft.util.Util;
 import net.minecraft.world.GameMode;
 import org.lwjgl.glfw.GLFW;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.nio.file.Path;
 import java.util.*;
 
 @Environment(EnvType.CLIENT)
@@ -145,8 +141,8 @@ public class PackifiedClient implements ClientModInitializer {
     private static void accumulativeAssetDownload(SyncPacketData data, ResourcePackProfile pack) {
         for (SyncPacketData.AssetData asset : data.assets()) {
             if (!asset.finalChunk()) {
-                if (bufferContainsAsset(asset.identifier())) {
-                    int index = bufferGetAsset(asset.identifier());
+                if (bufferContainsAsset(asset.path())) {
+                    int index = bufferGetAsset(asset.path());
                     chunkedAssetsBuffer.get(index).setAssetData(chunkedAssetsBuffer.get(index).assetData() + asset.assetData());
                 } else {
                     chunkedAssetsBuffer.add(asset);
@@ -154,15 +150,15 @@ public class PackifiedClient implements ClientModInitializer {
                 continue;
             }
             SyncPacketData.AssetData assetData;
-            if (bufferContainsAsset(asset.identifier())) {
-                int index = bufferGetAsset(asset.identifier());
+            if (bufferContainsAsset(asset.path())) {
+                int index = bufferGetAsset(asset.path());
                 assetData = chunkedAssetsBuffer.get(index);
                 assetData.setAssetData(assetData.assetData() + asset.assetData());
                 chunkedAssetsBuffer.remove(index);
             } else {
                 assetData = asset;
             }
-            FileUtils.saveSingleFile(assetData.identifier(), assetData.extension(), assetData.assetData());
+            FileUtils.saveSingleFile(assetData.path(), assetData.extension(), assetData.assetData());
         }
         if (data.finalChunk()) {
             FileUtils.setMCMetaContent(pack, data.metadata());
@@ -172,18 +168,18 @@ public class PackifiedClient implements ClientModInitializer {
         }
     }
 
-    public static int bufferGetAsset(Identifier identifier) {
+    public static int bufferGetAsset(Path path) {
         for (SyncPacketData.AssetData asset : chunkedAssetsBuffer) {
-            if (asset.identifier().equals(identifier)) {
+            if (asset.path().equals(path)) {
                 return chunkedAssetsBuffer.indexOf(asset);
             }
         }
         return 0;
     }
 
-    public static boolean bufferContainsAsset(Identifier identifier) {
+    public static boolean bufferContainsAsset(Path path) {
         for (SyncPacketData.AssetData asset : chunkedAssetsBuffer) {
-            if (asset.identifier().equals(identifier)) {
+            if (asset.path().equals(path)) {
                 return true;
             }
         }
@@ -220,7 +216,7 @@ public class PackifiedClient implements ClientModInitializer {
                     FileUtils.saveAllFiles();
                 } else {
                     // Handle Ctrl+S
-                    FileUtils.saveSingleFile(EditorWindow.currentFile.getIdentifier(), EditorWindow.currentFile.getExtension().getExtension(), FileUtils.getContent(EditorWindow.currentFile));
+                    FileUtils.saveSingleFile(EditorWindow.currentFile.getPath(), EditorWindow.currentFile.getExtension(), FileUtils.getContent(EditorWindow.currentFile));
                 }
             } else {
                 saveKeyPressed = false;

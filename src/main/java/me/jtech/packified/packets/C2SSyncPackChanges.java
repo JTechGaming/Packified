@@ -1,7 +1,7 @@
 package me.jtech.packified.packets;
 
 import me.jtech.packified.SyncPacketData;
-import me.jtech.packified.UuidList;
+import me.jtech.packified.CustomCodecs;
 import net.minecraft.network.RegistryByteBuf;
 import net.minecraft.network.codec.PacketCodec;
 import net.minecraft.network.packet.CustomPayload;
@@ -13,7 +13,7 @@ public record C2SSyncPackChanges(SyncPacketData packetData, List<UUID> markedPla
     public static final CustomPayload.Id<C2SSyncPackChanges> ID = new CustomPayload.Id<>(NetworkingConstants.C2S_SYNC_PACK_CHANGES);
     public static final PacketCodec<RegistryByteBuf, C2SSyncPackChanges> CODEC = PacketCodec.tuple(
             SyncPacketData.PACKET_CODEC, C2SSyncPackChanges::packetData,
-            UuidList.PACKET_CODEC, C2SSyncPackChanges::markedPlayers,
+            CustomCodecs.UuidCodecs.PACKET_CODEC, C2SSyncPackChanges::markedPlayers,
             C2SSyncPackChanges::new
     );
 

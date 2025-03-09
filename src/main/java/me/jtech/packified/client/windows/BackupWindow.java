@@ -77,6 +77,10 @@ public class BackupWindow {
                                     }
                                 }
                                 ImGui.separator();
+                                if (ImGui.menuItem("Open in Explorer")) {
+                                    FileUtils.openFileInExplorer(path);
+                                }
+                                ImGui.separator();
                                 if (ImGui.menuItem("Delete All")) {
                                     // Delete file
                                     ConfirmWindow.open("delete all backups", "They will be lost forever", FileUtils::clearBackups);

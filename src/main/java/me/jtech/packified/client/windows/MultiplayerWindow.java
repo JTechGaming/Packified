@@ -32,6 +32,7 @@ public class MultiplayerWindow {
             if (ImGui.isItemHovered()) {
                 ImGui.setTooltip("Sync your pack to all the server players");
             }
+            ImGui.sameLine();
             ImGui.imageButton(ImGuiImplementation.loadTexture("textures/ui/neu_upload.png"), 14, 14);
             if (ImGui.isItemClicked()) {
                 // Upload the pack to the server

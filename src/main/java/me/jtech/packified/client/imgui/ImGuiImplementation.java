@@ -39,7 +39,7 @@ import java.util.List;
 public class ImGuiImplementation {
     public final static CustomImGuiImplGlfw imGuiImplGlfw = new CustomImGuiImplGlfw();
     private final static CustomImGuiImplGl3 imGuiImplGl3 = new CustomImGuiImplGl3();
-    private static boolean initialized = false;
+    public static boolean initialized = false;
     private static boolean test = false;
 
     public static int minecraftTexture = -1;

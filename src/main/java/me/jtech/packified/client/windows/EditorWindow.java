@@ -1,7 +1,10 @@
 package me.jtech.packified.client.windows;
 
-import com.mojang.authlib.minecraft.client.ObjectMapper;
+import com.google.gson.JsonSyntaxException;
+import com.google.gson.stream.JsonReader;
+import com.google.gson.stream.JsonToken;
 import imgui.ImGui;
+import imgui.ImVec2;
 import imgui.extension.texteditor.TextEditor;
 import imgui.extension.texteditor.TextEditorLanguageDefinition;
 import imgui.extension.texteditor.flag.TextEditorPaletteIndex;
@@ -16,15 +19,36 @@ import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.sound.PositionedSoundInstance;
+import net.minecraft.client.sound.SoundInstance;
+import net.minecraft.client.sound.SoundManager;
+import net.minecraft.registry.Registries;
+import net.minecraft.registry.Registry;
+import net.minecraft.sound.SoundCategory;
+import net.minecraft.sound.SoundEvent;
 import net.minecraft.util.Identifier;
+import org.lwjgl.openal.AL;
+import org.lwjgl.openal.AL10;
+import org.lwjgl.stb.STBVorbis;
+import org.lwjgl.stb.STBVorbisInfo;
+import org.lwjgl.system.MemoryStack;
+import org.lwjgl.system.MemoryUtil;
 
 import javax.imageio.ImageIO;
+import javax.sound.sampled.*;
 import java.awt.image.BufferedImage;
-import java.io.File;
+import java.io.BufferedInputStream;
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.io.StringReader;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.nio.ShortBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 @Environment(EnvType.CLIENT)
 public class EditorWindow {
@@ -37,6 +61,10 @@ public class EditorWindow {
     public static int modifiedFiles = 0;
 
     public static List<PackFile> changedAssets = new ArrayList<>();
+
+    private static AtomicBoolean isPlaying = new AtomicBoolean(false);
+    private static int audioSource = -1;
+    private static int bufferId = -1;
 
     private enum Tool {
         PEN,
@@ -56,7 +84,7 @@ public class EditorWindow {
                 if (ImGui.beginMenu("File")) {
                     if (ImGui.menuItem("Open")) {
                         String defaultFolder = FabricLoader.getInstance().getConfigDir().resolve("packified").toString();
-                        FileDialog.openFileDialog(defaultFolder, "Files", "json", "png").thenAccept(pathStr -> {
+                        FileDialog.openFileDialog(defaultFolder, "Files", "json", "png", "ogg").thenAccept(pathStr -> {
                             if (pathStr != null) {
                                 Path path = Path.of(pathStr);
                                 MinecraftClient.getInstance().submit(() -> {
@@ -69,12 +97,10 @@ public class EditorWindow {
                                             String content = Files.readString(path);
                                             TextEditor editor = new TextEditor();
                                             editor.setText(content);
-                                            openFiles.add(new PackFile(path.getFileName().toString(), content, FileHierarchy.FileType.JSON, editor));
+                                            openFiles.add(new PackFile(path.getFileName().toString(), content, ".json", editor));
                                         } else if (extension.equals(".ogg")) {
                                             byte[] bytes = Files.readAllBytes(path);
-                                            String base64 = Base64.getEncoder().encodeToString(bytes);
-                                            String content = "data:audio/ogg;base64," + base64;
-                                            //openFiles.add(new PackFile(path.getFileName().toString(), content, FileHierarchy.FileType.OGG)); //TODO add audio support
+
                                         }
                                     } catch (IOException e) {
                                         throw new RuntimeException(e);
@@ -96,7 +122,7 @@ public class EditorWindow {
             if (ImGui.isItemClicked()) {
                 // Logic to save the current file
                 if (currentFile != null) {
-                    FileUtils.saveSingleFile(currentFile.getIdentifier(), FileUtils.getFileExtension(currentFile.getFileName()), currentFile.getTextEditor().getText());
+                    FileUtils.saveSingleFile(currentFile.getPath(), FileUtils.getFileExtension(currentFile.getFileName()), currentFile.getTextEditor().getText());
                 }
             }
             if (ImGui.isItemHovered()) {
@@ -129,7 +155,7 @@ public class EditorWindow {
                     if (ImGui.beginTabItem(openFiles.get(i).getFileName() + "##" + i, ImGuiTabItemFlags.None | (openFiles.get(i).isModified() ? ImGuiTabItemFlags.UnsavedDocument : 0))) {
                         if (openFiles.get(i).isModified()) {
                             for (int j = 0; j < changedAssets.size(); j++) {
-                                if (changedAssets.get(j).getIdentifier().equals(openFiles.get(i).getIdentifier())) {
+                                if (changedAssets.get(j).getPath().equals(openFiles.get(i).getPath())) {
                                     changedAssets.remove(j);
                                     break;
                                 }
@@ -139,15 +165,15 @@ public class EditorWindow {
                         currentFile = openFiles.get(i);
                         // Render the JSON editor for the current file
                         switch (openFiles.get(i).getExtension()) {
-                            case JSON, MC_META, FSH, VSH, PROPERTIES, TEXT:
+                            case ".json", ".mcmeta", ".fsh", ".vsh", ".properties", ".txt":
                                 renderTextFileEditor(openFiles.get(i));
                                 break;
-                            case PNG:
+                            case ".png":
                                 renderImageFileEditor(openFiles.get(i));
                                 break;
-//                            case OGG:
-//                                renderAudioFileEditor(openFiles.get(i));
-//                                break;
+                            case ".ogg":
+                                renderAudioFileEditor(openFiles.get(i));
+                                break;
                             default:
                                 ImGui.text("The " + openFiles.get(i).getExtension() + " file type can not be edited yet.");
                                 break;
@@ -166,10 +192,58 @@ public class EditorWindow {
     }
 
     private static void renderAudioFileEditor(PackFile audioFile) {
-        // Logic to render the audio editor for the given file
-        //TODO add audio editor tools, play, pause, stop, etc.
-        ImGui.text("The OGG file type can not be edited yet.");
+        // TODO implement audio playback
+//        if (ImGui.button(isPlaying.get() ? "Pause" : "Play")) {
+//            if (isPlaying.get()) {
+//                if (audioClip != null) audioClip.stop();
+//            } else {
+//                playOggWithMinecraft(audioFile.getPath());
+//            }
+//            isPlaying.set(!isPlaying.get());
+//        }
+
+        // Get total duration
+        float totalDuration = (audioClip != null) ? audioClip.getMicrosecondLength() / 1_000_000f : 0f;
+
+        // Update the playhead if audio is playing
+        if (isPlaying.get() && audioClip != null) {
+            playbackPosition[0] = audioClip.getMicrosecondPosition() / 1_000_000f;
+        }
+
+        // Display waveform with playhead slider
+        float[] waveform = convertToWaveform(audioFile.getSoundContent());
+        if (waveform.length > 0) {
+            ImGui.plotLines("Waveform", waveform, waveform.length); //, 0, null, -1.0f, 1.0f, new ImVec2(400, 100)
+
+            // Playhead slider (draggable)
+            if (ImGui.sliderFloat("Playback", playbackPosition, 0f, totalDuration)) {
+                if (audioClip != null) {
+                    audioClip.setMicrosecondPosition((long) (playbackPosition[0] * 1_000_000)); // Seek audio
+                }
+            }
+        } else {
+            ImGui.text("No waveform data available");
+        }
     }
+
+    private static float[] convertToWaveform(byte[] audioData) {
+        int sampleSize = 2; // 16-bit PCM audio
+        int numSamples = audioData.length / sampleSize;
+        float[] waveform = new float[numSamples];
+
+        ByteBuffer buffer = ByteBuffer.wrap(audioData);
+        buffer.order(ByteOrder.LITTLE_ENDIAN); // OGG uses little-endian format
+
+        for (int i = 0; i < numSamples; i++) {
+            short sample = buffer.getShort(); // Read 16-bit sample
+            waveform[i] = sample / 32768f; // Normalize to [-1,1]
+        }
+
+        return waveform;
+    }
+
+    private static Clip audioClip;
+    private static float[] playbackPosition = new float[]{0f}; // Current play position in seconds
 
     private static void renderTabPopup() {
         if (currentFile == null) {
@@ -179,14 +253,14 @@ public class EditorWindow {
             // Logic to save the current JSON file
             if (currentFile.isModified()) {
                 switch (currentFile.getExtension()) {
-                    case JSON, MC_META, FSH, VSH, PROPERTIES, TEXT:
-                        FileUtils.saveSingleFile(currentFile.getIdentifier(), FileUtils.getFileExtension(currentFile.getFileName()), currentFile.getTextEditor().getText());
+                    case ".json", ".mcmeta", ".fsh", ".vsh", ".properties", ".txt":
+                        FileUtils.saveSingleFile(currentFile.getPath(), FileUtils.getFileExtension(currentFile.getFileName()), currentFile.getTextEditor().getText());
                         break;
-                    case PNG:
-                        FileUtils.saveSingleFile(currentFile.getIdentifier(), FileUtils.getFileExtension(currentFile.getFileName()), FileUtils.encodeImageToBase64(currentFile.getImageEditorContent()));
+                    case ".png":
+                        FileUtils.saveSingleFile(currentFile.getPath(), FileUtils.getFileExtension(currentFile.getFileName()), FileUtils.encodeImageToBase64(currentFile.getImageEditorContent()));
                         break;
-                    case OGG:
-                        FileUtils.saveSingleFile(currentFile.getIdentifier(), FileUtils.getFileExtension(currentFile.getFileName()), FileUtils.encodeSoundToString(currentFile.getSoundEditorContent()));
+                    case ".ogg":
+                        FileUtils.saveSingleFile(currentFile.getPath(), FileUtils.getFileExtension(currentFile.getFileName()), FileUtils.encodeSoundToString(currentFile.getSoundEditorContent()));
                         break;
                 }
             }
@@ -233,7 +307,7 @@ public class EditorWindow {
             // Logic to delete the current file
             ConfirmWindow.open("delete this file", "The file will be lost forever.", () -> {
                 openFiles.remove(currentFile);
-                FileUtils.deleteFile(currentFile.getIdentifier());
+                FileUtils.deleteFile(currentFile.getPath());
             });
         }
     }
@@ -241,30 +315,43 @@ public class EditorWindow {
     private static void renderTextFileEditor(PackFile file) {
         // Logic to render the JSON editor for the given file
         TextEditor textEditor = file.getTextEditor();
-
         // Set syntax highlighting
         switch (file.getExtension()) {
-            case JSON, MC_META:
+            case ".json", ".mcmeta":
                 textEditor.setLanguageDefinition(createJsonLanguageDefinition());
                 break;
-            case FSH, VSH:
+            case ".fsh", ".vsh":
                 textEditor.setLanguageDefinition(TextEditorLanguageDefinition.glsl());
                 break;
-            case PROPERTIES, TEXT:
+            case ".properties", ".txt":
                 textEditor.setLanguageDefinition(createTxtLanguageDefinition());
                 break;
         }
 
         // Set error markers
         Map<Integer, String> errorMarkers = checkForErrors(file.getTextEditor().getText());
-        //file.getTextEditorContent().set(file.getTextEditor().getText());
         textEditor.setErrorMarkers(errorMarkers);
 
-        textEditor.setPalette(textEditor.getDarkPalette());
+        int[] customPalette = textEditor.getDarkPalette();
+
+        // Custom palette colors
+        customPalette[TextEditorPaletteIndex.Default] = ImGui.colorConvertFloat4ToU32(0.731f, 0.975f, 0.590f, 1.0f);
+        customPalette[TextEditorPaletteIndex.LineNumber] = ImGui.colorConvertFloat4ToU32(0.541f, 0.541f, 0.541f, 1.0f);
+        customPalette[TextEditorPaletteIndex.Punctuation] = ImGui.colorConvertFloat4ToU32(0.447f, 0.557f, 0.400f, 1.0f);
+        customPalette[TextEditorPaletteIndex.Selection] = ImGui.colorConvertFloat4ToU32(0.345f, 0.345f, 0.345f, 1.0f);
+        customPalette[TextEditorPaletteIndex.CurrentLineFill] = ImGui.colorConvertFloat4ToU32(0.063f, 0.063f, 0.063f, 1.0f);
+        //customPalette[TextEditorPaletteIndex.Keyword] = ImGui.colorConvertFloat4ToU32(0.863f, 0.863f, 0.800f, 1.0f);
+        //customPalette[TextEditorPaletteIndex.Default] = ImGui.colorConvertFloat4ToU32(0.447f, 0.557f, 0.400f, 1.0f);
+        customPalette[TextEditorPaletteIndex.CurrentLineEdge] = ImGui.colorConvertFloat4ToU32(0.498f, 0.624f, 0.498f, 0.5f);
+        customPalette[TextEditorPaletteIndex.Number] = ImGui.colorConvertFloat4ToU32(0.549f, 0.816f, 0.827f, 1.0f);
+        //customPalette[TextEditorPaletteIndex.MultiLineComment] = ImGui.colorConvertFloat4ToU32(0.549f, 0.816f, 0.827f, 1.0f);
+
+        //customPalette[TextEditorPaletteIndex.String] = ImGui.colorConvertFloat4ToU32(0.1f, 0.1f, 0.1f, 1.0f);
+
+        textEditor.setPalette(customPalette);
 
         // Render the editor
         textEditor.render("TextEditor");
-        //ImGui.inputTextMultiline("##source", file.getTextEditorContent(), ImGui.getWindowWidth() - 20, ImGui.getWindowHeight() - 40);
     }
 
     private static float[] zoomFactor = new float[]{1.0f};
@@ -306,61 +393,91 @@ public class EditorWindow {
             ImGui.image(textureId, width, height);
 
             // Handle drawing tools
-            handleDrawingTools(bufferedImage);
+            handleDrawingTools(bufferedImage, imageFile);
             imageFile.setContent(bufferedImage);
         } else {
             ImGui.text("Failed to load image");
         }
     }
 
-    private static void handleDrawingTools(BufferedImage image) {
-        // Logic to handle drawing tools
-        if (ImGui.isMouseClicked(0)) {
-            int mouseX = (int) (ImGui.getMousePosX() / zoomFactor[0]);
-            int mouseY = (int) (ImGui.getMousePosY() / zoomFactor[0]);
+    private static void handleDrawingTools(BufferedImage image, PackFile imageFile) {
+        if (ImGui.isMouseDown(0)) { // If left-click is held
+            // Get mouse position
+            float mouseX = ImGui.getMousePosX();
+            float mouseY = ImGui.getMousePosY();
 
-            switch (currentTool) {
-                case PEN:
-                    drawPen(image, mouseX, mouseY);
-                    break;
-                case PAINT_BUCKET:
-                    fill(image, mouseX, mouseY);
-                    break;
-                case SELECT:
-                    // Handle selection logic
-                    break;
-                case ERASER:
-                    erase(image, mouseX, mouseY);
-                    break;
+            // Convert screen mouse coordinates to image coordinates
+            int imgX = (int) ((mouseX - ImGui.getCursorScreenPosX()) / zoomFactor[0]);
+            int imgY = (int) ((mouseY - ImGui.getCursorScreenPosY()) / zoomFactor[0]);
+
+            if (imgX >= 0 && imgX < image.getWidth() && imgY >= 0 && imgY < image.getHeight()) {
+                switch (currentTool) {
+                    case PEN -> drawPen(image, imgX, imgY);
+                    case PAINT_BUCKET -> fill(image, imgX, imgY);
+                    case ERASER -> erase(image, imgX, imgY);
+                    case SELECT -> { /* Future Selection Logic */ }
+                }
+                // Update the texture to reflect changes
+                FileUtils.updateTexture(image, imageFile);
             }
         }
     }
 
     private static void drawPen(BufferedImage image, int x, int y) {
-        for (int i = 0; i < toolSize.get(); i++) {
-            for (int j = 0; j < toolSize.get(); j++) {
-                if (x + i < image.getWidth() && y + j < image.getHeight()) {
-                    image.setRGB(x + i, y + j, colorToRGB(color));
+        int brushSize = toolSize.get();
+        int rgb = colorToRGB(color);
+
+        for (int i = -brushSize / 2; i < brushSize / 2; i++) {
+            for (int j = -brushSize / 2; j < brushSize / 2; j++) {
+                int px = x + i;
+                int py = y + j;
+
+                if (px >= 0 && px < image.getWidth() && py >= 0 && py < image.getHeight()) {
+                    image.setRGB(px, py, rgb);
                 }
             }
         }
     }
 
     private static void erase(BufferedImage image, int x, int y) {
-        for (int i = 0; i < toolSize.get(); i++) {
-            for (int j = 0; j < toolSize.get(); j++) {
-                if (x + i < image.getWidth() && y + j < image.getHeight()) {
-                    image.setRGB(x + i, y + j, 0x00000000); // Transparent
+        int brushSize = toolSize.get();
+        int transparent = 0x00000000; // ARGB Transparent
+
+        for (int i = -brushSize / 2; i < brushSize / 2; i++) {
+            for (int j = -brushSize / 2; j < brushSize / 2; j++) {
+                int px = x + i;
+                int py = y + j;
+
+                if (px >= 0 && px < image.getWidth() && py >= 0 && py < image.getHeight()) {
+                    image.setRGB(px, py, transparent);
                 }
             }
         }
     }
 
     private static void fill(BufferedImage image, int x, int y) {
-        for (int i = 0; i < image.getWidth(); i++) {
-            for (int j = 0; j < image.getHeight(); j++) {
-                image.setRGB(i, j, colorToRGB(color));
-            }
+        int targetColor = image.getRGB(x, y);
+        int replacementColor = colorToRGB(color);
+
+        if (targetColor == replacementColor) return; // Prevent infinite loop
+
+        Queue<int[]> queue = new LinkedList<>();
+        queue.add(new int[]{x, y});
+
+        while (!queue.isEmpty()) {
+            int[] point = queue.poll();
+            int px = point[0];
+            int py = point[1];
+
+            if (px < 0 || py < 0 || px >= image.getWidth() || py >= image.getHeight()) continue;
+            if (image.getRGB(px, py) != targetColor) continue;
+
+            image.setRGB(px, py, replacementColor);
+
+            queue.add(new int[]{px + 1, py});
+            queue.add(new int[]{px - 1, py});
+            queue.add(new int[]{px, py + 1});
+            queue.add(new int[]{px, py - 1});
         }
     }
 
@@ -371,52 +488,77 @@ public class EditorWindow {
         return (r << 16) | (g << 8) | b;
     }
 
-    public static void openTextFile(Identifier identifier, String content) {
-        if (openFiles.stream().anyMatch(file -> file.getIdentifier().equals(identifier))) {
-            return;
+    public static void openTextFile(Path filePath, String content) {
+        if (openFiles.stream().anyMatch(file -> file.getPath().equals(filePath))) {
+            return; // Prevent opening the same file multiple times
         }
+
         TextEditor editor = new TextEditor();
         editor.setText(content);
-        PackFile file = new PackFile(identifier, content, FileUtils.getExtension(identifier), editor);
+        PackFile file = new PackFile(filePath, content, FileUtils.getFileExtension(filePath.getFileName().toString()), editor);
         openFiles.add(file);
         isOpen.set(true);
     }
 
-    public static void openImageFile(Identifier identifier, BufferedImage content) {
-        if (openFiles.stream().anyMatch(imageFile -> imageFile.getIdentifier().equals(identifier))) {
-            return;
+    public static void openImageFile(Path filePath, BufferedImage content) {
+        if (openFiles.stream().anyMatch(imageFile -> imageFile.getPath().equals(filePath))) {
+            return; // Prevent opening the same image multiple times
         }
-        openFiles.add(new PackFile(identifier, content));
+
+        openFiles.add(new PackFile(filePath, content));
         isOpen.set(true);
     }
+
+    public static void openAudioFile(Path filePath, byte[] audioData) {
+        if (openFiles.stream().anyMatch(file -> file.getPath().equals(filePath))) {
+            System.out.println("file already open");
+            return; // Prevent opening the same file multiple times
+        }
+
+        PackFile file = new PackFile(filePath, audioData);
+        openFiles.add(file);
+        isOpen.set(true);
+    }
+
 
     private static TextEditorLanguageDefinition createJsonLanguageDefinition() {
         TextEditorLanguageDefinition lang = new TextEditorLanguageDefinition();
         lang.setName("JSON");
 
-        // Define keywords
-        String[] keywords = new String[]{"elements", "name", "from", "to", "rotation", "faces"};
-        lang.setKeywords(keywords);
+        // Keywords (optional — just for highlighting keys like "elements")
+        lang.setKeywords(new String[]{"credit", "texture_size", "textures"});
 
-        // Define identifiers
+        // Identifiers (for better tooltip descriptions or intellisense, optional)
         Map<String, String> identifiers = new HashMap<>();
-        identifiers.put("north", "north");
-        identifiers.put("east", "east");
-        identifiers.put("south", "south");
-        identifiers.put("west", "west");
-        identifiers.put("up", "up");
-        identifiers.put("down", "down");
-        identifiers.put("uv", "uv");
-        identifiers.put("texture", "texture");
+        identifiers.put("name", "North face");
+        identifiers.put("from", "South face");
+        identifiers.put("to", "UV mapping");
+        identifiers.put("rotation", "Texture reference");
+        identifiers.put("faces", "Texture reference");
         lang.setIdentifiers(identifiers);
 
-        // Define token regex strings for symbols
+        lang.setCommentStart("♸"); // No single-line comments
+        lang.setCommentEnd("♼");
+
+        //lang.setStringDelimiter("\"");
+        //lang.setEscapeCharacter('\\');
+
         Map<String, Integer> tokenRegexStrings = new HashMap<>();
-        //tokenRegexStrings.put("\"[^\"]*\"", TextEditorPaletteIndex.String);
-        tokenRegexStrings.put("[{}\\[\\]:,]", TextEditorPaletteIndex.Punctuation);
+        tokenRegexStrings.put("[{}\\[\\],:]", TextEditorPaletteIndex.Punctuation);
+        tokenRegexStrings.put("[0-9.-]", TextEditorPaletteIndex.Number);
+        tokenRegexStrings.put("credit", TextEditorPaletteIndex.Keyword);
+        tokenRegexStrings.put("texture_size", TextEditorPaletteIndex.Keyword);
+        tokenRegexStrings.put("textures", TextEditorPaletteIndex.Keyword);
+        tokenRegexStrings.put("name", TextEditorPaletteIndex.Identifier);
+        tokenRegexStrings.put("from", TextEditorPaletteIndex.Identifier);
+        tokenRegexStrings.put("to", TextEditorPaletteIndex.Identifier);
+        tokenRegexStrings.put("rotation", TextEditorPaletteIndex.Identifier);
+        tokenRegexStrings.put("faces", TextEditorPaletteIndex.Identifier);
+        //tokenRegexStrings.put("[0-9.-]", TextEditorPaletteIndex.);
         lang.setTokenRegexStrings(tokenRegexStrings);
 
         lang.setAutoIdentation(true);
+
         return lang;
     }
 
