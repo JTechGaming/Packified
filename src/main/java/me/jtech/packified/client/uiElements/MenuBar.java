@@ -8,6 +8,7 @@ import me.jtech.packified.client.util.FileUtils;
 import me.jtech.packified.client.util.PackUtils;
 import me.jtech.packified.client.windows.BackupWindow;
 import me.jtech.packified.client.windows.EditorWindow;
+import me.jtech.packified.client.windows.SettingsWindow;
 import me.jtech.packified.packets.C2SInfoPacket;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
@@ -142,7 +143,7 @@ public class MenuBar {
 
             if (ImGui.beginMenu("Preferences")) {
                 if (ImGui.menuItem("Settings")) {
-                    System.out.println("Settings clicked");
+                    SettingsWindow.isOpen = !SettingsWindow.isOpen;
                 }
                 ImGui.endMenu();
             }

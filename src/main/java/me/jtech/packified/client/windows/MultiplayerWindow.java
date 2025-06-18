@@ -12,13 +12,19 @@ import me.jtech.packified.client.util.PackFile;
 import me.jtech.packified.client.util.PackUtils;
 import me.jtech.packified.packets.C2SRequestFullPack;
 import me.jtech.packified.packets.C2SSyncPackChanges;
+import net.fabricmc.api.EnvType;
+import net.fabricmc.api.Environment;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.resource.ResourcePackProfile;
+import net.minecraft.text.Text;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
+@Environment(EnvType.CLIENT)
 public class MultiplayerWindow {
     public static void render() {
         // Render the multiplayer window
@@ -50,16 +56,18 @@ public class MultiplayerWindow {
                 ImGui.tableSetupColumn("Pack");
                 ImGui.tableHeadersRow();
                 ImGui.tableNextRow();
-                MinecraftClient.getInstance().world.getPlayers().forEach(player -> {
+                MinecraftClient.getInstance().getNetworkHandler().getPlayerList().forEach(p -> {
+                    UUID uuid = p.getProfile().getId();
+                    String displayName = p.getProfile().getName();
                     ImGui.tableNextRow();
                     ImGui.tableSetColumnIndex(0);
-                    boolean greyedOut = !Packified.moddedPlayers.contains(player.getUuid());
+                    boolean greyedOut = !Packified.moddedPlayers.contains(uuid);
 
                     ImGui.pushStyleColor(ImGuiCol.Text, greyedOut ? ImGui.getColorU32(ImGuiCol.TextDisabled) : ImGui.getColorU32(ImGuiCol.Text));
-                    ImGui.menuItem(player.getDisplayName().getString());
+                    ImGui.menuItem(displayName);
                     ImGui.popStyleColor();
                     if (ImGui.isItemHovered()) {
-                        if (player.getUuid() != MinecraftClient.getInstance().player.getUuid()) {
+                        if (!uuid.toString().equalsIgnoreCase(MinecraftClient.getInstance().player.getUuid().toString())) {
                             if (greyedOut) {
                                 ImGui.setTooltip("Player does not have the mod installed");
                             } else {
@@ -71,23 +79,23 @@ public class MultiplayerWindow {
                     }
 
                     ImGui.tableSetColumnIndex(1);
-                    if (player.getUuid().equals(MinecraftClient.getInstance().player.getUuid())) {
+                    if (uuid.equals(MinecraftClient.getInstance().player.getUuid())) {
                         if (PackifiedClient.currentPack == null) {
                             ImGui.text("Vanilla");
                         } else {
                             ImGui.text(PackifiedClient.currentPack.getDisplayName().getString());
                         }
                     } else {
-                        ImGui.text(PackifiedClient.playerPacks.getOrDefault(player.getUuid(), "Vanilla"));
+                        ImGui.text(PackifiedClient.playerPacks.getOrDefault(uuid, "Vanilla"));
                     }
                     ImGui.tableSetColumnIndex(0);
 
-                    if (PackifiedClient.playerPacks.containsKey(player.getUuid()) && player.getUuid() != MinecraftClient.getInstance().player.getUuid()) {
-                        if (ImGui.beginPopupContextItem(player.getDisplayName().getString())) {
+                    if (PackifiedClient.playerPacks.containsKey(uuid) && uuid != MinecraftClient.getInstance().player.getUuid()) {
+                        if (ImGui.beginPopupContextItem(displayName)) {
                             if (ImGui.beginMenu("Request Pack")) {
                                 if (ImGui.menuItem("Full Pack")) {
                                     // Send a request for the full pack
-                                    ClientPlayNetworking.send(new C2SRequestFullPack("!!currentpack!!", player.getUuid()));
+                                    ClientPlayNetworking.send(new C2SRequestFullPack("!!currentpack!!", uuid));
                                 }
                                 if (ImGui.menuItem("Changes (not implemented)")) {
                                     // Send a request for the changes
@@ -100,6 +108,9 @@ public class MultiplayerWindow {
                     }
                 });
                 ImGui.endTable();
+                if (Packified.debugMode) {
+                    ImGui.inputInt("packets per tick: ", Packified.packetsPerTick);
+                }
             }
         }
         ImGui.end();

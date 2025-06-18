@@ -1,5 +1,7 @@
 package me.jtech.packified;
 
+import imgui.type.ImFloat;
+import imgui.type.ImInt;
 import me.jtech.packified.packets.*;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
@@ -13,17 +15,21 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
+import static com.mojang.text2speech.Narrator.LOGGER;
+
 public class Packified implements ModInitializer {
     public static final String MOD_ID = "packified";
     public static Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
 
-    public static final String version = "1.0.0";
+    public static final String version = "1.0.1";
 
     public static List<UUID> moddedPlayers = new ArrayList<>();
 
-    public static boolean debugMode = false;
+    public static boolean debugMode = true;
 
-    public static final int MAX_PACKET_SIZE = 32767;
+    public static final int MAX_PACKET_SIZE = 32767 / 4; // 32KB - 1KB for overhead
+
+    public static ImInt packetsPerTick = new ImInt(1);
 
     @Override
     public void onInitialize() {
@@ -66,6 +72,10 @@ public class Packified implements ModInitializer {
                 if (player == null) {
                     return;
                 }
+                LOGGER.info(payload.packetData().lastData() ? "Last data chunk received" : "Receiving full pack from player: {}", player.getUuid());
+                for (SyncPacketData.AssetData asset : payload.packetData().assets()) {
+                    LOGGER.info("Sending file: {}", asset.path());
+                }
                 ServerPlayNetworking.send(player, new S2CSendFullPack(payload.packetData()));
             });
         });
@@ -84,6 +94,7 @@ public class Packified implements ModInitializer {
         ServerPlayNetworking.registerGlobalReceiver(C2SHasMod.ID, (payload, context) -> {
             context.server().execute(() -> {
                 // Returns if the player has the mod installed
+                LOGGER.info("Player {} has the mod installed: {}", context.player().getUuid(), moddedPlayers.contains(context.player().getUuid()));
                 moddedPlayers.add(context.player().getUuid());
                 for (UUID player : moddedPlayers) {
                     ServerPlayerEntity serverPlayer = context.server().getPlayerManager().getPlayer(player);

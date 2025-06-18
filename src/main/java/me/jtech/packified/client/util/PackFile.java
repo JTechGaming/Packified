@@ -1,11 +1,15 @@
 package me.jtech.packified.client.util;
 
 import imgui.extension.texteditor.TextEditor;
+import imgui.extension.texteditor.TextEditorLanguageDefinition;
+import me.jtech.packified.client.windows.PixelArtEditor;
 import net.minecraft.client.sound.OggAudioStream;
 import net.minecraft.util.Identifier;
 
 import java.awt.image.BufferedImage;
 import java.nio.file.Path;
+
+import static me.jtech.packified.client.windows.EditorWindow.*;
 
 public class PackFile {
     private String fileName;
@@ -17,6 +21,7 @@ public class PackFile {
     private byte[] soundEditorContent;
     private Path path;
     private TextEditor textEditor;
+    private PixelArtEditor pixelArtEditor;
 
     public PackFile(Path path, BufferedImage content) {
         this.path = path;
@@ -24,6 +29,8 @@ public class PackFile {
         this.imageContent = content;
         this.imageEditorContent = content;
         this.extension = ".png";
+        this.pixelArtEditor = new PixelArtEditor();
+        this.pixelArtEditor.loadImage(content, path);
     }
 
     public PackFile(String fileName, BufferedImage content) {
@@ -31,6 +38,8 @@ public class PackFile {
         this.imageContent = content;
         this.imageEditorContent = content;
         this.extension = ".png";
+        this.pixelArtEditor = new PixelArtEditor();
+        this.pixelArtEditor.loadImage(content, path);
     }
 
     public PackFile(Path path, String content, String extension, TextEditor textEditor) {
@@ -39,6 +48,17 @@ public class PackFile {
         this.textContent = content;
         this.extension = extension;
         this.textEditor = textEditor;
+        switch (getExtension()) {
+            case ".json", ".mcmeta":
+                textEditor.setLanguageDefinition(createJsonLanguageDefinition());
+                break;
+            case ".fsh", ".vsh":
+                textEditor.setLanguageDefinition(TextEditorLanguageDefinition.glsl());
+                break;
+            case ".properties", ".txt":
+                textEditor.setLanguageDefinition(createTxtLanguageDefinition());
+                break;
+        }
     }
 
     public PackFile(String fileName, String content, String extension, TextEditor textEditor) {
@@ -46,6 +66,17 @@ public class PackFile {
         this.textContent = content;
         this.extension = extension;
         this.textEditor = textEditor;
+        switch (getExtension()) {
+            case ".json", ".mcmeta":
+                textEditor.setLanguageDefinition(createJsonLanguageDefinition());
+                break;
+            case ".fsh", ".vsh":
+                textEditor.setLanguageDefinition(TextEditorLanguageDefinition.glsl());
+                break;
+            case ".properties", ".txt":
+                textEditor.setLanguageDefinition(createTxtLanguageDefinition());
+                break;
+        }
     }
 
     public PackFile(Path path, byte[] content) {
@@ -76,18 +107,6 @@ public class PackFile {
         return fileName;
     }
 
-    public void setFileName(String fileName) {
-        this.fileName = fileName;
-    }
-
-    public BufferedImage getContent() {
-        return imageContent;
-    }
-
-    public void setContent(BufferedImage content) {
-        this.imageContent = content;
-    }
-
     public String getExtension() {
         return extension;
     }
@@ -96,45 +115,21 @@ public class PackFile {
         return imageEditorContent;
     }
 
-    public void setEditorContent(BufferedImage editorContent) {
-        this.imageEditorContent = editorContent;
-    }
-
     public boolean isModified() {
         return switch (extension) {
-            case ".png" -> !imageContent.equals(imageEditorContent);
+            case ".png" -> pixelArtEditor.wasModified;
             case ".json" -> !textContent.equals(textEditor.getText());
             case ".ogg" -> !soundContent.equals(soundEditorContent);
             default -> false;
         };
     }
 
-    public String getTextContent() {
-        return textContent;
-    }
-
-    public void setTextContent(String textContent) {
-        this.textContent = textContent;
-    }
-
     public byte[] getSoundContent() {
         return soundContent;
     }
 
-    public void setSoundContent(byte[] soundContent) {
-        this.soundContent = soundContent;
-    }
-
     public byte[] getSoundEditorContent() {
         return soundEditorContent;
-    }
-
-    public void setSoundEditorContent(byte[] soundEditorContent) {
-        this.soundEditorContent = soundEditorContent;
-    }
-
-    public BufferedImage getImageContent() {
-        return imageContent;
     }
 
     public void saveFile() {
@@ -151,5 +146,9 @@ public class PackFile {
 
     public void setImageEditorContent(String content) {
         this.imageEditorContent = FileUtils.decodeBase64ToImage(content);
+    }
+
+    public PixelArtEditor getPixelArtEditor() {
+        return pixelArtEditor;
     }
 }

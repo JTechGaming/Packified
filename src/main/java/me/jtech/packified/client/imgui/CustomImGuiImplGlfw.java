@@ -10,7 +10,7 @@ import static org.lwjgl.glfw.GLFW.*;
 
 @Environment(EnvType.CLIENT)
 public class CustomImGuiImplGlfw extends ImGuiImplGlfw {
-    private MouseHandledBy grabbed = null;
+    public MouseHandledBy grabbed = null;
     private final double[] grabbedOriginalMouseX = new double[1];
     private final double[] grabbedOriginalMouseY = new double[1];
     private int ignoreMouseMovements = 0;

@@ -49,6 +49,8 @@ dependencies {
     shadow(api(rootProject.files('dependencies/imgui-java-natives-macos-1.86.11-10-g0dbf36c.jar')))
     shadow(api(rootProject.files('dependencies/imgui-java-natives-windows-1.86.11-10-g0dbf36c.jar')))
 
+    //shadow(api(rootProject.files('dependencies/Axiom-4.3.3-for-MC1.21.jar')))
+
     shadow(implementation("org.apache.commons:commons-math3:3.6.1"))
 
     // Native File Dialogs
@@ -84,6 +86,7 @@ dependencies {
     })
 
     //include(implementation("com.moulberry:mixinconstraints:1.0.5"))
+    implementation 'com.fasterxml.jackson.core:jackson-databind:2.17.0'
 }
 
 loom {

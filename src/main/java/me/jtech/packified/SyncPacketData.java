@@ -7,7 +7,7 @@ import net.minecraft.network.codec.PacketCodecs;
 import java.nio.file.Path;
 import java.util.List;
 
-public record SyncPacketData(String packName, List<AssetData> assets, String metadata, boolean finalChunk) {
+public record SyncPacketData(String packName, List<AssetData> assets, String metadata, boolean finalChunk, boolean lastData, int packetAmount) {
 
     public static final class AssetData {
 
@@ -69,8 +69,10 @@ public record SyncPacketData(String packName, List<AssetData> assets, String met
             List<AssetData> assets = byteBuf.readList(AssetData.PACKET_CODEC);
             String metadata = byteBuf.readString();
             boolean finalChunk = byteBuf.readBoolean();
+            boolean lastData = byteBuf.readBoolean();
+            int packetAmount = byteBuf.readInt();
 
-            return new SyncPacketData(packName, assets, metadata, finalChunk);
+            return new SyncPacketData(packName, assets, metadata, finalChunk, lastData, packetAmount);
         }
 
         public void encode(PacketByteBuf byteBuf, SyncPacketData selectionData) {
@@ -78,6 +80,8 @@ public record SyncPacketData(String packName, List<AssetData> assets, String met
             byteBuf.writeCollection(selectionData.assets, AssetData.PACKET_CODEC);
             byteBuf.writeString(selectionData.metadata);
             byteBuf.writeBoolean(selectionData.finalChunk);
+            byteBuf.writeBoolean(selectionData.lastData);
+            byteBuf.writeInt(selectionData.packetAmount);
         }
     };
 

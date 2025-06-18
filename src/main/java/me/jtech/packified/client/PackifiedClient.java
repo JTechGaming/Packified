@@ -1,10 +1,12 @@
 package me.jtech.packified.client;
 
 import imgui.ImGui;
+import me.jtech.packified.PacketSender;
 import me.jtech.packified.Packified;
 import me.jtech.packified.SyncPacketData;
 import me.jtech.packified.client.imgui.ImGuiImplementation;
 import me.jtech.packified.client.util.FileUtils;
+import me.jtech.packified.client.util.ModConfig;
 import me.jtech.packified.client.util.PackFile;
 import me.jtech.packified.client.util.PackUtils;
 import me.jtech.packified.client.windows.ConfirmWindow;
@@ -22,7 +24,6 @@ import net.minecraft.client.network.ClientPlayerInteractionManager;
 import net.minecraft.client.option.KeyBinding;
 import net.minecraft.client.util.InputUtil;
 import net.minecraft.resource.ResourcePackProfile;
-import net.minecraft.util.Identifier;
 import net.minecraft.world.GameMode;
 import org.lwjgl.glfw.GLFW;
 import org.slf4j.Logger;
@@ -30,6 +31,8 @@ import org.slf4j.LoggerFactory;
 
 import java.nio.file.Path;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicReference;
 
 @Environment(EnvType.CLIENT)
 public class PackifiedClient implements ClientModInitializer {
@@ -37,6 +40,7 @@ public class PackifiedClient implements ClientModInitializer {
     public static Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
 
     private static final String version = Packified.version;
+    public static boolean reloaded = false;
 
     boolean shouldRender = false;
     private static KeyBinding keyBinding;
@@ -48,6 +52,7 @@ public class PackifiedClient implements ClientModInitializer {
 
     private static final List<SyncPacketData.AssetData> chunkedAssetsBuffer = new ArrayList<>();
     private static boolean isFirstPacket = true;
+
     //TODO fix known incompatibility: shared resources mod
     //TODO fix known incompatibility: ImmediatelyFast ???
     //TODO fix known incompatibility: Essential Mod
@@ -64,7 +69,14 @@ public class PackifiedClient implements ClientModInitializer {
             if (keyBinding.wasPressed()) {
                 toggleVisibility();
             }
+            PacketSender.processQueue();
+
+            if (reloaded) {
+                reloaded = false;
+                client.worldRenderer.reload();
+            }
         });
+
         // Prevent Minecraft from locking the cursor when clicking
         ClientTickEvents.START_CLIENT_TICK.register(client -> {
             if (shouldRender) {
@@ -78,6 +90,8 @@ public class PackifiedClient implements ClientModInitializer {
             }
         });
 
+        AtomicReference<NotificationHelper.Notification> notification = new AtomicReference<>();
+
         ClientPlayNetworking.registerGlobalReceiver(S2CSyncPackChanges.ID, (payload, context) -> {
             // Logic to apply the pack changes
             ResourcePackProfile pack = PackUtils.getPack(payload.packetData().packName());
@@ -88,7 +102,7 @@ public class PackifiedClient implements ClientModInitializer {
             currentPack = pack;
 
             SyncPacketData data = payload.packetData();
-            accumulativeAssetDownload(data, pack);
+            accumulativeAssetDownload(data, pack, notification.get());
         });
 
         ClientPlayNetworking.registerGlobalReceiver(S2CSendFullPack.ID, (payload, context) -> {
@@ -98,9 +112,16 @@ public class PackifiedClient implements ClientModInitializer {
                 isFirstPacket = false;
                 // Create the pack
                 FileUtils.createPack(data.packName(), List.of(), data.metadata());
-            }
 
-            accumulativeAssetDownload(data, currentPack);
+                notification.set(NotificationHelper.addNotification("Loading pack: " + data.packName(), "Downloading assets...", 5000, 0, data.packetAmount()));
+            }
+            if (notification.get() != null) {
+                notification.get().setProgress(notification.get().getProgress() + 1);
+            }
+            //Thread thread = new Thread(() -> {
+            accumulativeAssetDownload(data, currentPack, notification.get());
+            //});
+            //thread.start(); //todo couch.png didnt work, maybe because of the thread?
         });
 
         ClientPlayNetworking.registerGlobalReceiver(S2CRequestFullPack.ID, (payload, context) -> {
@@ -119,6 +140,7 @@ public class PackifiedClient implements ClientModInitializer {
         });
 
         ClientPlayNetworking.registerGlobalReceiver(S2CPlayerHasMod.ID, (payload, context) -> {
+            LOGGER.info("Player {} has the mod installed: {}", payload.specificPlayer(), payload.moddedPlayers().contains(payload.specificPlayer()));
             Packified.moddedPlayers = payload.moddedPlayers();
             markedPlayers = payload.moddedPlayers();
             if (payload.moddedPlayers().contains(payload.specificPlayer())) {
@@ -135,10 +157,13 @@ public class PackifiedClient implements ClientModInitializer {
 
         ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> {
             ClientPlayNetworking.send(new C2SHasMod(version));
+            if (PackifiedClient.currentPack != null) {
+                ClientPlayNetworking.send(new C2SInfoPacket(currentPack.getDisplayName().getString(), MinecraftClient.getInstance().player.getUuid()));
+            }
         });
     }
 
-    private static void accumulativeAssetDownload(SyncPacketData data, ResourcePackProfile pack) {
+    private static void accumulativeAssetDownload(SyncPacketData data, ResourcePackProfile pack, NotificationHelper.Notification notification) {
         for (SyncPacketData.AssetData asset : data.assets()) {
             if (!asset.finalChunk()) {
                 if (bufferContainsAsset(asset.path())) {
@@ -158,12 +183,19 @@ public class PackifiedClient implements ClientModInitializer {
             } else {
                 assetData = asset;
             }
-            FileUtils.saveSingleFile(assetData.path(), assetData.extension(), assetData.assetData());
+            PackifiedClient.LOGGER.info(assetData.path().toString());
+            FileUtils.saveSingleFile(assetData.path(), assetData.extension(), assetData.assetData(), pack);
         }
         if (data.finalChunk()) {
+            chunkedAssetsBuffer.clear();
+        }
+        if (data.lastData()) {
+            PackifiedClient.LOGGER.info("lastData");
             FileUtils.setMCMetaContent(pack, data.metadata());
             PackUtils.reloadPack();
-            chunkedAssetsBuffer.clear();
+            if (notification != null) {
+                notification.setProgress(notification.getMaxProgress());
+            }
             isFirstPacket = true;
         }
     }
@@ -186,13 +218,6 @@ public class PackifiedClient implements ClientModInitializer {
         return false;
     }
 
-    private boolean isSaveKeyPressed() {
-        long windowHandle = MinecraftClient.getInstance().getWindow().getHandle();
-        boolean ctrlPressed = InputUtil.isKeyPressed(windowHandle, GLFW.GLFW_KEY_LEFT_CONTROL) || InputUtil.isKeyPressed(windowHandle, GLFW.GLFW_KEY_RIGHT_CONTROL);
-        boolean sPressed = InputUtil.isKeyPressed(windowHandle, GLFW.GLFW_KEY_S);
-        return ctrlPressed && sPressed;
-    }
-
     boolean saveKeyPressed = false;
     boolean closeKeyPressed = false;
     boolean reloadKeyPressed = false;
@@ -203,7 +228,21 @@ public class PackifiedClient implements ClientModInitializer {
         boolean shiftPressed = InputUtil.isKeyPressed(windowHandle, GLFW.GLFW_KEY_LEFT_SHIFT) || InputUtil.isKeyPressed(windowHandle, GLFW.GLFW_KEY_RIGHT_SHIFT);
 
         if (ctrlPressed) {
-            if (currentPack == null || EditorWindow.openFiles.isEmpty() || EditorWindow.currentFile == null) {
+            if (currentPack == null) {
+                return;
+            }
+
+            if (InputUtil.isKeyPressed(windowHandle, GLFW.GLFW_KEY_R)) {
+                if (reloadKeyPressed) {
+                    return;
+                }
+                reloadKeyPressed = true;
+                CompletableFuture.runAsync(PackUtils::reloadPack);
+            } else {
+                reloadKeyPressed = false;
+            }
+
+            if (EditorWindow.openFiles.isEmpty() || EditorWindow.currentFile == null) {
                 return;
             }
             if (InputUtil.isKeyPressed(windowHandle, GLFW.GLFW_KEY_S)) {
@@ -216,7 +255,7 @@ public class PackifiedClient implements ClientModInitializer {
                     FileUtils.saveAllFiles();
                 } else {
                     // Handle Ctrl+S
-                    FileUtils.saveSingleFile(EditorWindow.currentFile.getPath(), EditorWindow.currentFile.getExtension(), FileUtils.getContent(EditorWindow.currentFile));
+                    FileUtils.saveSingleFile(EditorWindow.currentFile.getPath(), EditorWindow.currentFile.getExtension(), FileUtils.getContent(EditorWindow.currentFile), currentPack);
                 }
             } else {
                 saveKeyPressed = false;
@@ -253,15 +292,6 @@ public class PackifiedClient implements ClientModInitializer {
             } else {
                 closeKeyPressed = false;
             }
-            if (InputUtil.isKeyPressed(windowHandle, GLFW.GLFW_KEY_R)) {
-                if (reloadKeyPressed) {
-                    return;
-                }
-                reloadKeyPressed = true;
-                PackUtils.reloadPack();
-            } else {
-                reloadKeyPressed = false;
-            }
         }
     }
 
@@ -270,6 +300,7 @@ public class PackifiedClient implements ClientModInitializer {
 
         if (shouldRender) {
             ImGuiImplementation.aspectRatio = (float) MinecraftClient.getInstance().getWindow().getWidth() / MinecraftClient.getInstance().getWindow().getHeight();
+            ImGui.setWindowFocus("Main");
             unlockCursor();
         } else {
             lockCursor();

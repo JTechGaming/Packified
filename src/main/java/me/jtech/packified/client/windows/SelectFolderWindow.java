@@ -70,12 +70,12 @@ public class SelectFolderWindow {
 
                 Path targetPath = selectedFolder.resolve(file.getFileName());
                 System.out.println("Saving file to: " + targetPath);
-                FileUtils.saveSingleFile(targetPath, FileUtils.getFileExtension(file.getFileName().toString()), content);
+                FileUtils.saveSingleFile(targetPath, FileUtils.getFileExtension(file.getFileName().toString()), content, PackifiedClient.currentPack);
             }
         } else {
             Path targetPath = selectedFolder.resolve(fileName);
             System.out.println("Saving single file to: " + targetPath);
-            FileUtils.saveSingleFile(targetPath, extension, content);
+            FileUtils.saveSingleFile(targetPath, extension, content, PackifiedClient.currentPack);
         }
     }
 

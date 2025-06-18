@@ -8,8 +8,8 @@ import imgui.flag.ImGuiConfigFlags;
 import imgui.flag.ImGuiDockNodeFlags;
 import imgui.flag.ImGuiWindowFlags;
 import imgui.internal.ImGuiContext;
-import imgui.type.ImBoolean;
 import me.jtech.packified.Packified;
+import me.jtech.packified.client.NotificationHelper;
 import me.jtech.packified.client.uiElements.MenuBar;
 import me.jtech.packified.client.util.IniUtil;
 import me.jtech.packified.client.windows.*;
@@ -27,12 +27,10 @@ import org.lwjgl.glfw.GLFW;
 import org.lwjgl.opengl.GL11;
 
 import javax.imageio.ImageIO;
+import java.awt.*;
 import java.awt.image.BufferedImage;
-import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.List;
 
 @Environment(EnvType.CLIENT)
 @ApiStatus.Internal
@@ -40,9 +38,6 @@ public class ImGuiImplementation {
     public final static CustomImGuiImplGlfw imGuiImplGlfw = new CustomImGuiImplGlfw();
     private final static CustomImGuiImplGl3 imGuiImplGl3 = new CustomImGuiImplGl3();
     public static boolean initialized = false;
-    private static boolean test = false;
-
-    public static int minecraftTexture = -1;
 
     private static int frameX = 0;
     private static int frameY = 0;
@@ -57,8 +52,6 @@ public class ImGuiImplementation {
     public static boolean shouldRender = false;
 
     private static ImGuiContext imGuiContext = null;
-
-    private static long oldImGuiContext = 0;
 
     private static boolean activeLastFrame = false;
 
@@ -180,6 +173,8 @@ public class ImGuiImplementation {
         SelectFolderWindow.render();
         ModifyFileWindow.render();
         ConfirmWindow.render();
+        NotificationHelper.render();
+        SettingsWindow.render();
 
         if (ImGui.isMouseClicked(GLFW.GLFW_MOUSE_BUTTON_LEFT)) {
             int key = -GLFW.GLFW_MOUSE_BUTTON_LEFT-1;
@@ -211,20 +206,6 @@ public class ImGuiImplementation {
         ImPlot.destroyContext(ImPlot.getCurrentContext());
     }
 
-    public static void swapFrameSize() {
-        int tempWidth = frameWidth;
-        int tempHeight = frameHeight;
-        frameWidth = oldFrameWidth;
-        frameHeight = oldFrameHeight;
-        oldFrameWidth = tempWidth;
-        oldFrameHeight = tempHeight;
-    }
-
-    public static void updateFrameSize() {
-        MinecraftClient.getInstance().getWindow().setFramebufferHeight(frameHeight);
-        MinecraftClient.getInstance().getWindow().setFramebufferWidth(frameWidth);
-    }
-
     public static int loadTexture(String filePath) {
         try {
             Resource resource = MinecraftClient.getInstance().getResourceManager().getResource(Identifier.of(Packified.MOD_ID, filePath)).get();
@@ -238,6 +219,9 @@ public class ImGuiImplementation {
 
     //Can be used to load buffered images in ImGui
     public static int fromBufferedImage(BufferedImage image) {
+        if (image == null) {
+            return -1;
+        }
         final int[] pixels = new int[image.getWidth() * image.getHeight()];
         image.getRGB(0, 0, image.getWidth(), image.getHeight(), pixels, 0, image.getWidth());
 
@@ -378,5 +362,19 @@ public class ImGuiImplementation {
         ImGuiImplementation.viewportSizeY = viewportSizeY;
     }
 
+    public static double getNewMouseX(double x) {
+        return x - frameX;
+    }
 
+    public static double getNewMouseY(double y) {
+        return y - frameY;
+    }
+
+    public static int getNewGameWidth(float scale) {
+        return Math.max(1, Math.round(frameWidth * scale)) / 2;
+    }
+
+    public static int getNewGameHeight(float scale) {
+        return Math.max(1, Math.round(frameHeight * scale));
+    }
 }

@@ -226,7 +226,7 @@ public class FileHierarchy {
                         String fileName = fileIdentifier.substring(fileIdentifier.lastIndexOf('/') + 1);
                         String newIdentifierPath = path.toString().substring(0, path.toString().lastIndexOf('/') + 1) + fileName;
                         Path newPath = FileUtils.validateIdentifier(newIdentifierPath);
-                        FileUtils.saveSingleFile(newPath, FileUtils.getFileExtension(fileName), "");
+                        FileUtils.saveSingleFile(newPath, FileUtils.getFileExtension(fileName), "", PackifiedClient.currentPack);
                     });
                 }
                 if (ImGui.menuItem("Folder")) {

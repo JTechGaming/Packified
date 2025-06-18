@@ -5,6 +5,7 @@ import me.jtech.packified.client.PackifiedClient;
 import me.jtech.packified.client.windows.EditorWindow;
 import me.jtech.packified.client.windows.FileHierarchy;
 import me.jtech.packified.SyncPacketData;
+import me.jtech.packified.client.windows.PixelArtEditor;
 import me.jtech.packified.client.windows.SelectFolderWindow;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.MinecraftClient;
@@ -182,9 +183,9 @@ public class FileUtils {
     }
 
     public static void sendDebugChatMessage(String message) {
-        if (Packified.debugMode) {
-            MinecraftClient.getInstance().inGameHud.getChatHud().addMessage(Text.literal(message));
-        }
+//        if (Packified.debugMode) {
+//            MinecraftClient.getInstance().inGameHud.getChatHud().addMessage(Text.literal(message));
+//        }
     }
 
     public static void saveAllFiles() {
@@ -200,9 +201,16 @@ public class FileUtils {
         }
     }
 
-    public static void saveSingleFile(Path path, String fileType, String content) {
+    public static void saveSingleFile(Path path, String fileType, String content, ResourcePackProfile pack) {
         // Before saving, make a backup of the file
-        File resourcePackFolder = new File("resourcepacks/" + PackifiedClient.currentPack.getDisplayName().getString());
+        File resourcePackFolder = new File("resourcepacks/" + pack.getDisplayName().getString());
+        if (!resourcePackFolder.exists()) {
+            try {
+                Files.createDirectories(resourcePackFolder.toPath());
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        }
         makePackBackup(resourcePackFolder);
         saveFile(path, fileType, content);
     }
@@ -631,6 +639,7 @@ public class FileUtils {
     public static void openFileInExplorer(Path path) {
         File file = path.toFile();
         try {
+            Packified.LOGGER.info(file.getAbsolutePath());
             ProcessBuilder processBuilder = new ProcessBuilder("explorer.exe", "/select,", file.getAbsolutePath());
             processBuilder.start();
         } catch (IOException e) {

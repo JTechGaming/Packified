@@ -1,53 +1,35 @@
 package me.jtech.packified.client.windows;
 
-import com.google.gson.JsonSyntaxException;
-import com.google.gson.stream.JsonReader;
-import com.google.gson.stream.JsonToken;
+import com.fasterxml.jackson.core.JsonLocation;
+import com.fasterxml.jackson.core.JsonParseException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import imgui.ImGui;
-import imgui.ImVec2;
 import imgui.extension.texteditor.TextEditor;
 import imgui.extension.texteditor.TextEditorLanguageDefinition;
 import imgui.extension.texteditor.flag.TextEditorPaletteIndex;
 import imgui.flag.ImGuiTabBarFlags;
 import imgui.flag.ImGuiTabItemFlags;
 import imgui.flag.ImGuiWindowFlags;
+import imgui.internal.flag.ImGuiItemFlags;
 import imgui.type.ImBoolean;
 import imgui.type.ImInt;
+import me.jtech.packified.client.PackifiedClient;
 import me.jtech.packified.client.imgui.ImGuiImplementation;
 import me.jtech.packified.client.util.*;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.sound.PositionedSoundInstance;
-import net.minecraft.client.sound.SoundInstance;
-import net.minecraft.client.sound.SoundManager;
-import net.minecraft.registry.Registries;
-import net.minecraft.registry.Registry;
-import net.minecraft.sound.SoundCategory;
-import net.minecraft.sound.SoundEvent;
-import net.minecraft.util.Identifier;
-import org.lwjgl.openal.AL;
-import org.lwjgl.openal.AL10;
-import org.lwjgl.stb.STBVorbis;
-import org.lwjgl.stb.STBVorbisInfo;
-import org.lwjgl.system.MemoryStack;
-import org.lwjgl.system.MemoryUtil;
 
 import javax.imageio.ImageIO;
 import javax.sound.sampled.*;
 import java.awt.image.BufferedImage;
-import java.io.BufferedInputStream;
-import java.io.ByteArrayInputStream;
 import java.io.IOException;
-import java.io.StringReader;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
-import java.nio.ShortBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
-import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 @Environment(EnvType.CLIENT)
@@ -63,8 +45,6 @@ public class EditorWindow {
     public static List<PackFile> changedAssets = new ArrayList<>();
 
     private static AtomicBoolean isPlaying = new AtomicBoolean(false);
-    private static int audioSource = -1;
-    private static int bufferId = -1;
 
     private enum Tool {
         PEN,
@@ -100,7 +80,7 @@ public class EditorWindow {
                                             openFiles.add(new PackFile(path.getFileName().toString(), content, ".json", editor));
                                         } else if (extension.equals(".ogg")) {
                                             byte[] bytes = Files.readAllBytes(path);
-
+                                            openFiles.add(new PackFile(path.getFileName().toString(), bytes));
                                         }
                                     } catch (IOException e) {
                                         throw new RuntimeException(e);
@@ -122,7 +102,7 @@ public class EditorWindow {
             if (ImGui.isItemClicked()) {
                 // Logic to save the current file
                 if (currentFile != null) {
-                    FileUtils.saveSingleFile(currentFile.getPath(), FileUtils.getFileExtension(currentFile.getFileName()), currentFile.getTextEditor().getText());
+                    FileUtils.saveSingleFile(currentFile.getPath(), FileUtils.getFileExtension(currentFile.getFileName()), currentFile.getTextEditor().getText(), PackifiedClient.currentPack);
                 }
             }
             if (ImGui.isItemHovered()) {
@@ -192,35 +172,9 @@ public class EditorWindow {
     }
 
     private static void renderAudioFileEditor(PackFile audioFile) {
-        // TODO implement audio playback
-//        if (ImGui.button(isPlaying.get() ? "Pause" : "Play")) {
-//            if (isPlaying.get()) {
-//                if (audioClip != null) audioClip.stop();
-//            } else {
-//                playOggWithMinecraft(audioFile.getPath());
-//            }
-//            isPlaying.set(!isPlaying.get());
-//        }
-
-        // Get total duration
-        float totalDuration = (audioClip != null) ? audioClip.getMicrosecondLength() / 1_000_000f : 0f;
-
-        // Update the playhead if audio is playing
-        if (isPlaying.get() && audioClip != null) {
-            playbackPosition[0] = audioClip.getMicrosecondPosition() / 1_000_000f;
-        }
-
-        // Display waveform with playhead slider
         float[] waveform = convertToWaveform(audioFile.getSoundContent());
         if (waveform.length > 0) {
             ImGui.plotLines("Waveform", waveform, waveform.length); //, 0, null, -1.0f, 1.0f, new ImVec2(400, 100)
-
-            // Playhead slider (draggable)
-            if (ImGui.sliderFloat("Playback", playbackPosition, 0f, totalDuration)) {
-                if (audioClip != null) {
-                    audioClip.setMicrosecondPosition((long) (playbackPosition[0] * 1_000_000)); // Seek audio
-                }
-            }
         } else {
             ImGui.text("No waveform data available");
         }
@@ -254,13 +208,13 @@ public class EditorWindow {
             if (currentFile.isModified()) {
                 switch (currentFile.getExtension()) {
                     case ".json", ".mcmeta", ".fsh", ".vsh", ".properties", ".txt":
-                        FileUtils.saveSingleFile(currentFile.getPath(), FileUtils.getFileExtension(currentFile.getFileName()), currentFile.getTextEditor().getText());
+                        FileUtils.saveSingleFile(currentFile.getPath(), FileUtils.getFileExtension(currentFile.getFileName()), currentFile.getTextEditor().getText(), PackifiedClient.currentPack);
                         break;
                     case ".png":
-                        FileUtils.saveSingleFile(currentFile.getPath(), FileUtils.getFileExtension(currentFile.getFileName()), FileUtils.encodeImageToBase64(currentFile.getImageEditorContent()));
+                        FileUtils.saveSingleFile(currentFile.getPath(), FileUtils.getFileExtension(currentFile.getFileName()), FileUtils.encodeImageToBase64(currentFile.getImageEditorContent()), PackifiedClient.currentPack);
                         break;
                     case ".ogg":
-                        FileUtils.saveSingleFile(currentFile.getPath(), FileUtils.getFileExtension(currentFile.getFileName()), FileUtils.encodeSoundToString(currentFile.getSoundEditorContent()));
+                        FileUtils.saveSingleFile(currentFile.getPath(), FileUtils.getFileExtension(currentFile.getFileName()), FileUtils.encodeSoundToString(currentFile.getSoundEditorContent()), PackifiedClient.currentPack);
                         break;
                 }
             }
@@ -316,17 +270,6 @@ public class EditorWindow {
         // Logic to render the JSON editor for the given file
         TextEditor textEditor = file.getTextEditor();
         // Set syntax highlighting
-        switch (file.getExtension()) {
-            case ".json", ".mcmeta":
-                textEditor.setLanguageDefinition(createJsonLanguageDefinition());
-                break;
-            case ".fsh", ".vsh":
-                textEditor.setLanguageDefinition(TextEditorLanguageDefinition.glsl());
-                break;
-            case ".properties", ".txt":
-                textEditor.setLanguageDefinition(createTxtLanguageDefinition());
-                break;
-        }
 
         // Set error markers
         Map<Integer, String> errorMarkers = checkForErrors(file.getTextEditor().getText());
@@ -334,19 +277,16 @@ public class EditorWindow {
 
         int[] customPalette = textEditor.getDarkPalette();
 
-        // Custom palette colors
         customPalette[TextEditorPaletteIndex.Default] = ImGui.colorConvertFloat4ToU32(0.731f, 0.975f, 0.590f, 1.0f);
         customPalette[TextEditorPaletteIndex.LineNumber] = ImGui.colorConvertFloat4ToU32(0.541f, 0.541f, 0.541f, 1.0f);
-        customPalette[TextEditorPaletteIndex.Punctuation] = ImGui.colorConvertFloat4ToU32(0.447f, 0.557f, 0.400f, 1.0f);
+        customPalette[TextEditorPaletteIndex.Punctuation] = ImGui.colorConvertFloat4ToU32(0.969f, 0.616f, 0.427f, 1.0f);
         customPalette[TextEditorPaletteIndex.Selection] = ImGui.colorConvertFloat4ToU32(0.345f, 0.345f, 0.345f, 1.0f);
         customPalette[TextEditorPaletteIndex.CurrentLineFill] = ImGui.colorConvertFloat4ToU32(0.063f, 0.063f, 0.063f, 1.0f);
-        //customPalette[TextEditorPaletteIndex.Keyword] = ImGui.colorConvertFloat4ToU32(0.863f, 0.863f, 0.800f, 1.0f);
-        //customPalette[TextEditorPaletteIndex.Default] = ImGui.colorConvertFloat4ToU32(0.447f, 0.557f, 0.400f, 1.0f);
         customPalette[TextEditorPaletteIndex.CurrentLineEdge] = ImGui.colorConvertFloat4ToU32(0.498f, 0.624f, 0.498f, 0.5f);
+        customPalette[TextEditorPaletteIndex.Keyword] = ImGui.colorConvertFloat4ToU32(0.863f, 0.863f, 0.800f, 1.0f);
         customPalette[TextEditorPaletteIndex.Number] = ImGui.colorConvertFloat4ToU32(0.549f, 0.816f, 0.827f, 1.0f);
-        //customPalette[TextEditorPaletteIndex.MultiLineComment] = ImGui.colorConvertFloat4ToU32(0.549f, 0.816f, 0.827f, 1.0f);
-
-        //customPalette[TextEditorPaletteIndex.String] = ImGui.colorConvertFloat4ToU32(0.1f, 0.1f, 0.1f, 1.0f);
+        customPalette[TextEditorPaletteIndex.String] = ImGui.colorConvertFloat4ToU32(0.902f, 0.753f, 0.416f, 1.0f);
+        customPalette[TextEditorPaletteIndex.Identifier] = ImGui.colorConvertFloat4ToU32(0.6f, 0.85f, 0.7f, 1.0f);
 
         textEditor.setPalette(customPalette);
 
@@ -354,138 +294,8 @@ public class EditorWindow {
         textEditor.render("TextEditor");
     }
 
-    private static float[] zoomFactor = new float[]{1.0f};
-
     private static void renderImageFileEditor(PackFile imageFile) {
-        // Image editor tools
-        //TODO make all these tools work
-        if (ImGui.imageButton(ImGuiImplementation.loadTexture("textures/ui/neu_pencil.png"), 14, 14)) {
-            currentTool = Tool.PEN;
-        }
-        ImGui.sameLine();
-        if (ImGui.imageButton(ImGuiImplementation.loadTexture("textures/ui/neu_bucket.png"), 14, 14)) {
-            currentTool = Tool.PAINT_BUCKET;
-        }
-        ImGui.sameLine();
-        if (ImGui.imageButton(ImGuiImplementation.loadTexture("textures/ui/neu_select.png"), 14, 14)) {
-            currentTool = Tool.SELECT;
-        }
-        ImGui.sameLine();
-        if (ImGui.imageButton(ImGuiImplementation.loadTexture("textures/ui/neu_eraser.png"), 14, 14)) {
-            currentTool = Tool.ERASER;
-        }
-        ImGui.sameLine();
-        ImGui.inputInt("Tool Size", toolSize);
-        ImGui.colorEdit3("Color Picker", color);
-
-        // Load the image from the file content
-        BufferedImage bufferedImage = imageFile.getContent();
-        if (bufferedImage != null) {
-            int textureId = ImGuiImplementation.fromBufferedImage(bufferedImage);
-
-            // Add zoom controls
-            ImGui.sliderFloat("Zoom", zoomFactor, 0.1f, 5.0f);
-
-            // Apply zoom factor
-            float width = bufferedImage.getWidth() * zoomFactor[0];
-            float height = bufferedImage.getHeight() * zoomFactor[0];
-
-            ImGui.image(textureId, width, height);
-
-            // Handle drawing tools
-            handleDrawingTools(bufferedImage, imageFile);
-            imageFile.setContent(bufferedImage);
-        } else {
-            ImGui.text("Failed to load image");
-        }
-    }
-
-    private static void handleDrawingTools(BufferedImage image, PackFile imageFile) {
-        if (ImGui.isMouseDown(0)) { // If left-click is held
-            // Get mouse position
-            float mouseX = ImGui.getMousePosX();
-            float mouseY = ImGui.getMousePosY();
-
-            // Convert screen mouse coordinates to image coordinates
-            int imgX = (int) ((mouseX - ImGui.getCursorScreenPosX()) / zoomFactor[0]);
-            int imgY = (int) ((mouseY - ImGui.getCursorScreenPosY()) / zoomFactor[0]);
-
-            if (imgX >= 0 && imgX < image.getWidth() && imgY >= 0 && imgY < image.getHeight()) {
-                switch (currentTool) {
-                    case PEN -> drawPen(image, imgX, imgY);
-                    case PAINT_BUCKET -> fill(image, imgX, imgY);
-                    case ERASER -> erase(image, imgX, imgY);
-                    case SELECT -> { /* Future Selection Logic */ }
-                }
-                // Update the texture to reflect changes
-                FileUtils.updateTexture(image, imageFile);
-            }
-        }
-    }
-
-    private static void drawPen(BufferedImage image, int x, int y) {
-        int brushSize = toolSize.get();
-        int rgb = colorToRGB(color);
-
-        for (int i = -brushSize / 2; i < brushSize / 2; i++) {
-            for (int j = -brushSize / 2; j < brushSize / 2; j++) {
-                int px = x + i;
-                int py = y + j;
-
-                if (px >= 0 && px < image.getWidth() && py >= 0 && py < image.getHeight()) {
-                    image.setRGB(px, py, rgb);
-                }
-            }
-        }
-    }
-
-    private static void erase(BufferedImage image, int x, int y) {
-        int brushSize = toolSize.get();
-        int transparent = 0x00000000; // ARGB Transparent
-
-        for (int i = -brushSize / 2; i < brushSize / 2; i++) {
-            for (int j = -brushSize / 2; j < brushSize / 2; j++) {
-                int px = x + i;
-                int py = y + j;
-
-                if (px >= 0 && px < image.getWidth() && py >= 0 && py < image.getHeight()) {
-                    image.setRGB(px, py, transparent);
-                }
-            }
-        }
-    }
-
-    private static void fill(BufferedImage image, int x, int y) {
-        int targetColor = image.getRGB(x, y);
-        int replacementColor = colorToRGB(color);
-
-        if (targetColor == replacementColor) return; // Prevent infinite loop
-
-        Queue<int[]> queue = new LinkedList<>();
-        queue.add(new int[]{x, y});
-
-        while (!queue.isEmpty()) {
-            int[] point = queue.poll();
-            int px = point[0];
-            int py = point[1];
-
-            if (px < 0 || py < 0 || px >= image.getWidth() || py >= image.getHeight()) continue;
-            if (image.getRGB(px, py) != targetColor) continue;
-
-            image.setRGB(px, py, replacementColor);
-
-            queue.add(new int[]{px + 1, py});
-            queue.add(new int[]{px - 1, py});
-            queue.add(new int[]{px, py + 1});
-            queue.add(new int[]{px, py - 1});
-        }
-    }
-
-    private static int colorToRGB(float[] color) {
-        int r = (int) (color[0] * 255);
-        int g = (int) (color[1] * 255);
-        int b = (int) (color[2] * 255);
-        return (r << 16) | (g << 8) | b;
+        imageFile.getPixelArtEditor().render();
     }
 
     public static void openTextFile(Path filePath, String content) {
@@ -521,21 +331,57 @@ public class EditorWindow {
     }
 
 
-    private static TextEditorLanguageDefinition createJsonLanguageDefinition() {
+    public static TextEditorLanguageDefinition createJsonLanguageDefinition() {
         TextEditorLanguageDefinition lang = new TextEditorLanguageDefinition();
         lang.setName("JSON");
 
-        // Keywords (optional — just for highlighting keys like "elements")
-        lang.setKeywords(new String[]{"credit", "texture_size", "textures"});
+        // Keywords specific to Blockbench format
+        String[] keywords = new String[]{
+                "credit", "texture_size", "textures", "elements",
+                "from", "to", "rotation", "angle", "axis", "origin",
+                "faces", "uv", "texture", "north", "east", "south", "west", "up", "down", "particle"
+        };
 
-        // Identifiers (for better tooltip descriptions or intellisense, optional)
-        Map<String, String> identifiers = new HashMap<>();
-        identifiers.put("name", "North face");
-        identifiers.put("from", "South face");
-        identifiers.put("to", "UV mapping");
-        identifiers.put("rotation", "Texture reference");
-        identifiers.put("faces", "Texture reference");
-        lang.setIdentifiers(identifiers);
+        // Identifiers
+        String[] identifiers = {
+                // Root-level properties
+                "credit", "String field indicating the model origin (e.g., 'Made with Blockbench')",
+                "texture_size", "Array of two integers representing texture width and height",
+                "textures", "Map of texture references with the names of the textures used, and the particle texture",
+                "elements", "Array of cuboid elements that make up the model",
+
+                // Element object fields
+                "name", "Name of the element, used for identification",
+                "from", "3D vector indicating the starting (min) corner of the cuboid",
+                "to", "3D vector indicating the ending (max) corner of the cuboid",
+                "rotation", "Rotation of the element",
+
+                // Rotation object fields
+                "angle", "Angle of rotation in degrees",
+                "axis", "Axis of rotation: 'x', 'y', or 'z'",
+                "origin", "Origin point for the rotation (3D vector)",
+
+                // Faces and textures
+                "faces", "Object mapping of sides (north, south, etc.) to face definitions",
+                "uv", "Array of four numbers specifying UV coordinates for a face",
+                "texture", "Reference to a texture, unless explicitly named it is usually prefixed with '#' (e.g., '#0')",
+
+                // Face directions
+                "north", "The north-facing side of the model",
+                "south", "The south-facing side of the model",
+                "east", "The east-facing side of the model",
+                "west", "The west-facing side of the model",
+                "up", "The top side of the model",
+                "down", "The bottom side of the model",
+
+                // Special texture reference
+                "particle", "The texture to use for the particle this model displays"
+        };
+        Map<String, String> identifiersMap = new HashMap<>(identifiers.length / 2);
+        for (int i = 0; i < identifiers.length; i += 2) {
+            identifiersMap.put(identifiers[i], identifiers[i + 1]);
+        }
+        lang.setIdentifiers(identifiersMap);
 
         lang.setCommentStart("♸"); // No single-line comments
         lang.setCommentEnd("♼");
@@ -546,14 +392,10 @@ public class EditorWindow {
         Map<String, Integer> tokenRegexStrings = new HashMap<>();
         tokenRegexStrings.put("[{}\\[\\],:]", TextEditorPaletteIndex.Punctuation);
         tokenRegexStrings.put("[0-9.-]", TextEditorPaletteIndex.Number);
-        tokenRegexStrings.put("credit", TextEditorPaletteIndex.Keyword);
-        tokenRegexStrings.put("texture_size", TextEditorPaletteIndex.Keyword);
-        tokenRegexStrings.put("textures", TextEditorPaletteIndex.Keyword);
-        tokenRegexStrings.put("name", TextEditorPaletteIndex.Identifier);
-        tokenRegexStrings.put("from", TextEditorPaletteIndex.Identifier);
-        tokenRegexStrings.put("to", TextEditorPaletteIndex.Identifier);
-        tokenRegexStrings.put("rotation", TextEditorPaletteIndex.Identifier);
-        tokenRegexStrings.put("faces", TextEditorPaletteIndex.Identifier);
+        for (String identifier : identifiersMap.keySet()) {
+            // Add identifiers to the regex map
+            tokenRegexStrings.put("\\b" + identifier + "\\b", TextEditorPaletteIndex.Identifier);
+        }
         //tokenRegexStrings.put("[0-9.-]", TextEditorPaletteIndex.);
         lang.setTokenRegexStrings(tokenRegexStrings);
 
@@ -562,7 +404,7 @@ public class EditorWindow {
         return lang;
     }
 
-    private static TextEditorLanguageDefinition createTxtLanguageDefinition() {
+    public static TextEditorLanguageDefinition createTxtLanguageDefinition() {
         TextEditorLanguageDefinition lang = new TextEditorLanguageDefinition();
         lang.setName("Text");
         String[] keywords = new String[]{};
@@ -579,19 +421,17 @@ public class EditorWindow {
 
     private static Map<Integer, String> checkForErrors(String content) {
         Map<Integer, String> errorMarkers = new HashMap<>();
+        ObjectMapper mapper = new ObjectMapper();
         try {
-            new com.google.gson.JsonParser().parse(content);
-        } catch (com.google.gson.JsonSyntaxException e) {
-            // get the line number of the error
-            // the line number is the first number in the error message
-            try {
-                String number = e.getMessage().replaceAll("[^0-9 ]", "");
-                int lineNumber = Integer.parseInt(number.split(" ")[5]);
-                String errorMessage = e.getMessage().split(" ")[0];
-                errorMarkers.put(lineNumber, errorMessage);
-            } catch (NumberFormatException ex) {
-                System.err.println("Failed to parse error message: " + e.getMessage());
-            }
+            mapper.readTree(content); // Tries parsing the JSON
+        } catch (JsonParseException e) {
+            JsonLocation location = e.getLocation();
+            int lineNumber = location.getLineNr() - 1;
+            String errorMessage = e.getOriginalMessage();
+            errorMarkers.put(lineNumber, errorMessage);
+        } catch (IOException e) {
+            // General I/O error (not usually relevant for in-memory strings)
+            errorMarkers.put(0, "Unknown error reading content");
         }
         return errorMarkers;
     }
