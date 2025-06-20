@@ -7,6 +7,7 @@ import imgui.ImGui;
 import imgui.extension.texteditor.TextEditor;
 import imgui.extension.texteditor.TextEditorLanguageDefinition;
 import imgui.extension.texteditor.flag.TextEditorPaletteIndex;
+import imgui.flag.ImGuiCol;
 import imgui.flag.ImGuiTabBarFlags;
 import imgui.flag.ImGuiTabItemFlags;
 import imgui.flag.ImGuiWindowFlags;
@@ -97,6 +98,7 @@ public class EditorWindow {
                 ImGui.endMenuBar();
             }
 
+            ImGui.pushStyleColor(ImGuiCol.FrameBg, 0x00000000);
             ImGui.beginChild("Toolbar", ImGui.getWindowWidth(), 40, false, ImGuiWindowFlags.HorizontalScrollbar);
             ImGui.imageButton(ImGuiImplementation.loadTexture("textures/ui/neu_save.png"), 24, 24);
             if (ImGui.isItemClicked()) {
@@ -128,6 +130,7 @@ public class EditorWindow {
             }
 
             ImGui.endChild();
+            ImGui.popStyleColor();
 
             if (ImGui.beginTabBar("FileEditorTabs", ImGuiTabBarFlags.Reorderable | ImGuiTabBarFlags.AutoSelectNewTabs | ImGuiTabBarFlags.TabListPopupButton)) {
                 // Example of adding tabs dynamically

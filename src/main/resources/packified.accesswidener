@@ -13,3 +13,4 @@ accessible field net/minecraft/client/MinecraftClient serverResourcePackLoader L
 accessible method net/minecraft/client/MinecraftClient onFinishedLoading (Lnet/minecraft/client/MinecraftClient$LoadingContext;)V
 accessible field net/minecraft/client/MinecraftClient COMPLETED_UNIT_FUTURE Ljava/util/concurrent/CompletableFuture;
 accessible field net/minecraft/client/MinecraftClient resourcePackManager Lnet/minecraft/resource/ResourcePackManager;
+accessible method net/minecraft/client/render/WorldRenderer scheduleChunkRender (IIIZ)V

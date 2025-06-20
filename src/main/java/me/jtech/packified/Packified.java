@@ -25,7 +25,7 @@ public class Packified implements ModInitializer {
 
     public static List<UUID> moddedPlayers = new ArrayList<>();
 
-    public static boolean debugMode = true;
+    public static boolean debugMode = false;
 
     public static final int MAX_PACKET_SIZE = 32767 / 4; // 32KB - 1KB for overhead
 

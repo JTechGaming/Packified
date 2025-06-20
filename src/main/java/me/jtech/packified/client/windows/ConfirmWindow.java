@@ -1,6 +1,8 @@
 package me.jtech.packified.client.windows;
 
 import imgui.ImGui;
+import imgui.flag.ImGuiWindowFlags;
+import imgui.internal.ImGuiWindow;
 
 public class ConfirmWindow {
     public static boolean open = false;
@@ -17,7 +19,7 @@ public class ConfirmWindow {
 
     public static void render() {
         if (!open) return;
-        if (ImGui.begin("ConfirmPopup")) {
+        if (ImGui.begin("ConfirmPopup", ImGuiWindowFlags.NoResize| ImGuiWindowFlags.NoMove | ImGuiWindowFlags.NoCollapse)) {
             ImGui.text("Are you sure you want to " + actionText + "?");
             ImGui.text(additionalText);
             if (ImGui.button("Cancel")) {

@@ -24,6 +24,8 @@ import net.minecraft.client.network.ClientPlayerInteractionManager;
 import net.minecraft.client.option.KeyBinding;
 import net.minecraft.client.util.InputUtil;
 import net.minecraft.resource.ResourcePackProfile;
+import net.minecraft.util.math.ChunkPos;
+import net.minecraft.util.math.ChunkSectionPos;
 import net.minecraft.world.GameMode;
 import org.lwjgl.glfw.GLFW;
 import org.slf4j.Logger;
@@ -42,7 +44,7 @@ public class PackifiedClient implements ClientModInitializer {
     private static final String version = Packified.version;
     public static boolean reloaded = false;
 
-    boolean shouldRender = false;
+    public static boolean shouldRender = false;
     private static KeyBinding keyBinding;
 
     public static ResourcePackProfile currentPack;
@@ -73,7 +75,7 @@ public class PackifiedClient implements ClientModInitializer {
 
             if (reloaded) {
                 reloaded = false;
-                client.worldRenderer.reload();
+                sendBlockUpdateToLoadedChunks();
             }
         });
 
@@ -118,10 +120,8 @@ public class PackifiedClient implements ClientModInitializer {
             if (notification.get() != null) {
                 notification.get().setProgress(notification.get().getProgress() + 1);
             }
-            //Thread thread = new Thread(() -> {
+
             accumulativeAssetDownload(data, currentPack, notification.get());
-            //});
-            //thread.start(); //todo couch.png didnt work, maybe because of the thread?
         });
 
         ClientPlayNetworking.registerGlobalReceiver(S2CRequestFullPack.ID, (payload, context) -> {
@@ -161,6 +161,28 @@ public class PackifiedClient implements ClientModInitializer {
                 ClientPlayNetworking.send(new C2SInfoPacket(currentPack.getDisplayName().getString(), MinecraftClient.getInstance().player.getUuid()));
             }
         });
+    }
+
+    public static void sendBlockUpdateToLoadedChunks() {
+        MinecraftClient client = MinecraftClient.getInstance();
+        if (client.world == null) return;
+
+        int renderDistance = client.options.getViewDistance().getValue() * 2;
+        ChunkPos chunkPos = client.player.getChunkPos();
+
+        for (int i = 0; i < renderDistance; i++) {
+            for (int j = 0; j < renderDistance; j++) {
+                int chunkX = chunkPos.x + i - renderDistance / 2;
+                int chunkZ = chunkPos.z + j - renderDistance / 2;
+                if (!client.world.isChunkLoaded(chunkX, chunkZ)) {
+                    continue;
+                }
+                int ySections = ChunkSectionPos.getSectionCoord(client.world.getHeight());
+                for (int chunkY = 0; chunkY < ySections; chunkY++) {
+                    client.worldRenderer.scheduleChunkRender(chunkX, chunkY, chunkZ, true);
+                }
+            }
+        }
     }
 
     private static void accumulativeAssetDownload(SyncPacketData data, ResourcePackProfile pack, NotificationHelper.Notification notification) {
@@ -306,20 +328,22 @@ public class PackifiedClient implements ClientModInitializer {
             lockCursor();
         }
 
-        GameMode gameMode = shouldRender ? GameMode.SPECTATOR : getPreviousGameMode();
-        MinecraftClient client = MinecraftClient.getInstance();
-        assert client.player != null;
-        if (client.player.hasPermissionLevel(2)) {
-            if (gameMode.equals(GameMode.CREATIVE)) {
-                client.player.networkHandler.sendCommand("gamemode creative");
-            } else if (gameMode.equals(GameMode.SURVIVAL)) {
-                client.player.networkHandler.sendCommand("gamemode survival");
-            } else if (gameMode.equals(GameMode.SPECTATOR)) {
-                client.player.networkHandler.sendCommand("gamemode spectator");
-            } else if (gameMode.equals(GameMode.ADVENTURE)) {
-                client.player.networkHandler.sendCommand("gamemode adventure");
-            } else {
-                LOGGER.error("Unknown game mode: {}", gameMode);
+        if (!(boolean) ModConfig.getSettings().getOrDefault("stayincreative", false)) {
+            GameMode gameMode = shouldRender ? GameMode.SPECTATOR : getPreviousGameMode();
+            MinecraftClient client = MinecraftClient.getInstance();
+            assert client.player != null;
+            if (client.player.hasPermissionLevel(2)) {
+                if (gameMode.equals(GameMode.CREATIVE)) {
+                    client.player.networkHandler.sendCommand("gamemode creative");
+                } else if (gameMode.equals(GameMode.SURVIVAL)) {
+                    client.player.networkHandler.sendCommand("gamemode survival");
+                } else if (gameMode.equals(GameMode.SPECTATOR)) {
+                    client.player.networkHandler.sendCommand("gamemode spectator");
+                } else if (gameMode.equals(GameMode.ADVENTURE)) {
+                    client.player.networkHandler.sendCommand("gamemode adventure");
+                } else {
+                    LOGGER.error("Unknown game mode: {}", gameMode);
+                }
             }
         }
 

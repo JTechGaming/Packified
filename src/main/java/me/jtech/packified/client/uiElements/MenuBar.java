@@ -8,7 +8,7 @@ import me.jtech.packified.client.util.FileUtils;
 import me.jtech.packified.client.util.PackUtils;
 import me.jtech.packified.client.windows.BackupWindow;
 import me.jtech.packified.client.windows.EditorWindow;
-import me.jtech.packified.client.windows.SettingsWindow;
+import me.jtech.packified.client.windows.PreferencesWindow;
 import me.jtech.packified.packets.C2SInfoPacket;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
@@ -138,12 +138,8 @@ public class MenuBar {
                         EditorWindow.currentFile.getTextEditor().redo(1);
                     }
                 }
-                ImGui.endMenu();
-            }
-
-            if (ImGui.beginMenu("Preferences")) {
-                if (ImGui.menuItem("Settings")) {
-                    SettingsWindow.isOpen = !SettingsWindow.isOpen;
+                if (ImGui.menuItem("Preferences")) {
+                    PreferencesWindow.isOpen = !PreferencesWindow.isOpen;
                 }
                 ImGui.endMenu();
             }

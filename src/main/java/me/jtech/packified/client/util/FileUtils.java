@@ -2,11 +2,8 @@ package me.jtech.packified.client.util;
 
 import me.jtech.packified.Packified;
 import me.jtech.packified.client.PackifiedClient;
-import me.jtech.packified.client.windows.EditorWindow;
-import me.jtech.packified.client.windows.FileHierarchy;
+import me.jtech.packified.client.windows.*;
 import me.jtech.packified.SyncPacketData;
-import me.jtech.packified.client.windows.PixelArtEditor;
-import me.jtech.packified.client.windows.SelectFolderWindow;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.sound.OggAudioStream;
@@ -364,6 +361,33 @@ public class FileUtils {
             sendDebugChatMessage("Making a backup of the resource pack: " + resourcePackFolder.getAbsolutePath());
             Path backupDir = FabricLoader.getInstance().getConfigDir().resolve("packified-backups");
 
+            int maxBackupCount = PreferencesWindow.maxBackupCount.get(); // Maximum number of backups to keep
+
+            // Clean up old backups if they exceed the maximum count
+            if (maxBackupCount > 0) {
+                try (DirectoryStream<Path> stream = Files.newDirectoryStream(backupDir)) {
+                    List<Path> backups = new ArrayList<>();
+                    for (Path entry : stream) {
+                        backups.add(entry);
+                    }
+                    if (backups.size() >= maxBackupCount) {
+                        // Sort by last modified time and delete the oldest ones
+                        backups.sort(Comparator.comparingLong(path -> {
+                            try {
+                                return Files.getLastModifiedTime(path).toMillis();
+                            } catch (IOException e) {
+                                throw new RuntimeException("Failed to retrieve last modified time for backup", e);
+                            }
+                        }));
+                        for (int i = 0; i < backups.size() - maxBackupCount + 1; i++) {
+                            Files.delete(backups.get(i));
+                        }
+                    }
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
+            }
+
             if (!backupDir.toFile().exists()) {
                 Files.createDirectories(backupDir);
             }
@@ -470,7 +494,6 @@ public class FileUtils {
             default -> "Unknown";
         };
     }
-
 
 
     public static String getContent(PackFile file) {

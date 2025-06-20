@@ -1,17 +1,21 @@
 package me.jtech.packified.client.windows;
 
 import imgui.ImGui;
-import imgui.ImVec4;
-import imgui.extension.texteditor.TextEditor;
 import imgui.extension.texteditor.flag.TextEditorPaletteIndex;
 import imgui.flag.ImGuiWindowFlags;
 import imgui.type.ImBoolean;
+import imgui.type.ImInt;
+import me.jtech.packified.Packified;
+import me.jtech.packified.client.PackifiedClient;
+import me.jtech.packified.client.imgui.ImGuiImplementation;
+import me.jtech.packified.client.imgui.ImguiThemes;
 import me.jtech.packified.client.util.ModConfig;
 
 import java.util.Map;
 
-public class SettingsWindow {
-    public static boolean stayInCreative = ((boolean) ModConfig.getSettings().getOrDefault("stayincreateive", false));
+public class PreferencesWindow {
+    public static ImBoolean stayInCreative = new ImBoolean((boolean) ModConfig.getSettings().getOrDefault("stayincreateive", false));
+    public static ImInt maxBackupCount = new ImInt((int) Math.round((double) ModConfig.getSettings().getOrDefault("maxBackupCount", 10))); // Maximum number of backups to keep
 
     public static boolean isOpen = false;
 
@@ -20,15 +24,29 @@ public class SettingsWindow {
             return; // If the window is not open, do not render
         }
         // Render the settings window
-        if (ImGui.begin("Settings")) {
+        if (ImGui.begin("Settings", ImGuiWindowFlags.NoResize| ImGuiWindowFlags.NoMove | ImGuiWindowFlags.NoCollapse)) {
             if (ImGui.collapsingHeader("General Settings")) {
-//                if (ImGui.selectable("Stay In Creative: " + (stayInCreative ? "Enabled" : "Disabled"))) {
-//                    stayInCreative = !stayInCreative;
-//                    ModConfig.updateSettings(Map.of("stayincreative", stayInCreative));
-//                }
+                if (ImGui.checkbox("Stay In Creative: ", stayInCreative)) {
+                    ModConfig.updateSettings(Map.of("stayincreative", stayInCreative.get()));
+                }
+                if (ImGui.inputInt("Max backups" , maxBackupCount)) {
+                    ModConfig.updateSettings(Map.of("maxBackupCount", maxBackupCount.get()));
+                }
             }
-            if (ImGui.collapsingHeader("Editor Theme Settings")) {
+            if (ImGui.collapsingHeader("Appearance & Behavior")) {
+                if (ImGui.combo("Theme", ImguiThemes.getCurrentTheme(), ImguiThemes.getAvailableThemes())) {
+                    ImguiThemes.setTheme(ImguiThemes.getCurrentTheme());
+                }
+            }
+            if (ImGui.collapsingHeader("Editor")) {
                 renderTextEditorColorSettings();
+            }
+
+            // Close button in bottom right
+            ImGui.setCursorPosY(ImGui.getWindowHeight() - ImGui.getFrameHeightWithSpacing());
+            ImGui.setCursorPosX(ImGui.getWindowWidth() - ImGui.getFrameHeightWithSpacing() - ImGui.getStyle().getItemSpacingX() - ImGui.getStyle().getWindowMinSizeX());
+            if (ImGui.button("Close")) {
+                isOpen = false; // Close the settings window
             }
         }
         ImGui.end();

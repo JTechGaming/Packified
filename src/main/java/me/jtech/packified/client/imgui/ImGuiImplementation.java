@@ -12,6 +12,7 @@ import me.jtech.packified.Packified;
 import me.jtech.packified.client.NotificationHelper;
 import me.jtech.packified.client.uiElements.MenuBar;
 import me.jtech.packified.client.util.IniUtil;
+import me.jtech.packified.client.util.ModConfig;
 import me.jtech.packified.client.windows.*;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
@@ -27,7 +28,6 @@ import org.lwjgl.glfw.GLFW;
 import org.lwjgl.opengl.GL11;
 
 import javax.imageio.ImageIO;
-import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -75,6 +75,8 @@ public class ImGuiImplementation {
         final ImGuiIO data = ImGui.getIO();
         data.setIniFilename(Packified.MOD_ID + ".ini");
         data.setFontGlobalScale(1F);
+
+        ImguiThemes.setDeepDarkTheme();
 
         // The "generatedFonts" list now contains an ImFont for each scale from 5 to 50, you should save the font scales you want as global fields here to use them later:
         // For example:
@@ -174,7 +176,8 @@ public class ImGuiImplementation {
         ModifyFileWindow.render();
         ConfirmWindow.render();
         NotificationHelper.render();
-        SettingsWindow.render();
+        PreferencesWindow.render();
+        //ModelEditorWindow.show(new ImBoolean(true));
 
         if (ImGui.isMouseClicked(GLFW.GLFW_MOUSE_BUTTON_LEFT)) {
             int key = -GLFW.GLFW_MOUSE_BUTTON_LEFT-1;
@@ -299,7 +302,6 @@ public class ImGuiImplementation {
         }
         ClientPlayerInteractionManager gameMode = MinecraftClient.getInstance().interactionManager;
         if (gameMode == null) return false;
-        if (gameMode.getCurrentGameMode() != GameMode.SPECTATOR) return false;
         if (MinecraftClient.getInstance().world == null) return false;
         if (MinecraftClient.getInstance().player == null) return false;
         if (MinecraftClient.getInstance().getOverlay() != null) return false;
@@ -371,7 +373,7 @@ public class ImGuiImplementation {
     }
 
     public static int getNewGameWidth(float scale) {
-        return Math.max(1, Math.round(frameWidth * scale)) / 2;
+        return Math.max(1, Math.round(frameWidth * scale)) * 2;
     }
 
     public static int getNewGameHeight(float scale) {

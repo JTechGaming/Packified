@@ -1,6 +1,7 @@
 package me.jtech.packified.client.windows;
 
 import imgui.ImGui;
+import imgui.flag.ImGuiCol;
 import imgui.flag.ImGuiDragDropFlags;
 import imgui.flag.ImGuiTableFlags;
 import imgui.type.ImString;
@@ -135,7 +136,6 @@ public class FileHierarchy {
         }
 
         if (PackifiedClient.currentPack != null) {
-
             ImGui.imageButton(ImGuiImplementation.loadTexture("textures/ui/neu_import.png"), 14, 14);
             if (ImGui.isItemClicked()) {
                 // Logic to import a file
