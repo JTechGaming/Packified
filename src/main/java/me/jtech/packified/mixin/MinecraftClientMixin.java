@@ -31,6 +31,13 @@ public class MinecraftClientMixin {
         ImGuiImplementation.dispose();
     }
 
+    @Inject(method = "openGameMenu", at = @At("HEAD"), cancellable = true)
+    public void openGameMenu(CallbackInfo ci) {
+        if (ImGuiImplementation.isActive()) {
+            ci.cancel();
+        }
+    }
+
     @Inject(method = "render", at=@At(value = "INVOKE", target = "Lnet/minecraft/client/gl/Framebuffer;draw(II)V", shift = At.Shift.AFTER))
     public void afterMainBlit(boolean bl, CallbackInfo ci) {
         if (!RenderSystem.isOnRenderThread()) return;

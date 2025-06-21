@@ -8,6 +8,7 @@ import me.jtech.packified.client.util.FileUtils;
 import me.jtech.packified.client.util.PackUtils;
 import me.jtech.packified.client.windows.BackupWindow;
 import me.jtech.packified.client.windows.EditorWindow;
+import me.jtech.packified.client.windows.PackCreationWindow;
 import me.jtech.packified.client.windows.PreferencesWindow;
 import me.jtech.packified.packets.C2SInfoPacket;
 import net.fabricmc.api.EnvType;
@@ -35,7 +36,7 @@ public class MenuBar {
                     if (ImGui.menuItem("Pack")) {
                         EditorWindow.openFiles.clear();
                         PackifiedClient.currentPack = null;
-                        PackUtils.createPack();
+                        PackCreationWindow.isOpen = !PackCreationWindow.isOpen;
                     }
                     ImGui.endMenu();
                 }

@@ -4,6 +4,7 @@ import imgui.ImGui;
 import me.jtech.packified.PacketSender;
 import me.jtech.packified.Packified;
 import me.jtech.packified.SyncPacketData;
+import me.jtech.packified.client.imgui.CustomImGuiImplGlfw;
 import me.jtech.packified.client.imgui.ImGuiImplementation;
 import me.jtech.packified.client.util.FileUtils;
 import me.jtech.packified.client.util.ModConfig;
@@ -85,8 +86,10 @@ public class PackifiedClient implements ClientModInitializer {
                 if (keyBinding.wasPressed()) {
                     toggleVisibility();
                 }
-                KeyBinding.unpressAll();
-                unlockCursor();
+                if (!ImGuiImplementation.grabbed) {
+                    KeyBinding.unpressAll();
+                    unlockCursor();
+                }
 
                 handleKeypresses();
             }
@@ -330,33 +333,36 @@ public class PackifiedClient implements ClientModInitializer {
 
         if (!(boolean) ModConfig.getSettings().getOrDefault("stayincreative", false)) {
             GameMode gameMode = shouldRender ? GameMode.SPECTATOR : getPreviousGameMode();
-            MinecraftClient client = MinecraftClient.getInstance();
-            assert client.player != null;
-            if (client.player.hasPermissionLevel(2)) {
-                if (gameMode.equals(GameMode.CREATIVE)) {
-                    client.player.networkHandler.sendCommand("gamemode creative");
-                } else if (gameMode.equals(GameMode.SURVIVAL)) {
-                    client.player.networkHandler.sendCommand("gamemode survival");
-                } else if (gameMode.equals(GameMode.SPECTATOR)) {
-                    client.player.networkHandler.sendCommand("gamemode spectator");
-                } else if (gameMode.equals(GameMode.ADVENTURE)) {
-                    client.player.networkHandler.sendCommand("gamemode adventure");
-                } else {
-                    LOGGER.error("Unknown game mode: {}", gameMode);
-                }
-            }
+            changeGameMode(gameMode);
         }
 
         ImGuiImplementation.shouldRender = shouldRender;
     }
 
-    private static void unlockCursor() {
+    public static void changeGameMode(GameMode gameMode) {
+        MinecraftClient client = MinecraftClient.getInstance();
+        if (client.player.hasPermissionLevel(2)) {
+            if (gameMode.equals(GameMode.CREATIVE)) {
+                client.player.networkHandler.sendCommand("gamemode creative");
+            } else if (gameMode.equals(GameMode.SURVIVAL)) {
+                client.player.networkHandler.sendCommand("gamemode survival");
+            } else if (gameMode.equals(GameMode.SPECTATOR)) {
+                client.player.networkHandler.sendCommand("gamemode spectator");
+            } else if (gameMode.equals(GameMode.ADVENTURE)) {
+                client.player.networkHandler.sendCommand("gamemode adventure");
+            } else {
+                LOGGER.error("Unknown game mode: {}", gameMode);
+            }
+        }
+    }
+
+    public static void unlockCursor() {
         MinecraftClient client = MinecraftClient.getInstance();
         GLFW.glfwSetInputMode(client.getWindow().getHandle(), GLFW.GLFW_CURSOR, GLFW.GLFW_CURSOR_NORMAL);
         client.mouse.unlockCursor();
     }
 
-    private GameMode getPreviousGameMode() {
+    public static GameMode getPreviousGameMode() {
         ClientPlayerInteractionManager clientPlayerInteractionManager = MinecraftClient.getInstance().interactionManager;
         GameMode gameMode = clientPlayerInteractionManager.getPreviousGameMode();
         if (gameMode != null) {
@@ -366,7 +372,7 @@ public class PackifiedClient implements ClientModInitializer {
         }
     }
 
-    private static void lockCursor() {
+    public static void lockCursor() {
         MinecraftClient client = MinecraftClient.getInstance();
         GLFW.glfwSetInputMode(client.getWindow().getHandle(), GLFW.GLFW_CURSOR, GLFW.GLFW_CURSOR_DISABLED);
         client.mouse.lockCursor();

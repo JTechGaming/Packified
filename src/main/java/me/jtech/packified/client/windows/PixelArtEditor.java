@@ -49,12 +49,14 @@ public class PixelArtEditor {
 
     private Path currentFile = null; // Current path to file being edited
 
-    private float zoomSensitivity = 1.0f; // Adjust sensitivity for zooming
-    private float panSensitivity = 5.0f; // Adjust sensitivity for panning
+    private float zoomSensitivity = 1.0f; // sensitivity for zooming
+    private float panSensitivity = 10.0f; // sensitivity for panning
 
     private ImInt floodFillTolerance = new ImInt(20); // Tolerance for flood fill color matching
 
     public boolean wasModified = false; // Track if the image was modified
+
+    private boolean firstRender = true; // Track if this is the first render to clamp image position
 
     // Load image and create OpenGL texture
     public void loadImage(BufferedImage img, Path path) {
@@ -107,29 +109,16 @@ public class PixelArtEditor {
             return;
         }
 
-        //ImGui.begin("Pixel Art Editor", ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse);
+        if (firstRender) {
+            firstRender = false;
+            // Clamp initial image position to fit within the window
+            scale += zoomSensitivity;
+            clampImagePosition();
+        }
 
         ImGuiIO io = ImGui.getIO();
         int width = image.getWidth();
         int height = image.getHeight();
-
-        // Handle zoom with Ctrl + Scroll
-        if (ImGui.isWindowHovered()) {
-            float scrollDelta = io.getMouseWheel();
-            if (scrollDelta != 0.0f) {
-                if (io.getKeyCtrl()) {
-                    scale += scrollDelta * zoomSensitivity; // Adjust sensitivity as needed
-                    if (scale < MIN_SCALE) scale = MIN_SCALE;
-                    if (scale > MAX_SCALE) scale = MAX_SCALE;
-                } else if (io.getKeyShift()) {
-                    // Adjust image position with Shift + Scroll
-                    imagePosX -= scrollDelta * panSensitivity; // Adjust sensitivity as needed
-                } else {
-                    // Adjust image position with regular scroll
-                    imagePosY -= scrollDelta * panSensitivity; // Adjust sensitivity as needed
-                }
-            }
-        }
 
         // Tool Buttons
         ImGui.imageButton(ImGuiImplementation.loadTexture("textures/ui/neu_pencil.png"), 14, 14);
@@ -156,26 +145,60 @@ public class PixelArtEditor {
             currentTool = Tool.ERASER;
         }
         ImGui.sameLine();
+        ImGui.setNextItemWidth(150);
         ImGui.inputInt("Tool Size", toolSize);
+        ImGui.sameLine();
+        ImGui.setNextItemWidth(350);
         ImGui.colorEdit3("Color Picker", currentColor);
+        ImGui.sameLine();
+        ImGui.setNextItemWidth(120);
         ImGui.sliderFloat("Opacity", currentAlpha, 0.0f, 1.0f);
 
-        if (ImGui.button("Save Image")) {
-            saveImage(image, currentFile);
+//        if (ImGui.button("Save Image")) {
+//            saveImage(image, currentFile);
+//        }
+//        ImGui.sameLine();
+//        if (ImGui.button("Undo (Ctrl+Z)")) {
+//            undo();
+//        }
+//        ImGui.sameLine();
+//        if (ImGui.button("Redo (Ctrl+Y)")) {
+//            redo();
+//        }
+
+        ImGui.beginChild("Canvas##", 0, 0, false, ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse);
+
+        // Handle zoom with Ctrl + Scroll
+        if (ImGui.isWindowHovered()) {
+            float scrollDelta = io.getMouseWheel();
+            if (scrollDelta != 0.0f) {
+                if (io.getKeyCtrl()) {
+                    scale += scrollDelta * zoomSensitivity; // Adjust sensitivity as needed
+                    if (scale < MIN_SCALE) scale = MIN_SCALE;
+                    if (scale > MAX_SCALE) scale = MAX_SCALE;
+
+                    clampImagePosition();
+                } else if (io.getKeyShift()) {
+                    // Adjust image position with Shift + Scroll
+                    imagePosX += scrollDelta * panSensitivity * scale; // Adjust sensitivity as needed
+                    if (imagePosX > 0 ) imagePosX = 0; // Prevent scrolling out of bounds
+                    if (imagePosX < (-width * scale + ImGui.getWindowWidth())) {
+                        imagePosX = -width * scale + ImGui.getWindowWidth(); // Prevent scrolling out of bounds
+                    }
+                } else {
+                    // Adjust image position with regular scroll
+                    imagePosY += scrollDelta * panSensitivity * scale; // Adjust sensitivity as needed
+                    if (imagePosY > 0) imagePosY = 0; // Prevent scrolling out of bounds
+                    if (imagePosY < (-height * scale + ImGui.getWindowHeight())) {
+                        imagePosY = -height * scale + ImGui.getWindowHeight(); // Prevent scrolling out of bounds
+                    }
+                }
+            }
         }
-        ImGui.sameLine();
-        if (ImGui.button("Undo (Ctrl+Z)")) {
-            undo();
-        }
-        ImGui.sameLine();
-        if (ImGui.button("Redo (Ctrl+Y)")) {
-            redo();
-        }
+
+        ImGui.setCursorPos(ImGui.getCursorPosX() + imagePosX, ImGui.getCursorPosY() + imagePosY);
 
         ImGui.image(textureId, width * scale, height * scale);
-
-        imagePosX = ImGui.getItemRectMinX();
-        imagePosY = ImGui.getItemRectMinY();
 
         boolean mouseHovered = ImGui.isItemHovered();
         boolean leftMouseDown = ImGui.isMouseDown(0);
@@ -184,8 +207,11 @@ public class PixelArtEditor {
             float mouseX = io.getMousePosX();
             float mouseY = io.getMousePosY();
 
-            float localX = (mouseX - imagePosX) / scale;
-            float localY = (mouseY - imagePosY) / scale;
+            float imageScreenX = ImGui.getItemRectMinX();
+            float imageScreenY = ImGui.getItemRectMinY();
+
+            float localX = (mouseX - imageScreenX) / scale;
+            float localY = (mouseY - imageScreenY) / scale;
 
             int pixelX = (int) localX;
             int pixelY = (int) localY;
@@ -217,6 +243,23 @@ public class PixelArtEditor {
         if (io.getKeyCtrl() && ImGui.isKeyPressed('Y', false)) {
             redo();
         }
+
+        ImGui.endChild();
+    }
+
+    private void clampImagePosition() {
+        int width = image.getWidth();
+        int height = image.getHeight();
+        float windowWidth = ImGui.getWindowWidth();
+        float windowHeight = ImGui.getWindowHeight();
+
+        // Clamp X position
+        if (imagePosX > 0) imagePosX = 0;
+        if (imagePosX < windowWidth - width * scale) imagePosX = Math.min(0, windowWidth - width * scale);
+
+        // Clamp Y position
+        if (imagePosY > 0) imagePosY = 0;
+        if (imagePosY < windowHeight - height * scale) imagePosY = Math.min(0, windowHeight - height * scale);
     }
 
     private void drawInterpolatedLine(int x0, int y0, int x1, int y1) {

@@ -133,6 +133,8 @@ public class ImguiThemes {
         colors[ImGuiCol.ScrollbarGrabHovered] = new float[]{0.25f, 0.25f, 0.25f, 1.00f};
         colors[ImGuiCol.ScrollbarGrabActive] = new float[]{0.30f, 0.30f, 0.30f, 1.00f};
 
+        colors[ImGuiCol.TableHeaderBg] = new float[]{0.19f, 0.19f, 0.20f, 1.00f};
+
         // Accent colors changed to darker olive-green/grey shades
         colors[ImGuiCol.CheckMark] = new float[]{0.45f, 0.45f, 0.45f, 1.00f};        // Dark gray for check marks
         colors[ImGuiCol.SliderGrab] = new float[]{0.45f, 0.45f, 0.45f, 1.00f};       // Dark gray for sliders
@@ -201,6 +203,8 @@ public class ImguiThemes {
         colors[ImGuiCol.ScrollbarGrabHovered] = new float[]{0.75f, 0.75f, 0.75f, 1.00f};
         colors[ImGuiCol.ScrollbarGrabActive] = new float[]{0.70f, 0.70f, 0.70f, 1.00f};
 
+        colors[ImGuiCol.TableHeaderBg] = new float[]{0.85f, 0.85f, 0.85f, 1.00f}; // Table background
+
         // Accent colors with a soft pastel gray-green
         colors[ImGuiCol.CheckMark] = new float[]{0.55f, 0.65f, 0.55f, 1.00f}; // Soft gray-green for check marks
         colors[ImGuiCol.SliderGrab] = new float[]{0.55f, 0.65f, 0.55f, 1.00f};
@@ -224,6 +228,8 @@ public class ImguiThemes {
         colors[ImGuiCol.TabUnfocusedActive] = new float[]{0.75f, 0.75f, 0.75f, 1.00f};
         colors[ImGuiCol.DockingPreview] = new float[]{0.55f, 0.65f, 0.55f, 1.00f}; // Docking preview in gray-green
         colors[ImGuiCol.DockingEmptyBg] = new float[]{0.90f, 0.90f, 0.90f, 1.00f};
+
+        style.setColors(colors);
 
         // Additional styles
         style.setFramePadding(8.0f, 4.0f);
@@ -268,6 +274,9 @@ public class ImguiThemes {
         colors[ImGuiCol.TitleBg] = new float[]{0.12f, 0.12f, 0.15f, 1.00f};
         colors[ImGuiCol.TitleBgActive] = new float[]{0.15f, 0.15f, 0.20f, 1.00f};
         colors[ImGuiCol.TitleBgCollapsed] = new float[]{0.10f, 0.10f, 0.12f, 1.00f};
+
+        // Table
+        colors[ImGuiCol.TableHeaderBg] = new float[]{0.10f, 0.10f, 0.12f, 1.00f};
 
         // Borders
         colors[ImGuiCol.Border] = new float[]{0.20f, 0.20f, 0.25f, 0.50f};
@@ -322,9 +331,9 @@ public class ImguiThemes {
         colors[ImGuiCol.HeaderActive] = new float[]{0.25f, 0.25f, 0.35f, 1.00f};
 
         // Buttons
-        colors[ImGuiCol.Button] = new float[]{0.15f, 0.19f, 0.40f, 1.00f};
-        colors[ImGuiCol.ButtonHovered] = new float[]{0.30f, 0.32f, 0.53f, 1.00f};
-        colors[ImGuiCol.ButtonActive] = new float[]{0.35f, 0.38f, 0.63f, 1.00f};
+        colors[ImGuiCol.Button] = new float[]{0.30f, 0.50f, 0.80f, 1.00f};
+        colors[ImGuiCol.ButtonHovered] = new float[]{0.40f, 0.60f, 0.90f, 1.00f};
+        colors[ImGuiCol.ButtonActive] = new float[]{0.45f, 0.65f, 0.95f, 1.00f};
 
         // Frame BG
         colors[ImGuiCol.FrameBg] = new float[]{0.15f, 0.15f, 0.18f, 1.00f};
@@ -332,16 +341,19 @@ public class ImguiThemes {
         colors[ImGuiCol.FrameBgActive] = new float[]{0.25f, 0.25f, 0.30f, 1.00f};
 
         // Tabs
-        colors[ImGuiCol.Tab] = new float[]{0.12f, 0.16f, 0.37f, 1.00f};
-        colors[ImGuiCol.TabHovered] = new float[]{0.13f, 0.17f, 0.38f, 1.00f};
-        colors[ImGuiCol.TabActive] = new float[]{0.15f, 0.19f, 0.40f, 1.00f};
-        colors[ImGuiCol.TabUnfocused] = new float[]{0.09f, 0.13f, 0.34f, 1.00f};
-        colors[ImGuiCol.TabUnfocusedActive] = new float[]{0.11f, 0.15f, 0.36f, 1.00f};
+        colors[ImGuiCol.Tab] = new float[]{0.30f, 0.50f, 0.80f, 1.00f};
+        colors[ImGuiCol.TabHovered] = new float[]{0.37f, 0.57f, 0.87f, 1.00f};
+        colors[ImGuiCol.TabActive] = new float[]{0.27f, 0.47f, 0.77f, 1.00f};
+        colors[ImGuiCol.TabUnfocused] = new float[]{0.15f, 0.35f, 0.65f, 1.00f};
+        colors[ImGuiCol.TabUnfocusedActive] = new float[]{0.22f, 0.42f, 0.72f, 1.00f};
 
         // Title
         colors[ImGuiCol.TitleBg] = new float[]{0.12f, 0.12f, 0.15f, 1.00f};
         colors[ImGuiCol.TitleBgActive] = new float[]{0.15f, 0.15f, 0.20f, 1.00f};
         colors[ImGuiCol.TitleBgCollapsed] = new float[]{0.10f, 0.10f, 0.12f, 1.00f};
+
+        // Table
+        colors[ImGuiCol.TableHeaderBg] = new float[]{0.10f, 0.10f, 0.12f, 1.00f};
 
         // Borders
         colors[ImGuiCol.Border] = new float[]{0.20f, 0.20f, 0.25f, 0.50f};

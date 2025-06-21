@@ -22,6 +22,7 @@ import java.util.stream.Stream;
 
 @Environment(EnvType.CLIENT)
 public class FileHierarchy {
+    private static boolean fileSelect;
     private final Path filePath;
     private final Map<String, FileHierarchy> children = new HashMap<>();
 
@@ -172,6 +173,25 @@ public class FileHierarchy {
 
                     ImGui.endTable();
                 }
+
+                if (!fileSelect) {
+                    if (ImGui.beginPopupContextItem("##FileHierarchyPopupNoSelection")) {
+                        // Open file
+                        if (ImGui.beginMenu("New")) {
+                            if (ImGui.menuItem("Pack")) {
+                                // Create a new pack
+                                PackCreationWindow.isOpen = true;
+                            }
+                            ImGui.endMenu();
+                        }
+                        if (ImGui.menuItem("Load Pack")) {
+                            // Open the select pack window
+                            SelectPackWindow.open = true;
+                        }
+                        ImGui.endPopup();
+                    }
+                }
+                fileSelect = false;
             } else {
                 ImGui.setCursorPos((ImGui.getWindowWidth() - ImGui.calcTextSize("No pack loaded").x) / 2, (ImGui.getWindowHeight() - ImGui.getTextLineHeightWithSpacing()) / 2);
             }
@@ -216,6 +236,7 @@ public class FileHierarchy {
 
     private static void renderRightClickPopup(String name, Path path, boolean isFolder) {
         if (ImGui.beginPopupContextItem(name)) {
+            fileSelect = true;
             selectedFile = path;
             // Open file
             if (ImGui.beginMenu("New")) {

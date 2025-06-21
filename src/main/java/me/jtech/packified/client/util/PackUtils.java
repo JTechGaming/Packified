@@ -1,9 +1,11 @@
 package me.jtech.packified.client.util;
 
+import com.google.gson.JsonObject;
 import me.jtech.packified.PacketSender;
 import me.jtech.packified.Packified;
 import me.jtech.packified.client.PackifiedClient;
 import me.jtech.packified.client.windows.EditorWindow;
+import me.jtech.packified.client.windows.PackCreationWindow;
 import me.jtech.packified.packets.C2SSendFullPack;
 import me.jtech.packified.packets.C2SSyncPackChanges;
 import me.jtech.packified.SyncPacketData;
@@ -13,7 +15,6 @@ import net.minecraft.SharedConstants;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.resource.ResourceReloadLogger;
 import net.minecraft.resource.*;
-import net.minecraft.util.Identifier;
 import net.minecraft.util.Util;
 
 import javax.imageio.ImageIO;
@@ -26,10 +27,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
 import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.stream.Collectors;
 import java.util.stream.Stream;
-
-import static com.mojang.text2speech.Narrator.LOGGER;
 
 public class PackUtils {
     private static List<ResourcePackProfile> resourcePacks;
@@ -284,44 +282,51 @@ public class PackUtils {
         resourcePackManager.disable(currentPack.getId());
     }
 
-    public static void createPack() {
-        FileDialog.saveFileDialog(new File("resourcepacks/").getPath(), "New Pack.zip", "zip").thenAccept(pathStr -> {
-            if (pathStr != null) {
-                Path path = Path.of(pathStr);
-                File folder = new File("resourcepacks/" + path.getFileName().toString().replace(".zip", ""));
-                folder.mkdirs();
-                // make the pack.mcmeta file
-                File mcmeta = new File(folder, "pack.mcmeta");
-                try {
-                    mcmeta.createNewFile();
-                    String fileName = path.getFileName().toString().replace(".zip", "");
-                    String packMcmetaContent = "{\"pack\": {\"pack_format\": " + getCurrentPackFormat() + ",\"description\": \"" + fileName + "\"}}";
-                    Files.write(mcmeta.toPath(), packMcmetaContent.getBytes());
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-                File assetsFolder = new File(folder, "assets");
-                File mcAssetsRoot = new File(assetsFolder, ".mcassetsroot");
-                try {
-                    assetsFolder.mkdirs();
-                    mcAssetsRoot.createNewFile();
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-                File minecraftFolder = new File(assetsFolder, "minecraft");
-                try {
-                    minecraftFolder.mkdirs();
-                } catch (Exception e) {
-                    e.printStackTrace();
-                }
+    public static void createPack(String packName, String description, int packVersionIndex, int packVersionEndIndex) {
+        File folder = new File("resourcepacks/" + packName);
+        folder.mkdirs();
+        // make the pack.mcmeta file
+        File mcmeta = new File(folder, "pack.mcmeta");
+        try {
+            mcmeta.createNewFile();
+            String packVersion = getAllPackVersions(packVersionIndex, packVersionEndIndex);
+            String packMcmetaContent = "{\"pack\": {\"pack_format\": " + packVersion + "\"description\": \"" + description + "\"}}";
+            Files.write(mcmeta.toPath(), packMcmetaContent.getBytes());
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        File assetsFolder = new File(folder, "assets");
+        File mcAssetsRoot = new File(assetsFolder, ".mcassetsroot");
+        try {
+            assetsFolder.mkdirs();
+            mcAssetsRoot.createNewFile();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        File minecraftFolder = new File(assetsFolder, "minecraft");
+        try {
+            minecraftFolder.mkdirs();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
 
-                refresh();
+        List<ResourcePackProfile> refresh = refresh();
+        for (ResourcePackProfile resourcePack : refresh) {
+            if (resourcePack.getDisplayName().getString().equalsIgnoreCase(packName)) {
+                PackifiedClient.currentPack = resourcePack;
+                loadPack(resourcePack);
+                return;
             }
-        });
+        }
     }
 
-    public static int getCurrentPackFormat() {
-        return SharedConstants.getGameVersion().getResourceVersion(ResourceType.CLIENT_RESOURCES);
+    private static String getAllPackVersions(int startIndex, int endIndex) {
+        String output = endIndex + ",";
+        if (startIndex == endIndex) {
+            return output;
+        }
+        output += "\"supported_versions\": [" + startIndex + ", " + endIndex + "],";
+        return output;
     }
 
     @FunctionalInterface

@@ -134,7 +134,7 @@ public class PackFile {
 
     public void saveFile() {
         switch (extension) {
-            case ".png" -> imageContent = imageEditorContent;
+            case ".png" -> pixelArtEditor.wasModified = false;
             case ".json" -> textContent = textEditor.getText();
             case ".ogg" -> soundContent = soundEditorContent;
         }

@@ -4,11 +4,15 @@
   "package": "me.jtech.packified.mixin",
   "compatibilityLevel": "JAVA_21",
   "mixins": [
+    "JsonModelErrorsMixin",
+    "PlayerInventoryMixin"
   ],
   "client": [
     "FramebufferMixin",
     "MinecraftClientMixin",
     "MouseMixin",
+    "ShaderModelErrorsMixin",
+    "SoundErrorMixin",
     "WindowMixin"
   ],
   "injectors": {

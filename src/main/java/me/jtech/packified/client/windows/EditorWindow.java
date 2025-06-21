@@ -60,7 +60,7 @@ public class EditorWindow {
 
     public static void render() {
         // Editor window code
-        if (ImGui.begin("File Editor", isOpen, ImGuiWindowFlags.MenuBar)) {
+        if (ImGui.begin("File Editor", isOpen, ImGuiWindowFlags.MenuBar | ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse)) {
             if (ImGui.beginMenuBar()) {
                 if (ImGui.beginMenu("File")) {
                     if (ImGui.menuItem("Open")) {

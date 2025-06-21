@@ -30,14 +30,14 @@ public class MouseMixin {
 
     @Inject(method = "lockCursor", at=@At("HEAD"), cancellable = true)
     public void grabMouse(CallbackInfo ci) {
-        if (ImGuiImplementation.isActive()) {
+        if (ImGuiImplementation.isActive() && !ImGuiImplementation.grabbed) {
             ci.cancel();
         }
     }
 
     @Inject(method = "unlockCursor", at=@At("HEAD"), cancellable = true)
     public void releaseMouse(CallbackInfo ci) {
-        if (ImGuiImplementation.isActive()) {
+        if (ImGuiImplementation.isActive() && ImGuiImplementation.grabbed) {
             ci.cancel();
         }
     }

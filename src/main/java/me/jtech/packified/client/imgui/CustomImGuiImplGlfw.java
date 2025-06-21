@@ -1,6 +1,8 @@
 package me.jtech.packified.client.imgui;
 
 import imgui.glfw.ImGuiImplGlfw;
+import me.jtech.packified.Packified;
+import me.jtech.packified.client.PackifiedClient;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.minecraft.client.MinecraftClient;
@@ -16,6 +18,10 @@ public class CustomImGuiImplGlfw extends ImGuiImplGlfw {
     private int ignoreMouseMovements = 0;
     private long mainWindowPtr;
     private int grabLinkedKey = -1;
+
+    public MouseHandledBy getMouseHandledBy() {
+        return grabbed;
+    }
 
     public static enum MouseHandledBy {
         EDITOR_GRABBED,
@@ -40,11 +46,11 @@ public class CustomImGuiImplGlfw extends ImGuiImplGlfw {
     }
 
     public void ungrab() {
-        if (this.grabbed != null) {
-            this.grabbed = null;
-            GLFW.glfwSetInputMode(this.mainWindowPtr, 208897, 212993);
-            GLFW.glfwSetCursorPos(this.mainWindowPtr, this.grabbedOriginalMouseX[0], this.grabbedOriginalMouseY[0]);
-        }
+//        if (this.grabbed != null) {
+//            this.grabbed = MouseHandledBy.IMGUI;
+//            GLFW.glfwSetInputMode(this.mainWindowPtr, 208897, 212993);
+//            GLFW.glfwSetCursorPos(this.mainWindowPtr, this.grabbedOriginalMouseX[0], this.grabbedOriginalMouseY[0]);
+//        }
     }
 
     public void setGrabbed(boolean passthroughToGame, int grabLinkedKey, boolean releaseGrabOnUp, double x, double y) {

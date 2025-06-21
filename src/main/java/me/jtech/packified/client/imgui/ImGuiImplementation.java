@@ -9,10 +9,10 @@ import imgui.flag.ImGuiDockNodeFlags;
 import imgui.flag.ImGuiWindowFlags;
 import imgui.internal.ImGuiContext;
 import me.jtech.packified.Packified;
+import me.jtech.packified.client.CornerNotificationsHelper;
 import me.jtech.packified.client.NotificationHelper;
 import me.jtech.packified.client.uiElements.MenuBar;
 import me.jtech.packified.client.util.IniUtil;
-import me.jtech.packified.client.util.ModConfig;
 import me.jtech.packified.client.windows.*;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
@@ -21,7 +21,6 @@ import net.minecraft.client.network.ClientPlayerInteractionManager;
 import net.minecraft.client.util.Window;
 import net.minecraft.resource.Resource;
 import net.minecraft.util.Identifier;
-import net.minecraft.world.GameMode;
 import org.jetbrains.annotations.ApiStatus;
 import org.lwjgl.BufferUtils;
 import org.lwjgl.glfw.GLFW;
@@ -31,6 +30,8 @@ import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+
+import static org.lwjgl.glfw.GLFW.*;
 
 @Environment(EnvType.CLIENT)
 @ApiStatus.Internal
@@ -56,6 +57,8 @@ public class ImGuiImplementation {
     private static boolean activeLastFrame = false;
 
     public static float aspectRatio = 1;
+
+    public static boolean grabbed = false;
 
     public static void create(final long handle) {
         if (initialized) {
@@ -84,6 +87,7 @@ public class ImGuiImplementation {
         // How you can apply the font then, you can see in ExampleMixin
 
         data.setConfigFlags(ImGuiConfigFlags.DockingEnable | ImGuiConfigFlags.ViewportsEnable);
+        data.setConfigMacOSXBehaviors(MinecraftClient.IS_SYSTEM_MAC);
 
         imGuiImplGlfw.init(handle, true);
         imGuiImplGl3.init();
@@ -93,7 +97,6 @@ public class ImGuiImplementation {
         ImGui.setCurrentContext(currentContext);
     }
 
-    @ApiStatus.Internal
     public static void draw() {
         long oldImGuiContext = ImGui.getCurrentContext().ptr;
         ImGui.setCurrentContext(imGuiContext);
@@ -162,6 +165,32 @@ public class ImGuiImplementation {
             ImGuiImplementation.setFrameHeight((int) Math.max(1, maxY - minY));
             ImGuiImplementation.setViewportSizeX((int) ImGui.getMainViewport().getSizeX());
             ImGuiImplementation.setViewportSizeY((int) ImGui.getMainViewport().getSizeY());
+
+            if (ImGui.isWindowHovered() && ImGui.isMouseClicked(GLFW.GLFW_MOUSE_BUTTON_RIGHT)) {
+                // If the main window is clicked, we grab the mouse
+                MinecraftClient client = MinecraftClient.getInstance();
+                GLFW.glfwSetInputMode(client.getWindow().getHandle(), GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+                grabbed = true;
+                client.mouse.lockCursor();
+            }
+            MinecraftClient client = MinecraftClient.getInstance();
+            if (!client.mouse.wasRightButtonClicked()) {
+                if (grabbed) {
+                    grabbed = false;
+                    client.mouse.unlockCursor();
+                    GLFW.glfwSetInputMode(client.getWindow().getHandle(), GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+                }
+            } else {
+                if (MinecraftClient.getInstance().currentScreen != null) {
+                    GLFW.glfwSetInputMode(client.getWindow().getHandle(), GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+                } else {
+                    GLFW.glfwSetInputMode(client.getWindow().getHandle(), GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+                }
+
+                ImGui.setWindowFocus("Main");
+                ImGui.getIO().setWantCaptureKeyboard(false);
+                ImGui.getIO().setWantCaptureMouse(false);
+            }
         }
 
         ImGui.end();
@@ -176,15 +205,9 @@ public class ImGuiImplementation {
         ModifyFileWindow.render();
         ConfirmWindow.render();
         NotificationHelper.render();
+        CornerNotificationsHelper.render();
         PreferencesWindow.render();
-        //ModelEditorWindow.show(new ImBoolean(true));
-
-        if (ImGui.isMouseClicked(GLFW.GLFW_MOUSE_BUTTON_LEFT)) {
-            int key = -GLFW.GLFW_MOUSE_BUTTON_LEFT-1;
-            if (key != 0) {
-                imGuiImplGlfw.setGrabbed(true, key, true, frameX + frameWidth / 2f, frameY + frameHeight / 2f);
-            }
-        }
+        PackCreationWindow.render();
 
         // end frame
         ImGui.render();
@@ -373,7 +396,7 @@ public class ImGuiImplementation {
     }
 
     public static int getNewGameWidth(float scale) {
-        return Math.max(1, Math.round(frameWidth * scale)) * 2;
+        return Math.max(1, Math.round(frameWidth * scale));
     }
 
     public static int getNewGameHeight(float scale) {

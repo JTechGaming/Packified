@@ -15,7 +15,7 @@ import java.util.Map;
 
 public class PreferencesWindow {
     public static ImBoolean stayInCreative = new ImBoolean((boolean) ModConfig.getSettings().getOrDefault("stayincreateive", false));
-    public static ImInt maxBackupCount = new ImInt((int) Math.round((double) ModConfig.getSettings().getOrDefault("maxBackupCount", 10))); // Maximum number of backups to keep
+    public static ImInt maxBackupCount = new ImInt((int) ModConfig.getSettings().getOrDefault("maxBackupCount", 10)); // Maximum number of backups to keep
 
     public static boolean isOpen = false;
 
@@ -28,6 +28,7 @@ public class PreferencesWindow {
             if (ImGui.collapsingHeader("General Settings")) {
                 if (ImGui.checkbox("Stay In Creative: ", stayInCreative)) {
                     ModConfig.updateSettings(Map.of("stayincreative", stayInCreative.get()));
+                    PackifiedClient.changeGameMode(PackifiedClient.getPreviousGameMode());
                 }
                 if (ImGui.inputInt("Max backups" , maxBackupCount)) {
                     ModConfig.updateSettings(Map.of("maxBackupCount", maxBackupCount.get()));
