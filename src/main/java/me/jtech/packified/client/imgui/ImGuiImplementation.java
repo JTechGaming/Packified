@@ -1,9 +1,14 @@
 package me.jtech.packified.client.imgui;
 
 import com.mojang.blaze3d.platform.GlStateManager;
+import imgui.ImDrawList;
 import imgui.ImGui;
 import imgui.ImGuiIO;
+import imgui.ImVec2;
 import imgui.extension.implot.ImPlot;
+import imgui.extension.implot.ImPlotContext;
+import imgui.extension.implot.flag.ImPlotBin;
+import imgui.extension.implot.flag.ImPlotFlags;
 import imgui.flag.ImGuiConfigFlags;
 import imgui.flag.ImGuiDockNodeFlags;
 import imgui.flag.ImGuiWindowFlags;
@@ -155,16 +160,37 @@ public class ImGuiImplementation {
             float maxY = ImGui.getWindowContentRegionMaxY();
 
             if (ImGui.getIO().hasConfigFlags(ImGuiConfigFlags.ViewportsEnable)) {
-                ImGuiImplementation.setFrameX((int) (ImGui.getWindowPosX() - ImGui.getWindowViewport().getPosX() + minX));
-                ImGuiImplementation.setFrameY((int) (ImGui.getWindowPosY() - ImGui.getWindowViewport().getPosY() + minY));
+                frameX = (int) (ImGui.getWindowPosX() - ImGui.getWindowViewport().getPosX() + minX);
+                frameY = (int) (ImGui.getWindowPosY() - ImGui.getWindowViewport().getPosY() + minY);
             } else {
-                ImGuiImplementation.setFrameX((int) (ImGui.getWindowPosX() + minX));
-                ImGuiImplementation.setFrameY((int) (ImGui.getWindowPosY() + minY));
+                frameX = (int) (ImGui.getWindowPosX() + minX);
+                frameY = (int) (ImGui.getWindowPosY() + minY);
             }
-            ImGuiImplementation.setFrameWidth((int) Math.max(1, maxX - minX));
-            ImGuiImplementation.setFrameHeight((int) Math.max(1, maxY - minY));
-            ImGuiImplementation.setViewportSizeX((int) ImGui.getMainViewport().getSizeX());
-            ImGuiImplementation.setViewportSizeY((int) ImGui.getMainViewport().getSizeY());
+            frameWidth = (int) Math.max(1, maxX - minX);
+            frameHeight = (int) Math.max(1, maxY - minY);
+            viewportSizeX = (int) ImGui.getMainViewport().getSizeX();
+            viewportSizeY = (int) ImGui.getMainViewport().getSizeY();
+
+            float aspectRatio = ImGui.getMainViewport().getSizeX() / ImGui.getMainViewport().getSizeY();
+
+            float currentAspectRatio = frameWidth / (float) frameHeight;
+
+            if (currentAspectRatio < aspectRatio) {
+                int newHeight = (int)(frameWidth / aspectRatio);
+                frameY += (frameHeight - newHeight)/2;
+                frameHeight = newHeight;
+            } else if (currentAspectRatio > aspectRatio) {
+                int newWidth = (int)(frameHeight * aspectRatio);
+                frameX += (frameWidth - newWidth)/2;
+                frameWidth = newWidth;
+            }
+
+            ImGuiImplementation.setFrameWidth(frameWidth);
+            ImGuiImplementation.setFrameHeight(frameHeight);
+            ImGuiImplementation.setViewportSizeX(viewportSizeX);
+            ImGuiImplementation.setViewportSizeY(viewportSizeY);
+            ImGuiImplementation.setFrameX(frameX);
+            ImGuiImplementation.setFrameY(frameY);
 
             if (ImGui.isWindowHovered() && ImGui.isMouseClicked(GLFW.GLFW_MOUSE_BUTTON_RIGHT)) {
                 // If the main window is clicked, we grab the mouse
@@ -308,8 +334,6 @@ public class ImGuiImplementation {
                 GLFW.glfwSetCursorPos(handle, ImGui.getMainViewport().getSizeX()/2f, ImGui.getMainViewport().getSizeY()/2f);
             }
         }
-
-        //imGuiImplGlfw.setViewportWindowsHidden(!activeLastFrame);
     }
 
     public static boolean isActive() {
@@ -352,10 +376,6 @@ public class ImGuiImplementation {
     }
 
     public static void setFrameWidth(int frameWidth) {
-//        if (frameWidth > frameHeight * aspectRatio) {
-//            ImGuiImplementation.frameWidth = (int) (frameHeight * aspectRatio);
-//            return;
-//        }
         ImGuiImplementation.frameWidth = frameWidth;
     }
 
@@ -364,10 +384,6 @@ public class ImGuiImplementation {
     }
 
     public static void setFrameHeight(int frameHeight) {
-//        if (frameHeight > frameWidth * aspectRatio) {
-//            ImGuiImplementation.frameHeight = (int) (frameWidth * aspectRatio);
-//            return;
-//        }
         ImGuiImplementation.frameHeight = frameHeight;
     }
 
@@ -396,10 +412,18 @@ public class ImGuiImplementation {
     }
 
     public static int getNewGameWidth(float scale) {
-        return Math.max(1, Math.round(frameWidth * scale));
+        return Math.max(1, Math.round(frameWidth * scale)) + frameX;
     }
 
     public static int getNewGameHeight(float scale) {
-        return Math.max(1, Math.round(frameHeight * scale));
+        return Math.max(1, Math.round(frameHeight * scale)) + frameY;
+    }
+
+    public static ImVec2 getCenterViewportPos() {
+        return new ImVec2(frameX + frameWidth / 2f, frameY + frameHeight / 2f);
+    }
+
+    public static boolean shouldModifyViewport() {
+        return isActive();
     }
 }

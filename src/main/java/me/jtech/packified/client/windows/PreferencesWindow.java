@@ -1,11 +1,14 @@
 package me.jtech.packified.client.windows;
 
 import imgui.ImGui;
+import imgui.ImVec2;
 import imgui.extension.texteditor.flag.TextEditorPaletteIndex;
+import imgui.flag.ImGuiCond;
 import imgui.flag.ImGuiWindowFlags;
 import imgui.type.ImBoolean;
 import imgui.type.ImInt;
 import me.jtech.packified.Packified;
+import me.jtech.packified.client.NotificationHelper;
 import me.jtech.packified.client.PackifiedClient;
 import me.jtech.packified.client.imgui.ImGuiImplementation;
 import me.jtech.packified.client.imgui.ImguiThemes;
@@ -23,8 +26,12 @@ public class PreferencesWindow {
         if (!isOpen) {
             return; // If the window is not open, do not render
         }
-        // Render the settings window
-        if (ImGui.begin("Settings", ImGuiWindowFlags.NoResize| ImGuiWindowFlags.NoMove | ImGuiWindowFlags.NoCollapse)) {
+
+        // Set position to center of viewport
+        ImVec2 centerPos = ImGuiImplementation.getCenterViewportPos();
+        ImGui.setNextWindowPos(centerPos.x, centerPos.y, ImGuiCond.Always, 0.5f, 0.5f);
+
+        if (ImGui.begin("Settings")) {
             if (ImGui.collapsingHeader("General Settings")) {
                 if (ImGui.checkbox("Stay In Creative: ", stayInCreative)) {
                     ModConfig.updateSettings(Map.of("stayincreative", stayInCreative.get()));

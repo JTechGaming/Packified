@@ -2,7 +2,9 @@ package me.jtech.packified.client;
 
 import imgui.ImGui;
 import imgui.ImVec2;
+import imgui.flag.ImGuiCond;
 import imgui.flag.ImGuiWindowFlags;
+import me.jtech.packified.client.imgui.ImGuiImplementation;
 
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -14,6 +16,7 @@ public class NotificationHelper {
 
     public static void render() {
         Iterator<Notification> iterator = notifications.iterator();
+
         while (iterator.hasNext()) {
             Notification notification = iterator.next();
             if (!notification.hasProgressBar) {
@@ -23,13 +26,17 @@ public class NotificationHelper {
                     continue;
                 }
             }
-            if (notification.getProgress() >= notification.getMaxProgress() && !notification.hasProgressBar()) {
+            if (notification.getProgress() >= notification.getMaxProgress() && notification.hasProgressBar()) {
                 iterator.remove();
                 continue;
             }
 
-            ImGui.setNextWindowPos(ImGui.getWindowSizeX()/2 - 300,
-                    ImGui.getWindowSizeY()/2 - 100);
+            // Set position to center of viewport
+            ImVec2 centerPos = ImGuiImplementation.getCenterViewportPos();
+            ImGui.setNextWindowPos(centerPos.x, centerPos.y, ImGuiCond.Always, 0.5f, 0.5f);
+
+            ImGui.setNextWindowViewport(ImGui.getMainViewport().getID());
+
             ImGui.begin(notification.title, NOTIFY_DEFAULT_TOAST_FLAGS);
             ImGui.pushTextWrapPos();
             ImGui.text(notification.title);

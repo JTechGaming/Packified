@@ -4,8 +4,11 @@ import me.jtech.packified.client.imgui.CustomImGuiImplGlfw;
 import me.jtech.packified.client.imgui.ImGuiImplementation;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
+import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.Mouse;
+import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
@@ -14,6 +17,14 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 @Environment(EnvType.CLIENT)
 @Mixin(Mouse.class)
 public class MouseMixin {
+    @Shadow private double x;
+    @Shadow private double y;
+    @Shadow private double cursorDeltaX;
+    @Shadow private double cursorDeltaY;
+    @Shadow private boolean hasResolutionChanged;
+    @Final
+    @Shadow private MinecraftClient client;
+
     @Inject(method = "isCursorLocked", at=@At("HEAD"), cancellable = true)
     public void isMouseGrabbed(CallbackInfoReturnable<Boolean> cir) {
         if (ImGuiImplementation.isActive()) {

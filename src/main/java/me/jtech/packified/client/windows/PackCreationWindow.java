@@ -1,9 +1,12 @@
 package me.jtech.packified.client.windows;
 
 import imgui.ImGui;
+import imgui.ImVec2;
 import imgui.flag.ImGuiCol;
+import imgui.flag.ImGuiCond;
 import imgui.flag.ImGuiWindowFlags;
 import imgui.type.ImString;
+import me.jtech.packified.client.imgui.ImGuiImplementation;
 import me.jtech.packified.client.util.PackUtils;
 import net.minecraft.SharedConstants;
 import net.minecraft.client.MinecraftClient;
@@ -34,7 +37,10 @@ public class PackCreationWindow {
     public static void render() {
         if (!isOpen) return;
 
-        ImGui.begin("Pack Creation Wizard", ImGuiWindowFlags.NoMove | ImGuiWindowFlags.NoCollapse | ImGuiWindowFlags.NoResize);
+        // Set position to center of viewport
+        ImVec2 centerPos = ImGuiImplementation.getCenterViewportPos();
+        ImGui.setNextWindowPos(centerPos.x, centerPos.y, ImGuiCond.Always, 0.5f, 0.5f);
+        ImGui.begin("Pack Creation Wizard");
 
         ImGui.setNextItemWidth(150);
         ImGui.inputText("Pack Name", packName);

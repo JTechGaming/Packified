@@ -1,10 +1,13 @@
 package me.jtech.packified.client.windows;
 
 import imgui.ImGui;
+import imgui.ImVec2;
+import imgui.flag.ImGuiCond;
 import imgui.flag.ImGuiSelectableFlags;
 import imgui.flag.ImGuiTabBarFlags;
 import imgui.flag.ImGuiWindowFlags;
 import me.jtech.packified.client.PackifiedClient;
+import me.jtech.packified.client.imgui.ImGuiImplementation;
 import me.jtech.packified.client.util.FileUtils;
 import me.jtech.packified.client.util.PackUtils;
 import net.fabricmc.api.EnvType;
@@ -26,6 +29,11 @@ public class BackupWindow {
         if (!open) {
             return;
         }
+
+        // Set position to center of viewport
+        ImVec2 centerPos = ImGuiImplementation.getCenterViewportPos();
+        ImGui.setNextWindowPos(centerPos.x, centerPos.y, ImGuiCond.Always, 0.5f, 0.5f);
+
         if (ImGui.begin("Backups", ImGuiWindowFlags.MenuBar)) {
             ResourcePackProfile pack = PackifiedClient.currentPack;
             if (pack == null) {
