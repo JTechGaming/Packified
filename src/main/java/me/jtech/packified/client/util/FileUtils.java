@@ -270,7 +270,7 @@ public class FileUtils {
         }
     }
 
-    private static Path getPackFolderPath() {
+    public static Path getPackFolderPath() {
         if (PackifiedClient.currentPack == null) return null;
         return FabricLoader.getInstance().getGameDir()
                 .resolve("resourcepacks")
@@ -670,6 +670,7 @@ public class FileUtils {
 
     public static void moveFile(Path originalPath, String newRelativePath) {
         // move file
+        boolean wasOpen = EditorWindow.openFiles.stream().anyMatch(file -> file.getPath().equals(originalPath));
         EditorWindow.openFiles.removeIf(file -> file.getPath().equals(originalPath));
         if (newRelativePath.isEmpty()) {
             System.out.println("New path is empty");
@@ -682,13 +683,12 @@ public class FileUtils {
             return;
         }
 
-        Path newFilePath = originalPath.getParent().resolve(newRelativePath);
-        System.out.println(newFilePath);
+        Path newFilePath = packFolderPath.resolve(newRelativePath);
 
         try {
             // Ensure new file does not already exist
             if (Files.exists(newFilePath)) {
-                System.err.println("Cannot move: File with new path already exists -> " + newFilePath);
+                LogWindow.addInfo("Could not move file: File with new path already exists -> " + newFilePath);
                 return;
             }
 
@@ -699,8 +699,9 @@ public class FileUtils {
             Files.move(originalPath, newFilePath, StandardCopyOption.ATOMIC_MOVE);
 
             // Update open files in the editor
-            EditorWindow.openFiles.removeIf(file -> file.getPath().equals(originalPath));
-
+            if (wasOpen) {
+                openFile(newFilePath);
+            }
         } catch (IOException e) {
             System.err.println("Failed to move file: " + e.getMessage());
             e.printStackTrace();
@@ -708,6 +709,7 @@ public class FileUtils {
     }
 
     public static void renameFile(Path originalPath, String newRelativePath) {
+        boolean wasOpen = EditorWindow.openFiles.stream().anyMatch(file -> file.getPath().equals(originalPath));
         EditorWindow.openFiles.removeIf(file -> file.getPath().equals(originalPath));
         if (newRelativePath.isEmpty()) {
             System.out.println("New name is empty");
@@ -737,9 +739,9 @@ public class FileUtils {
             Files.move(originalPath, newFilePath, StandardCopyOption.ATOMIC_MOVE);
 
             // Update open files in the editor
-            EditorWindow.openFiles.removeIf(file -> file.getPath().equals(originalPath));
-
-            openFile(newFilePath);
+            if (wasOpen) {
+                openFile(newFilePath);
+            }
         } catch (IOException e) {
             System.err.println("Failed to rename file: " + e.getMessage());
             e.printStackTrace();
@@ -759,12 +761,11 @@ public class FileUtils {
 
     public static String getRelativePackPath(Path filePath, String name) {
         Path packFolderPath = getPackFolderPath();
-
         if (packFolderPath == null) {
             System.err.println("Resource pack folder is not set.");
             return filePath.toString();
         }
-        return packFolderPath.relativize(filePath).resolve(name).toString();
+        return filePath.resolve(name).toString();
     }
 
     public static void updateTexture(BufferedImage image, PackFile imageFile) {
@@ -803,5 +804,45 @@ public class FileUtils {
             throw new RuntimeException(e);
         }
         return totalSize;
+    }
+
+    public static String readFile(Path path) {
+        // Read file content
+        if (path == null || !Files.exists(path)) {
+            System.err.println("File not found: " + path);
+            return "";
+        }
+        try {
+            return Files.readString(path, StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            e.printStackTrace();
+            return "";
+        }
+    }
+
+    public static void generateFolderStructure() {
+        generateFolderStructure("textures/");
+        generateFolderStructure("textures/item/");
+        generateFolderStructure("textures/block/");
+        generateFolderStructure("textures/models/");
+        generateFolderStructure("models/");
+        generateFolderStructure("models/item/");
+        generateFolderStructure("models/block/");
+        generateFolderStructure("sounds/");
+        generateFolderStructure("sounds/block");
+        generateFolderStructure("sounds/records");
+        generateFolderStructure("lang/");
+        generateFolderStructure("shaders/");
+        generateFolderStructure("shaders/programs/");
+        generateFolderStructure("shaders/core/");
+    }
+
+    public static void generateFolderStructure(String s) {
+        // Generate folder structure based on the provided string
+        Path currentPath = getPackFolderPath();
+        currentPath = currentPath.resolve("assets/minecraft/").resolve(s);
+        System.out.println(currentPath);
+
+        currentPath.toFile().mkdirs();
     }
 }

@@ -51,6 +51,8 @@ public class EditorWindow {
         }
         // Editor window code
         if (ImGui.begin("File Editor", isOpen, ImGuiWindowFlags.MenuBar | ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse)) {
+            ImGuiImplementation.pushWindowCenterPos();
+
             if (ImGui.beginMenuBar()) {
                 if (ImGui.beginMenu("File")) {
                     if (ImGui.menuItem("Open")) {
@@ -132,6 +134,7 @@ public class EditorWindow {
 
             if (ImGui.beginTabBar("FileEditorTabs", ImGuiTabBarFlags.Reorderable | ImGuiTabBarFlags.AutoSelectNewTabs | ImGuiTabBarFlags.TabListPopupButton)) {
                 // Example of adding tabs dynamically
+
                 for (int i = 0; i < openFiles.size(); i++) {
                     if (ImGui.beginTabItem(openFiles.get(i).getFileName() + "##" + i, ImGuiTabItemFlags.None | (openFiles.get(i).isModified() ? ImGuiTabItemFlags.UnsavedDocument : 0))) {
                         if (openFiles.get(i).isModified()) {

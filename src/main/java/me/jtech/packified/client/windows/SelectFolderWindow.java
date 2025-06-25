@@ -129,7 +129,7 @@ public class SelectFolderWindow {
     public static void render() {
         if (!open.get()) return;
 
-        if (ImGui.begin("Select Folder")) {
+        if (ImGui.begin("Select Folder", open)) {
             if (ImGui.beginTable("SelectFolderTable", 3, ImGuiTableFlags.RowBg | ImGuiTableFlags.Resizable | ImGuiTableFlags.ScrollX | ImGuiTableFlags.ScrollY)) {
                 ImGui.tableSetupColumn("Name");
                 ImGui.tableSetupColumn("Size");

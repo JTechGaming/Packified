@@ -25,7 +25,7 @@ public class FileHierarchy {
     public static ImBoolean isOpen = new ImBoolean(true);
 
     private static boolean fileSelect;
-    private final Path filePath;
+    private Path filePath;
     private final Map<String, FileHierarchy> children = new HashMap<>();
 
     private static ImString searchQuery = new ImString();
@@ -49,7 +49,8 @@ public class FileHierarchy {
      * Recursively adds files and folders to their correct place in the hierarchy.
      */
     public void addFile(Path path) {
-        Path relativePath = filePath.relativize(path); // Get relative path from root
+        // Ensure the relative path is calculated correctly
+        Path relativePath = FileUtils.getPackFolderPath().relativize(path);
         List<String> parts = new ArrayList<>();
 
         for (Path p : relativePath) {
@@ -64,9 +65,14 @@ public class FileHierarchy {
         for (int i = 0; i < parts.size(); i++) {
             String part = parts.get(i);
             if (i == parts.size() - 1 && Files.isRegularFile(path)) {
+                // Add file to the hierarchy
                 current.children.putIfAbsent(part, new FileHierarchy(path));
             } else {
-                current.children.putIfAbsent(part, new FileHierarchy(filePath.resolve(part)));
+                // Construct the full path for the folder using relativePath
+                Path folderPath = FileUtils.getPackFolderPath().resolve(String.join("/", parts.subList(0, i + 1)));
+
+                // Add folder to the hierarchy
+                current.children.putIfAbsent(part, new FileHierarchy(folderPath));
                 current = current.children.get(part); // Navigate deeper
             }
         }
@@ -85,16 +91,14 @@ public class FileHierarchy {
 
             renderRightClickPopup(name, filePath, true);
 
-            if (!isOpen) {
-                // Enable Drag & Drop Target for Folders
-                if (ImGui.beginDragDropTarget()) {
-                    String payload = ImGui.acceptDragDropPayload("DND_FILE");
-                    if (payload != null) {
-                        Path draggedFile = Path.of(payload);
-                        FileUtils.moveFile(draggedFile, FileUtils.getRelativePackPath(filePath, draggedFile.getFileName().toString()));
-                    }
-                    ImGui.endDragDropTarget();
+            // Enable Drag & Drop Target for Folders
+            if (ImGui.beginDragDropTarget()) {
+                String payload = ImGui.acceptDragDropPayload("DND_FILE");
+                if (payload != null) {
+                    Path draggedFile = Path.of(payload);
+                    FileUtils.moveFile(draggedFile, filePath.resolve(draggedFile.getFileName()).toString()); // Move the file to the correct location
                 }
+                ImGui.endDragDropTarget();
             }
 
             if (isOpen) {
@@ -151,7 +155,7 @@ public class FileHierarchy {
     private static void drawFile(String name, Path filePath) {
         if (filePath == null) return;
         if (isEditingName && filePath.equals(selectedFile)) {
-            ImGui.inputText("##FileNameInput", fileNameInput, ImGuiInputTextFlags.EnterReturnsTrue | ImGuiInputTextFlags.AutoSelectAll);
+            ImGui.inputText("##FileNameInput", fileNameInput, ImGuiInputTextFlags.EnterReturnsTrue);
             if (ImGui.isItemDeactivatedAfterEdit()) {
                 isEditingName = false;
                 selectedFileName = null; // Reset the selected file name
@@ -189,6 +193,8 @@ public class FileHierarchy {
         alreadyRenderedHoverThisFrame = false;
 
         ImGui.begin("File Hierarchy", isOpen);
+
+        ImGuiImplementation.pushWindowCenterPos();
 
         ImGui.inputText("Search", searchQuery);
 
@@ -334,12 +340,90 @@ public class FileHierarchy {
                 }
                 ImGui.endMenu();
             }
+            if (ImGui.beginMenu("Generate")) {
+                if (ImGui.menuItem("All")) {
+                    FileUtils.generateFolderStructure();
+                }
+                ImGui.separator();
+                if (ImGui.beginMenu("Models")) {
+                    if (ImGui.menuItem("All")) {
+                        FileUtils.generateFolderStructure("models/");
+                    }
+                    ImGui.separator();
+                    if (ImGui.menuItem("Item")) {
+                        FileUtils.generateFolderStructure("models/item/");
+                    }
+                    if (ImGui.menuItem("Block")) {
+                        FileUtils.generateFolderStructure("models/block/item/");
+                        FileUtils.generateFolderStructure("models/block/block/");
+                    }
+                    ImGui.endMenu();
+                }
+                if (ImGui.beginMenu("Textures")) {
+                    if (ImGui.menuItem("All")) {
+                        FileUtils.generateFolderStructure("textures/");
+                        FileUtils.generateFolderStructure("textures/item/");
+                        FileUtils.generateFolderStructure("textures/block/");
+                    }
+                    ImGui.separator();
+                    if (ImGui.menuItem("Item")) {
+                        FileUtils.generateFolderStructure("textures/item/");
+                    }
+                    if (ImGui.menuItem("Block")) {
+                        FileUtils.generateFolderStructure("textures/block/");
+                    }
+                    ImGui.endMenu();
+                }
+                if (ImGui.beginMenu("Shaders")) {
+                    if (ImGui.menuItem("All")) {
+                        FileUtils.generateFolderStructure("shaders/programs/");
+                        FileUtils.generateFolderStructure("shaders/core/");
+                    }
+                    ImGui.separator();
+                    if (ImGui.menuItem("Programs")) {
+                        FileUtils.generateFolderStructure("shaders/programs/");
+                    }
+                    if (ImGui.menuItem("Core")) {
+                        FileUtils.generateFolderStructure("shaders/core/");
+                    }
+                    ImGui.endMenu();
+                }
+                if (ImGui.beginMenu("Sounds")) {
+                    if (ImGui.menuItem("All")) {
+                        FileUtils.generateFolderStructure("sounds/block/");
+                        FileUtils.generateFolderStructure("sounds/records/");
+                    }
+                    ImGui.separator();
+                    if (ImGui.menuItem("Block")) {
+                        FileUtils.generateFolderStructure("sounds/block/");
+                    }
+                    if (ImGui.menuItem("Records")) {
+                        FileUtils.generateFolderStructure("sounds/records/");
+                    }
+                    ImGui.endMenu();
+                }
+                if (ImGui.menuItem("Lang")) {
+                    FileUtils.generateFolderStructure("lang/");
+                }
+                if (ImGui.menuItem("Blockstates")) {
+                    FileUtils.generateFolderStructure("blockstates/");
+                }
+                if (ImGui.menuItem("Font")) {
+                    FileUtils.generateFolderStructure("font/");
+                }
+                ImGui.endMenu();
+            }
+
+            ImGui.separator();
             if (ImGui.menuItem("Load Pack")) {
                 selectedFile = path;
                 // Open the select pack window
                 SelectPackWindow.open.set(true);
             }
+
             if (!isFolder) {
+                ImGui.separator();
+
                 if (ImGui.menuItem("Open")) {
                     selectedFile = path;
 
@@ -350,10 +434,6 @@ public class FileHierarchy {
                 if (ImGui.beginMenu("Refactor")) {
                     if (ImGui.menuItem("Rename")) {
                         // Create a new file
-//                        ModifyFileWindow.open("Rename", path, (fileName) -> {
-//                            // Create the file
-//                            FileUtils.renameFile(path, fileName);
-//                        });
                         isEditingName = true;
                         fileNameInput.set(selectedFile.getFileName().toString());
                         selectedFileName = path.getFileName().toString();
@@ -381,6 +461,16 @@ public class FileHierarchy {
                         MinecraftClient.getInstance().keyboard.setClipboard(id.substring(0, id.lastIndexOf('.')));
                     }
                     ImGui.endMenu();
+                }
+                if (ImGui.menuItem("Duplicate")) {
+                    ModifyFileWindow.open("Duplicate File", path, (fileIdentifier) -> {
+                        // Create the file
+                        String fileName = fileIdentifier.substring(fileIdentifier.lastIndexOf('/') + 1);
+                        String newIdentifierPath = path.toString().substring(0, path.toString().lastIndexOf('/') + 1) + fileName;
+                        Path newPath = FileUtils.validateIdentifier(newIdentifierPath);
+                        String content = FileUtils.readFile(path);
+                        FileUtils.saveSingleFile(newPath, FileUtils.getFileExtension(fileName), content, PackifiedClient.currentPack);
+                    });
                 }
             }
             ImGui.separator();

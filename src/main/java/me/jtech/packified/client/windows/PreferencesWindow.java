@@ -31,7 +31,7 @@ public class PreferencesWindow {
         ImVec2 centerPos = ImGuiImplementation.getCenterViewportPos();
         ImGui.setNextWindowPos(centerPos.x, centerPos.y, ImGuiCond.Always, 0.5f, 0.5f);
 
-        if (ImGui.begin("Settings")) {
+        if (ImGui.begin("Settings", isOpen)) {
             if (ImGui.collapsingHeader("General Settings")) {
                 if (ImGui.checkbox("Stay In Creative: ", stayInCreative)) {
                     ModConfig.updateSettings(Map.of("stayincreative", stayInCreative.get()));

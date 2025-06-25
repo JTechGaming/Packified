@@ -445,6 +445,23 @@ public class ImGuiImplementation {
         return new ImVec2(frameX + frameWidth / 2f, frameY + frameHeight / 2f);
     }
 
+    private static ImVec2 lastCenterPos = null;
+
+    public static void pushWindowCenterPos() {
+        lastCenterPos = getCurrentWindowCenterPos();
+    }
+
+    public static ImVec2 getLastWindowCenterPos() {
+        if (lastCenterPos == null) {
+            return getCenterViewportPos();
+        }
+        return lastCenterPos;
+    }
+
+    public static ImVec2 getCurrentWindowCenterPos() {
+        return new ImVec2(ImGui.getWindowPosX() + ImGui.getWindowSizeX() / 2f, ImGui.getWindowPosY() + ImGui.getWindowSizeY() / 2f);
+    }
+
     public static boolean shouldModifyViewport() {
         return isActive();
     }

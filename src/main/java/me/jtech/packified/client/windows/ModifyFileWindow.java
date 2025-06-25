@@ -1,8 +1,11 @@
 package me.jtech.packified.client.windows;
 
 import imgui.ImGui;
+import imgui.ImVec2;
+import imgui.flag.ImGuiCond;
 import imgui.type.ImBoolean;
 import imgui.type.ImString;
+import me.jtech.packified.client.imgui.ImGuiImplementation;
 import me.jtech.packified.client.util.FileUtils;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
@@ -28,7 +31,12 @@ public class ModifyFileWindow {
 
     public static void render() {
         if (!open.get()) return;
-        if (ImGui.begin("ModifyFilePopup")) {
+
+        // Set position to center
+        ImVec2 centerPos = ImGuiImplementation.getLastWindowCenterPos();
+        ImGui.setNextWindowPos(centerPos.x, centerPos.y, ImGuiCond.Always, 0.5f, 0.5f);
+
+        if (ImGui.begin("ModifyFilePopup", open)) {
             fileName = new ImString(fileName.get(), fileName.getLength() + 8);
             ImGui.inputText("File Name:", fileName);
             ImGui.sameLine();
