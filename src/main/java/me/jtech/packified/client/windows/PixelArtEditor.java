@@ -3,7 +3,6 @@ package me.jtech.packified.client.windows;
 import imgui.ImGui;
 import imgui.ImGuiIO;
 import imgui.flag.ImGuiWindowFlags;
-import imgui.type.ImFloat;
 import imgui.type.ImInt;
 import me.jtech.packified.client.imgui.ImGuiImplementation;
 import org.lwjgl.BufferUtils;
@@ -121,12 +120,12 @@ public class PixelArtEditor {
         int height = image.getHeight();
 
         // Tool Buttons
-        ImGui.imageButton(ImGuiImplementation.loadTexture("textures/ui/neu_pencil.png"), 14, 14);
+        ImGui.imageButton(ImGuiImplementation.loadTextureFromIdentifier("textures/ui/neu_pencil.png"), 14, 14);
         if (ImGui.isItemClicked()) {
             currentTool = Tool.PEN;
         }
         ImGui.sameLine();
-        ImGui.imageButton(ImGuiImplementation.loadTexture("textures/ui/neu_bucket.png"), 14, 14);
+        ImGui.imageButton(ImGuiImplementation.loadTextureFromIdentifier("textures/ui/neu_bucket.png"), 14, 14);
         if (ImGui.isItemClicked()) {
             currentTool = Tool.PAINT_BUCKET;
         }
@@ -135,12 +134,12 @@ public class PixelArtEditor {
             ImGui.endPopup();
         }
         ImGui.sameLine();
-        ImGui.imageButton(ImGuiImplementation.loadTexture("textures/ui/neu_select.png"), 14, 14);
+        ImGui.imageButton(ImGuiImplementation.loadTextureFromIdentifier("textures/ui/neu_select.png"), 14, 14);
         if (ImGui.isItemClicked()) {
             currentTool = Tool.SELECT;
         }
         ImGui.sameLine();
-        ImGui.imageButton(ImGuiImplementation.loadTexture("textures/ui/neu_eraser.png"), 14, 14);
+        ImGui.imageButton(ImGuiImplementation.loadTextureFromIdentifier("textures/ui/neu_eraser.png"), 14, 14);
         if (ImGui.isItemClicked()) {
             currentTool = Tool.ERASER;
         }
@@ -200,6 +199,8 @@ public class PixelArtEditor {
 
         ImGui.image(textureId, width * scale, height * scale);
 
+        renderPixelGuidelineGrid();
+
         boolean mouseHovered = ImGui.isItemHovered();
         boolean leftMouseDown = ImGui.isMouseDown(0);
 
@@ -245,6 +246,45 @@ public class PixelArtEditor {
         }
 
         ImGui.endChild();
+    }
+
+    private void renderPixelGuidelineGrid() {
+        if (image == null || !EditorWindow.showGrid) return;
+
+        int width = image.getWidth();
+        int height = image.getHeight();
+
+        // Draw vertical lines
+        for (int x = 0; x < width; x += toolSize.get()) {
+            ImGui.getWindowDrawList().addLine(
+                    ImGui.getItemRectMinX() + x * scale + imagePosX,
+                    ImGui.getItemRectMinY(),
+                    ImGui.getItemRectMinX() + x * scale + imagePosX,
+                    ImGui.getItemRectMinY() + height * scale,
+                    setColorOpacity(0xFF000000, scaleLineOpacity()), 1.0f);
+        }
+
+        // Draw horizontal lines
+        for (int y = 0; y < height; y += toolSize.get()) {
+            ImGui.getWindowDrawList().addLine(
+                    ImGui.getItemRectMinX(),
+                    ImGui.getItemRectMinY() + y * scale + imagePosY,
+                    ImGui.getItemRectMinX() + width * scale,
+                    ImGui.getItemRectMinY() + y * scale + imagePosY,
+                    setColorOpacity(0xFF000000, scaleLineOpacity()), 1.0f);
+        }
+    }
+
+    private int scaleLineOpacity() {
+        int max = 0xFF;
+        int min = 0x00;
+        int scaledOpacity = (int) (max * (1.05f - (scale / MAX_SCALE)));
+        return Math.max(min, Math.min(max, scaledOpacity));
+    }
+
+    private int setColorOpacity(int color, float opacity) {
+        int alpha = (int) (opacity * 255);
+        return (alpha << 24) | (color & 0x00FFFFFF); // Set alpha while keeping RGB
     }
 
     private void clampImagePosition() {

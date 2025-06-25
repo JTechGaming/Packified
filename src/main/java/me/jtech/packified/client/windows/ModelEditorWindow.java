@@ -25,17 +25,132 @@ import static org.lwjgl.glfw.GLFW.*;
 public class ModelEditorWindow {
     public static void loadModel(File modelFile) {
         Gson gson = new Gson();
-        MinecraftModel model;
+        MinecraftModel model = null;
 
         try (Reader reader = new FileReader(modelFile)) {
             model = gson.fromJson(reader, MinecraftModel.class);
+            if (model == null || model.elements == null || model.elements.length == 0) {
+                System.err.println("Invalid model file or no elements found.");
+                return;
+            }
         } catch (IOException e) {
             e.printStackTrace();
         }
+
+        if (model == null) return;
+
+        // Apply display transformations (if present)
+        float[] displayScale = {1.f, 1.f, 1.f};
+        float[] displayTranslation = {0.f, 0.f, 0.f};
+        float[] displayRotation = {0.f, 0.f, 0.f};
+
+        if (model.display != null && model.display.fixed != null) {
+            displayScale = model.display.fixed.scale != null ? model.display.fixed.scale : displayScale;
+            displayTranslation = model.display.fixed.translation != null ? model.display.fixed.translation : displayTranslation;
+            displayRotation = model.display.fixed.rotation != null ? model.display.fixed.rotation : displayRotation;
+        }
+
+        // Initialize OBJECT_MATRICES based on the model elements
+        OBJECT_MATRICES = new float[model.elements.length][16];
+        for (int i = 0; i < model.elements.length; i++) {
+            MinecraftModel.Element element = model.elements[i];
+            System.out.println(element);
+            OBJECT_MATRICES[i] = new float[16];
+            Arrays.fill(OBJECT_MATRICES[i], 0.f);
+            OBJECT_MATRICES[i][0] = 1.f; // Identity matrix
+            OBJECT_MATRICES[i][5] = 1.f;
+            OBJECT_MATRICES[i][10] = 1.f;
+            OBJECT_MATRICES[i][15] = 1.f;
+
+            // Set translation based on 'from' and 'to'
+            if (element.from != null && element.to != null) {
+                OBJECT_MATRICES[i][12] = (element.from[0] + element.to[0]) / 2;
+                OBJECT_MATRICES[i][13] = (element.from[1] + element.to[1]) / 2;
+                OBJECT_MATRICES[i][14] = (element.from[2] + element.to[2]) / 2;
+            }
+
+            // Apply rotation if present
+            if (element.rotation != null) {
+                applyRotation(OBJECT_MATRICES[i], element.rotation);
+            }
+
+            // Apply display transformations
+            applyDisplayTransformations(OBJECT_MATRICES[i], displayTranslation, displayRotation, displayScale);
+        }
+    }
+
+    private static void applyDisplayTransformations(float[] matrix, float[] translation, float[] rotation, float[] scale) {
+        // Apply translation
+        matrix[12] += translation[0];
+        matrix[13] += translation[1];
+        matrix[14] += translation[2];
+
+        // Apply rotation (around X, Y, Z axes)
+        if (rotation[0] != 0) applyRotation(matrix, new MinecraftModel.Rotation(new float[]{0, 0, 0}, MinecraftModel.Axis.X, rotation[0]));
+        if (rotation[1] != 0) applyRotation(matrix, new MinecraftModel.Rotation(new float[]{0, 0, 0}, MinecraftModel.Axis.Y, rotation[1]));
+        if (rotation[2] != 0) applyRotation(matrix, new MinecraftModel.Rotation(new float[]{0, 0, 0}, MinecraftModel.Axis.Z, rotation[2]));
+
+        // Apply scale
+        matrix[0] *= scale[0];
+        matrix[5] *= scale[1];
+        matrix[10] *= scale[2];
+    }
+
+    private static void applyRotation(float[] objectMatrix, MinecraftModel.Rotation rotation) {
+        if (rotation == null || rotation.origin == null || rotation.axis == null) {
+            return; // No rotation to apply
+        }
+
+        float[] origin = rotation.origin;
+        float angle = rotation.angle;
+        MinecraftModel.Axis axis = rotation.axis;
+
+        // Translate to origin
+        objectMatrix[12] -= origin[0];
+        objectMatrix[13] -= origin[1];
+        objectMatrix[14] -= origin[2];
+
+        // Apply rotation around the specified axis
+        switch (axis) {
+            case X:
+                objectMatrix[5] = (float) Math.cos(angle);
+                objectMatrix[6] = (float) -Math.sin(angle);
+                objectMatrix[9] = (float) Math.sin(angle);
+                objectMatrix[10] = (float) Math.cos(angle);
+                break;
+            case Y:
+                objectMatrix[0] = (float) Math.cos(angle);
+                objectMatrix[2] = (float) Math.sin(angle);
+                objectMatrix[8] = (float) -Math.sin(angle);
+                objectMatrix[10] = (float) Math.cos(angle);
+                break;
+            case Z:
+                objectMatrix[0] = (float) Math.cos(angle);
+                objectMatrix[1] = (float) -Math.sin(angle);
+                objectMatrix[4] = (float) Math.sin(angle);
+                objectMatrix[5] = (float) Math.cos(angle);
+                break;
+        }
+
+        // Translate back from origin
+        objectMatrix[12] += origin[0];
+        objectMatrix[13] += origin[1];
+        objectMatrix[14] += origin[2];
     }
 
     public class MinecraftModel {
         public Element[] elements;
+        public Display display;
+
+        public static class Display {
+            public Fixed fixed;
+
+            public static class Fixed {
+                public float[] rotation;
+                public float[] translation;
+                public float[] scale;
+            }
+        }
 
         public enum Axis {
             X, Y, Z
@@ -49,8 +164,14 @@ public class ModelEditorWindow {
 
         public static class Rotation {
             public float[] origin;
-            public Axis axis; // "x", "y", or "z"
+            public Axis axis;
             public float angle;
+
+            public Rotation(float[] origin, Axis axis, float angle) {
+                this.origin = origin;
+                this.axis = axis;
+                this.angle = angle;
+            }
         }
     }
 
@@ -61,7 +182,7 @@ public class ModelEditorWindow {
     private static final float CAM_X_ANGLE = 32.f / 180.f * (float) Math.PI;
     private static final float FLT_EPSILON = 1.19209290E-07f;
 
-    private static final float[][] OBJECT_MATRICES = {
+    private static float[][] OBJECT_MATRICES = {
             {
                     1.f, 0.f, 0.f, 0.f,
                     0.f, 1.f, 0.f, 0.f,
@@ -189,6 +310,8 @@ public class ModelEditorWindow {
             currentGizmoOperation = Operation.SCALE;
         } else if (ImGui.isKeyPressed(GLFW_KEY_LEFT_SHIFT)) {
             USE_SNAP.set(!USE_SNAP.get());
+        } else if (ImGui.isKeyPressed(GLFW_KEY_B)) {
+            loadModel(Path.of("C:\\Users\\jaspe\\Downloads\\template_anvil.json").toFile());
         }
 
         if (ImGuizmo.isUsing()) {
@@ -262,6 +385,12 @@ public class ModelEditorWindow {
         ImGuizmo.setId(0);
         ImGuizmo.drawCubes(INPUT_CAMERA_VIEW, cameraProjection, OBJECT_MATRICES[0]);
 
+        if (!isIsCursorInsideWindow()) {
+            ImGui.endChild();
+            ImGui.end();
+            return;
+        }
+
         if (USE_SNAP.get() && BOUNDING_SIZE.get() && boundSizingSnap) {
             ImGuizmo.manipulate(INPUT_CAMERA_VIEW, cameraProjection, OBJECT_MATRICES[0], null, currentGizmoOperation, currentMode, INPUT_SNAP_VALUE, INPUT_BOUNDS, INPUT_BOUNDS_SNAP);
         } else if (USE_SNAP.get() && BOUNDING_SIZE.get()) {
@@ -282,6 +411,20 @@ public class ModelEditorWindow {
 
         ImGui.endChild();
         ImGui.end();
+    }
+
+    private static boolean isIsCursorInsideWindow() {
+        float mouseX = ImGui.getMousePosX();
+        float mouseY = ImGui.getMousePosY();
+        float windowX = ImGui.getWindowPosX();
+        float windowY = ImGui.getWindowPosY();
+        float windowWidth = ImGui.getWindowWidth();
+        float windowHeight = ImGui.getWindowHeight();
+
+        // Check if the cursor is within the window bounds
+        boolean isCursorInsideWindow = mouseX >= windowX && mouseX <= (windowX + windowWidth) &&
+                mouseY >= windowY && mouseY <= (windowY + windowHeight);
+        return isCursorInsideWindow;
     }
 
     private static float[] perspective(float fovY, float aspect, float near, float far) {

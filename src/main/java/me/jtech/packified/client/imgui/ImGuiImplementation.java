@@ -1,18 +1,15 @@
 package me.jtech.packified.client.imgui;
 
 import com.mojang.blaze3d.platform.GlStateManager;
-import imgui.ImDrawList;
 import imgui.ImGui;
 import imgui.ImGuiIO;
 import imgui.ImVec2;
 import imgui.extension.implot.ImPlot;
-import imgui.extension.implot.ImPlotContext;
-import imgui.extension.implot.flag.ImPlotBin;
-import imgui.extension.implot.flag.ImPlotFlags;
 import imgui.flag.ImGuiConfigFlags;
 import imgui.flag.ImGuiDockNodeFlags;
 import imgui.flag.ImGuiWindowFlags;
 import imgui.internal.ImGuiContext;
+import imgui.type.ImBoolean;
 import me.jtech.packified.Packified;
 import me.jtech.packified.client.CornerNotificationsHelper;
 import me.jtech.packified.client.NotificationHelper;
@@ -35,6 +32,7 @@ import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.file.Path;
 
 import static org.lwjgl.glfw.GLFW.*;
 
@@ -222,6 +220,7 @@ public class ImGuiImplementation {
         ImGui.end();
 
         // Window rendering
+        LogWindow.render();
         EditorWindow.render();
         FileHierarchy.render();
         BackupWindow.render();
@@ -258,15 +257,38 @@ public class ImGuiImplementation {
         ImPlot.destroyContext(ImPlot.getCurrentContext());
     }
 
-    public static int loadTexture(String filePath) {
+    public static int loadTextureFromIdentifier(String identifierPath) {
         try {
-            Resource resource = MinecraftClient.getInstance().getResourceManager().getResource(Identifier.of(Packified.MOD_ID, filePath)).get();
+            Resource resource = MinecraftClient.getInstance().getResourceManager().getResource(Identifier.of(Packified.MOD_ID, identifierPath)).get();
             BufferedImage image = ImageIO.read(resource.getInputStream());
             return fromBufferedImage(image);
         } catch (IOException e) {
             e.printStackTrace();
             return -1;
         }
+    }
+
+    public static int loadTextureFromPath(Path filePath) {
+        try {
+            BufferedImage image = ImageIO.read(filePath.toFile());
+            return fromBufferedImage(image);
+        } catch (IOException e) {
+            e.printStackTrace();
+            return -1;
+        }
+    }
+
+    public static BufferedImage getBufferedImageFromPath(Path filePath) {
+        try {
+            return ImageIO.read(filePath.toFile());
+        } catch (IOException e) {
+            e.printStackTrace();
+            return null;
+        }
+    }
+
+    public static int loadTextureFromBufferedImage(BufferedImage image) {
+        return fromBufferedImage(image);
     }
 
     //Can be used to load buffered images in ImGui

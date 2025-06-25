@@ -6,6 +6,7 @@ import imgui.flag.ImGuiCond;
 import imgui.flag.ImGuiSelectableFlags;
 import imgui.flag.ImGuiTabBarFlags;
 import imgui.flag.ImGuiWindowFlags;
+import imgui.type.ImBoolean;
 import me.jtech.packified.client.PackifiedClient;
 import me.jtech.packified.client.imgui.ImGuiImplementation;
 import me.jtech.packified.client.util.FileUtils;
@@ -23,10 +24,10 @@ import java.util.stream.Stream;
 
 @Environment(EnvType.CLIENT)
 public class BackupWindow {
-    public static boolean open = false;
+    public static ImBoolean open = new ImBoolean(false);
 
     public static void render() {
-        if (!open) {
+        if (!open.get()) {
             return;
         }
 
@@ -34,7 +35,7 @@ public class BackupWindow {
         ImVec2 centerPos = ImGuiImplementation.getCenterViewportPos();
         ImGui.setNextWindowPos(centerPos.x, centerPos.y, ImGuiCond.Always, 0.5f, 0.5f);
 
-        if (ImGui.begin("Backups", ImGuiWindowFlags.MenuBar)) {
+        if (ImGui.begin("Backups", open, ImGuiWindowFlags.MenuBar)) {
             ResourcePackProfile pack = PackifiedClient.currentPack;
             if (pack == null) {
                 ImGui.setCursorPos((ImGui.getWindowWidth() - ImGui.calcTextSize("No pack loaded").x) / 2, (ImGui.getWindowHeight() - ImGui.getTextLineHeightWithSpacing()) / 2);
@@ -42,7 +43,7 @@ public class BackupWindow {
                 // Centered button to load a pack
                 ImGui.setCursorPos((ImGui.getWindowWidth() - ImGui.calcTextSize("Load Pack").x) / 2, (ImGui.getWindowHeight() - ImGui.getTextLineHeightWithSpacing()) / 2 + ImGui.getTextLineHeightWithSpacing());
                 if (ImGui.button("Load Pack")) {
-                    SelectPackWindow.open = true;
+                    SelectPackWindow.open.set(true);
                 }
                 ImGui.end();
                 return;
@@ -63,7 +64,7 @@ public class BackupWindow {
                                     } catch (IOException e) {
                                         e.printStackTrace();
                                     }
-                                    open = false;
+                                    open.set(false);
                                 }
                             }
                             if (ImGui.beginPopupContextItem(path.getFileName().toString())) {
@@ -74,7 +75,7 @@ public class BackupWindow {
                                     } catch (IOException e) {
                                         e.printStackTrace();
                                     }
-                                    open = false;
+                                    open.set(false);
                                 }
                                 if (ImGui.menuItem("Delete")) {
                                     // Delete file

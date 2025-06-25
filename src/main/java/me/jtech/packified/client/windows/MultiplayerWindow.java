@@ -3,33 +3,31 @@ package me.jtech.packified.client.windows;
 import imgui.ImGui;
 import imgui.flag.ImGuiCol;
 import imgui.flag.ImGuiTableFlags;
+import imgui.type.ImBoolean;
 import me.jtech.packified.Packified;
-import me.jtech.packified.SyncPacketData;
 import me.jtech.packified.client.PackifiedClient;
 import me.jtech.packified.client.imgui.ImGuiImplementation;
-import me.jtech.packified.client.util.FileUtils;
-import me.jtech.packified.client.util.PackFile;
 import me.jtech.packified.client.util.PackUtils;
 import me.jtech.packified.packets.C2SRequestFullPack;
-import me.jtech.packified.packets.C2SSyncPackChanges;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.MinecraftClient;
-import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.resource.ResourcePackProfile;
-import net.minecraft.text.Text;
 
-import java.util.ArrayList;
-import java.util.List;
 import java.util.UUID;
 
 @Environment(EnvType.CLIENT)
 public class MultiplayerWindow {
+    public static ImBoolean isOpen = new ImBoolean(true);
+
     public static void render() {
+        if (!isOpen.get()) {
+            return; // If the window is not open, do not render
+        }
         // Render the multiplayer window
-        if (ImGui.begin("Multiplayer")) {
-            ImGui.imageButton(ImGuiImplementation.loadTexture("textures/ui/neu_sync.png"), 14, 14);
+        if (ImGui.begin("Multiplayer", isOpen)) {
+            ImGui.imageButton(ImGuiImplementation.loadTextureFromIdentifier("textures/ui/neu_sync.png"), 14, 14);
             if (ImGui.isItemClicked()) {
                 // Sync the pack to all the server players
                 ResourcePackProfile pack = PackifiedClient.currentPack;
@@ -39,7 +37,7 @@ public class MultiplayerWindow {
                 ImGui.setTooltip("Sync your pack to all the server players");
             }
             ImGui.sameLine();
-            ImGui.imageButton(ImGuiImplementation.loadTexture("textures/ui/neu_upload.png"), 14, 14);
+            ImGui.imageButton(ImGuiImplementation.loadTextureFromIdentifier("textures/ui/neu_upload.png"), 14, 14);
             if (ImGui.isItemClicked()) {
                 // Upload the pack to the server
                 ResourcePackProfile pack = PackifiedClient.currentPack;

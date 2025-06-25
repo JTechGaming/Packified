@@ -12,6 +12,7 @@ import me.jtech.packified.client.util.PackFile;
 import me.jtech.packified.client.util.PackUtils;
 import me.jtech.packified.client.windows.ConfirmWindow;
 import me.jtech.packified.client.windows.EditorWindow;
+import me.jtech.packified.client.windows.LogWindow;
 import me.jtech.packified.packets.*;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.api.EnvType;
@@ -80,6 +81,8 @@ public class PackifiedClient implements ClientModInitializer {
             }
         });
 
+        LogWindow.addLog("Packified Client initialized", LogWindow.LogType.INFO.getColor());
+
         // Prevent Minecraft from locking the cursor when clicking
         ClientTickEvents.START_CLIENT_TICK.register(client -> {
             if (shouldRender) {
@@ -123,6 +126,9 @@ public class PackifiedClient implements ClientModInitializer {
             if (notification.get() != null) {
                 notification.get().setProgress(notification.get().getProgress() + 1);
             }
+
+            LogWindow.addLog("Downloading pack from server: " + payload.packetData().packName(), LogWindow.LogType.INFO.getColor());
+            LogWindow.addLog(notification.get().getProgress() + " / " + notification.get().getMaxProgress(), LogWindow.LogType.INFO.getColor());
 
             accumulativeAssetDownload(data, currentPack, notification.get());
         });
@@ -222,6 +228,7 @@ public class PackifiedClient implements ClientModInitializer {
                 notification.setProgress(notification.getMaxProgress());
             }
             isFirstPacket = true;
+            LogWindow.addLog("Pack " + pack.getDisplayName().getString() + " downloaded successfully!", LogWindow.LogType.INFO.getColor());
         }
     }
 

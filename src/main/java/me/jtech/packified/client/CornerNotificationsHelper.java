@@ -3,6 +3,7 @@ package me.jtech.packified.client;
 import imgui.ImGui;
 import imgui.flag.ImGuiCond;
 import imgui.flag.ImGuiWindowFlags;
+import me.jtech.packified.client.windows.LogWindow;
 import net.minecraft.client.MinecraftClient;
 
 import java.awt.*;
@@ -15,9 +16,16 @@ public class CornerNotificationsHelper {
 
     public static void addNotification(String message, String description, Color color, float durationSeconds) {
         notifications.add(new ImGuiNotification(message, description, color, durationSeconds));
+
+        // Forward the notification to the log
+        LogWindow.addLog(message + ": " + description, color);
     }
 
     public static void render() {
+        if (notifications.isEmpty()) {
+            return; // Exit early if there are no notifications
+        }
+
         int screenWidth = (int) ImGui.getMainViewport().getSizeX();
         int screenHeight = (int) ImGui.getMainViewport().getSizeY();
 

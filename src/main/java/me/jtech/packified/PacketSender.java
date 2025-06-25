@@ -1,5 +1,6 @@
 package me.jtech.packified;
 
+import me.jtech.packified.client.windows.LogWindow;
 import me.jtech.packified.packets.C2SSendFullPack;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.network.packet.CustomPayload;
@@ -20,12 +21,18 @@ public class PacketSender {
         for (int i = 0; i < PPT && !packetQueue.isEmpty(); i++) {
             C2SSendFullPack packet = packetQueue.poll();
             if (packet != null) {
-                sendPacket(packet);
+                sendPacket(packet, i);
+            }
+
+            if (packetQueue.isEmpty()) {
+                LogWindow.addLog("All packets sent successfully.", LogWindow.LogType.INFO.getColor());
             }
         }
     }
 
-    private static void sendPacket(CustomPayload packet) {
+    private static void sendPacket(C2SSendFullPack packet, int i) {
         ClientPlayNetworking.send(packet);
+        LogWindow.addLog("Packet sent: " + packet.getId().toString(), LogWindow.LogType.INFO.getColor());
+        LogWindow.addLog(i + " / " + packet.packetData().packetAmount() + " packets sent.", LogWindow.LogType.INFO.getColor());
     }
 }

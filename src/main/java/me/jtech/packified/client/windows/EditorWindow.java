@@ -11,9 +11,7 @@ import imgui.flag.ImGuiCol;
 import imgui.flag.ImGuiTabBarFlags;
 import imgui.flag.ImGuiTabItemFlags;
 import imgui.flag.ImGuiWindowFlags;
-import imgui.internal.flag.ImGuiItemFlags;
 import imgui.type.ImBoolean;
-import imgui.type.ImInt;
 import me.jtech.packified.client.PackifiedClient;
 import me.jtech.packified.client.imgui.ImGuiImplementation;
 import me.jtech.packified.client.util.*;
@@ -36,10 +34,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 @Environment(EnvType.CLIENT)
 public class EditorWindow {
     public static List<PackFile> openFiles = new ArrayList<>();
-    public static ImBoolean isOpen = new ImBoolean(false);
-    private static ImInt toolSize = new ImInt(1);
-
-    private static float[] color = new float[]{1.0f, 1.0f, 1.0f};
+    public static ImBoolean isOpen = new ImBoolean(true);
 
     public static int modifiedFiles = 0;
 
@@ -47,18 +42,13 @@ public class EditorWindow {
 
     private static AtomicBoolean isPlaying = new AtomicBoolean(false);
 
-    private enum Tool {
-        PEN,
-        PAINT_BUCKET,
-        SELECT,
-        ERASER
-    }
-
-    private static Tool currentTool = Tool.PEN;
-
     public static PackFile currentFile;
+    public static boolean showGrid;
 
     public static void render() {
+        if (!isOpen.get()) {
+            return; // If the window is not open, do not render
+        }
         // Editor window code
         if (ImGui.begin("File Editor", isOpen, ImGuiWindowFlags.MenuBar | ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse)) {
             if (ImGui.beginMenuBar()) {
@@ -95,12 +85,20 @@ public class EditorWindow {
                     }
                     ImGui.endMenu();
                 }
+                if (currentFile != null && currentFile.getExtension().equalsIgnoreCase(".png")) {
+                    if (ImGui.beginMenu("Image")) {
+                        if (ImGui.menuItem("Show Grid")) {
+                            showGrid = !showGrid; // Toggle grid visibility
+                        }
+                        ImGui.endMenu();
+                    }
+                }
                 ImGui.endMenuBar();
             }
 
             ImGui.pushStyleColor(ImGuiCol.FrameBg, 0x00000000);
             ImGui.beginChild("Toolbar", ImGui.getWindowWidth(), 40, false, ImGuiWindowFlags.HorizontalScrollbar);
-            ImGui.imageButton(ImGuiImplementation.loadTexture("textures/ui/neu_save.png"), 24, 24);
+            ImGui.imageButton(ImGuiImplementation.loadTextureFromIdentifier("textures/ui/neu_save.png"), 24, 24);
             if (ImGui.isItemClicked()) {
                 // Logic to save the current file
                 if (currentFile != null) {
@@ -111,7 +109,7 @@ public class EditorWindow {
                 ImGui.setTooltip("Save (Ctrl+S)");
             }
             ImGui.sameLine();
-            ImGui.imageButton(ImGuiImplementation.loadTexture("textures/ui/neu_save-all.png"), 24, 24);
+            ImGui.imageButton(ImGuiImplementation.loadTextureFromIdentifier("textures/ui/neu_save-all.png"), 24, 24);
             if (ImGui.isItemClicked()) {
                 // Logic to save all files
                 FileUtils.saveAllFiles();
@@ -120,7 +118,7 @@ public class EditorWindow {
                 ImGui.setTooltip("Save All (Ctrl+Shift+S)");
             }
             ImGui.sameLine();
-            ImGui.imageButton(ImGuiImplementation.loadTexture("textures/ui/neu_reload.png"), 24, 24);
+            ImGui.imageButton(ImGuiImplementation.loadTextureFromIdentifier("textures/ui/neu_reload.png"), 24, 24);
             if (ImGui.isItemClicked()) {
                 // Logic to save all files
                 PackUtils.reloadPack();
@@ -174,12 +172,27 @@ public class EditorWindow {
         ImGui.end();
     }
 
+    private static AudioPlayer audioPlayer = new AudioPlayer();
+
     private static void renderAudioFileEditor(PackFile audioFile) {
         float[] waveform = convertToWaveform(audioFile.getSoundContent());
         if (waveform.length > 0) {
             ImGui.plotLines("Waveform", waveform, waveform.length); //, 0, null, -1.0f, 1.0f, new ImVec2(400, 100)
         } else {
             ImGui.text("No waveform data available");
+        }
+        int sampleRate = 44100; // Default sample rate for OGG files, can be adjusted based on actual data
+        int channels = 1; // Assuming stereo audio, adjust if mono
+        if (!audioPlayer.loaded) {
+            audioPlayer.load(waveform, sampleRate, channels);
+        }
+        if (ImGui.button("Play")) {
+            if (!audioPlayer.isPlaying()) {
+                audioPlayer.play();
+            }
+        }
+        if (!audioPlayer.isPlaying()) {
+            // idk clean up or smth
         }
     }
 

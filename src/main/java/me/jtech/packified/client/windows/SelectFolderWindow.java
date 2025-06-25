@@ -2,6 +2,7 @@ package me.jtech.packified.client.windows;
 
 import imgui.ImGui;
 import imgui.flag.ImGuiTableFlags;
+import imgui.type.ImBoolean;
 import imgui.type.ImString;
 import me.jtech.packified.client.PackifiedClient;
 import me.jtech.packified.client.util.FileUtils;
@@ -17,7 +18,7 @@ import java.util.stream.Stream;
 
 @Environment(EnvType.CLIENT)
 public class SelectFolderWindow {
-    public static boolean open = false;
+    public static ImBoolean open = new ImBoolean(false);
     private static String fileName = "";
     private static String extension = "";
     private static String content = "";
@@ -30,7 +31,7 @@ public class SelectFolderWindow {
      * Open the select folder window with the given file name, extension, and content
      */
     public static void open(String fileName, String extension, String content) {
-        open = true;
+        open.set(true);
         SelectFolderWindow.fileName = fileName;
         SelectFolderWindow.extension = extension;
         SelectFolderWindow.content = content;
@@ -40,7 +41,7 @@ public class SelectFolderWindow {
      * Open the select folder window with the given folder name and its files
      */
     public static void open(String folderName, List<Path> filePaths) {
-        open = true;
+        open.set(true);
         SelectFolderWindow.fileName = folderName;
         Map<Path, String> fileMap = new HashMap<>();
 
@@ -56,12 +57,10 @@ public class SelectFolderWindow {
     }
 
     public static void close(Path selectedFolder) {
-        if (!open) return; // Prevent multiple executions
-        open = false;
+        if (!open.get()) return; // Prevent multiple executions
+        open.set(false);
 
         if (selectedFolder == null) return;
-
-        System.out.println("Final Selected Folder: " + selectedFolder);
 
         if (!files.isEmpty()) {
             for (Map.Entry<Path, String> entry : files.entrySet()) {
@@ -69,12 +68,12 @@ public class SelectFolderWindow {
                 String content = entry.getValue();
 
                 Path targetPath = selectedFolder.resolve(file.getFileName());
-                System.out.println("Saving file to: " + targetPath);
+                LogWindow.addInfo("Saving file to: " + targetPath);
                 FileUtils.saveSingleFile(targetPath, FileUtils.getFileExtension(file.getFileName().toString()), content, PackifiedClient.currentPack);
             }
         } else {
             Path targetPath = selectedFolder.resolve(fileName);
-            System.out.println("Saving single file to: " + targetPath);
+            LogWindow.addInfo("Saving single file to: " + targetPath);
             FileUtils.saveSingleFile(targetPath, extension, content, PackifiedClient.currentPack);
         }
     }
@@ -128,7 +127,7 @@ public class SelectFolderWindow {
     }
 
     public static void render() {
-        if (!open) return;
+        if (!open.get()) return;
 
         if (ImGui.begin("Select Folder")) {
             if (ImGui.beginTable("SelectFolderTable", 3, ImGuiTableFlags.RowBg | ImGuiTableFlags.Resizable | ImGuiTableFlags.ScrollX | ImGuiTableFlags.ScrollY)) {

@@ -20,10 +20,10 @@ public class PreferencesWindow {
     public static ImBoolean stayInCreative = new ImBoolean((boolean) ModConfig.getSettings().getOrDefault("stayincreateive", false));
     public static ImInt maxBackupCount = new ImInt((int) ModConfig.getSettings().getOrDefault("maxBackupCount", 10)); // Maximum number of backups to keep
 
-    public static boolean isOpen = false;
+    public static ImBoolean isOpen = new ImBoolean(false);
 
     public static void render() {
-        if (!isOpen) {
+        if (!isOpen.get()) {
             return; // If the window is not open, do not render
         }
 
@@ -54,7 +54,7 @@ public class PreferencesWindow {
             ImGui.setCursorPosY(ImGui.getWindowHeight() - ImGui.getFrameHeightWithSpacing());
             ImGui.setCursorPosX(ImGui.getWindowWidth() - ImGui.getFrameHeightWithSpacing() - ImGui.getStyle().getItemSpacingX() - ImGui.getStyle().getWindowMinSizeX());
             if (ImGui.button("Close")) {
-                isOpen = false; // Close the settings window
+                isOpen.set(false); // Close the settings window
             }
         }
         ImGui.end();

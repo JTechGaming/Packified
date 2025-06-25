@@ -5,6 +5,7 @@ import imgui.ImVec2;
 import imgui.flag.ImGuiCol;
 import imgui.flag.ImGuiCond;
 import imgui.flag.ImGuiWindowFlags;
+import imgui.type.ImBoolean;
 import imgui.type.ImString;
 import me.jtech.packified.client.imgui.ImGuiImplementation;
 import me.jtech.packified.client.util.PackUtils;
@@ -17,7 +18,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 public class PackCreationWindow {
-    public static boolean isOpen = false;
+    public static ImBoolean isOpen = new ImBoolean(false);
     private static ImString packName = new ImString(64);
     private static ImString packDescription = new ImString(256);
 
@@ -35,7 +36,7 @@ public class PackCreationWindow {
             .orElse(resourcePackVersions.size()-1); // Default to the latest version that is less than or equal to the current version
 
     public static void render() {
-        if (!isOpen) return;
+        if (!isOpen.get()) return;
 
         // Set position to center of viewport
         ImVec2 centerPos = ImGuiImplementation.getCenterViewportPos();
@@ -117,7 +118,7 @@ public class PackCreationWindow {
         if (ImGui.button("Create Pack")) {
             if (!packName.get().isEmpty()) {
                 PackUtils.createPack(packName.get(), packDescription.get(), packVersionIndex, packVersionEndIndex);
-                isOpen = false; // Close the window after creation
+                isOpen.set(false); // Close the window after creation
             } else {
                 System.out.println("Pack name cannot be empty."); //todo replace with popup notification
             }

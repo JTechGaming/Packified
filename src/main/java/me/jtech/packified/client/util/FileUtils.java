@@ -6,9 +6,7 @@ import me.jtech.packified.client.windows.*;
 import me.jtech.packified.SyncPacketData;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.sound.OggAudioStream;
 import net.minecraft.resource.*;
-import net.minecraft.text.Text;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.InvalidIdentifierException;
 
@@ -684,8 +682,8 @@ public class FileUtils {
             return;
         }
 
-        // Ensure newRelativePath is converted back to a full path inside the resource pack
-        Path newFilePath = packFolderPath.resolve(newRelativePath);
+        Path newFilePath = originalPath.getParent().resolve(newRelativePath);
+        System.out.println(newFilePath);
 
         try {
             // Ensure new file does not already exist
@@ -722,8 +720,8 @@ public class FileUtils {
             return;
         }
 
-        // Ensure newRelativePath is converted back to a full path inside the resource pack
-        Path newFilePath = packFolderPath.resolve(newRelativePath);
+        Path newFilePath = originalPath.getParent().resolve(newRelativePath);
+        System.out.println(newFilePath);
 
         try {
             // Ensure new file does not already exist
@@ -774,5 +772,36 @@ public class FileUtils {
         String content = encodeImageToBase64(image);
         imageFile.setImageEditorContent(content);
         imageFile.saveFile();
+    }
+
+    public static int getFolderFileCount(Path folderPath) {
+        int fileCount = 0;
+        if (!folderPath.toFile().exists()) {
+            return 0;
+        }
+        try {
+            fileCount = (int) Files.walk(folderPath)
+                    .filter(Files::isRegularFile)
+                    .count();
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+        return fileCount;
+    }
+
+    public static int getFolderSize(Path folderPath) {
+        int totalSize = 0;
+        if (!folderPath.toFile().exists()) {
+            return 0;
+        }
+        try {
+            totalSize = (int) Files.walk(folderPath)
+                    .filter(Files::isRegularFile)
+                    .mapToLong(path -> path.toFile().length())
+                    .sum();
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+        return totalSize;
     }
 }

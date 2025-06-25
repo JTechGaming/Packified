@@ -1,15 +1,13 @@
 package me.jtech.packified.client.uiElements;
 
 import imgui.ImGui;
+import imgui.internal.flag.ImGuiItemFlags;
 import me.jtech.packified.Packified;
 import me.jtech.packified.client.PackifiedClient;
 import me.jtech.packified.client.util.FileDialog;
 import me.jtech.packified.client.util.FileUtils;
 import me.jtech.packified.client.util.PackUtils;
-import me.jtech.packified.client.windows.BackupWindow;
-import me.jtech.packified.client.windows.EditorWindow;
-import me.jtech.packified.client.windows.PackCreationWindow;
-import me.jtech.packified.client.windows.PreferencesWindow;
+import me.jtech.packified.client.windows.*;
 import me.jtech.packified.packets.C2SInfoPacket;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
@@ -36,7 +34,7 @@ public class MenuBar {
                     if (ImGui.menuItem("Pack")) {
                         EditorWindow.openFiles.clear();
                         PackifiedClient.currentPack = null;
-                        PackCreationWindow.isOpen = !PackCreationWindow.isOpen;
+                        PackCreationWindow.isOpen.set(!PackCreationWindow.isOpen.get());
                     }
                     ImGui.endMenu();
                 }
@@ -95,7 +93,7 @@ public class MenuBar {
                 }
                 ImGui.separator();
                 if (ImGui.menuItem("Backups")) {
-                    BackupWindow.open = !BackupWindow.open;
+                    BackupWindow.open.set(!BackupWindow.open.get());
                 }
                 ImGui.separator();
                 if (ImGui.beginMenu("Open Pack")) {
@@ -140,7 +138,23 @@ public class MenuBar {
                     }
                 }
                 if (ImGui.menuItem("Preferences")) {
-                    PreferencesWindow.isOpen = !PreferencesWindow.isOpen;
+                    PreferencesWindow.isOpen.set(!PreferencesWindow.isOpen.get());
+                }
+                ImGui.endMenu();
+            }
+
+            if (ImGui.beginMenu("Window")) {
+                if (ImGui.menuItem("Multiplayer")) {
+                    MultiplayerWindow.isOpen.set(!MultiplayerWindow.isOpen.get());
+                }
+                if (ImGui.menuItem("File Hierarchy")) {
+                    FileHierarchy.isOpen.set(!FileHierarchy.isOpen.get());
+                }
+                if (ImGui.menuItem("File Editor")) {
+                    EditorWindow.isOpen.set(!EditorWindow.isOpen.get());
+                }
+                if (ImGui.menuItem("Log")) {
+                    LogWindow.isOpen.set(!LogWindow.isOpen.get());
                 }
                 ImGui.endMenu();
             }
