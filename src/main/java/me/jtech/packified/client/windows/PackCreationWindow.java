@@ -41,6 +41,7 @@ public class PackCreationWindow {
         // Set position to center of viewport
         ImVec2 centerPos = ImGuiImplementation.getCenterViewportPos();
         ImGui.setNextWindowPos(centerPos.x, centerPos.y, ImGuiCond.Always, 0.5f, 0.5f);
+        ImGui.setNextWindowViewport(ImGui.getMainViewport().getID());
         ImGui.begin("Pack Creation Wizard");
 
         ImGui.setNextItemWidth(150);

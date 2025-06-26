@@ -246,7 +246,7 @@ public class ModelEditorWindow {
 
     public static void show(final ImBoolean showImGuizmoWindow) {
         //ImGuizmo.beginFrame();
-
+        ImGui.setNextWindowViewport(ImGui.getMainViewport().getID());
         if (ImGui.begin("ImGuizmo Demo", showImGuizmoWindow)) {
             ImGui.text("This a demo for ImGuizmo");
 
@@ -369,6 +369,7 @@ public class ModelEditorWindow {
 
         ImGui.setNextWindowPos(ImGui.getMainViewport().getPosX() + 100, ImGui.getMainViewport().getPosY() + 100, ImGuiCond.Once);
         ImGui.setNextWindowSize(800, 400, ImGuiCond.Once);
+        ImGui.setNextWindowViewport(ImGui.getMainViewport().getID());
         ImGui.begin("Gizmo", showImGuizmoWindow);
         ImGui.beginChild("prevent_window_from_moving_by_drag", 0, 0, false, ImGuiWindowFlags.NoMove);
 

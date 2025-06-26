@@ -51,6 +51,8 @@ public class EditorWindow {
             return; // If the window is not open, do not render
         }
         // Editor window code
+        ImGui.setNextWindowViewport(ImGui.getMainViewport().getID());
+
         if (ImGui.begin("File Editor", isOpen, ImGuiWindowFlags.MenuBar | ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse)) {
             ImGuiImplementation.pushWindowCenterPos();
 

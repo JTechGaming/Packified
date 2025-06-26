@@ -34,6 +34,7 @@ public class BackupWindow {
         // Set position to center of viewport
         ImVec2 centerPos = ImGuiImplementation.getCenterViewportPos();
         ImGui.setNextWindowPos(centerPos.x, centerPos.y, ImGuiCond.Always, 0.5f, 0.5f);
+        ImGui.setNextWindowViewport(ImGui.getMainViewport().getID());
 
         if (ImGui.begin("Backups", open, ImGuiWindowFlags.MenuBar)) {
             ResourcePackProfile pack = PackifiedClient.currentPack;

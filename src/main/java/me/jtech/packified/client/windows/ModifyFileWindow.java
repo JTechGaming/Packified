@@ -35,6 +35,7 @@ public class ModifyFileWindow {
         // Set position to center
         ImVec2 centerPos = ImGuiImplementation.getLastWindowCenterPos();
         ImGui.setNextWindowPos(centerPos.x, centerPos.y, ImGuiCond.Always, 0.5f, 0.5f);
+        ImGui.setNextWindowViewport(ImGui.getMainViewport().getID());
 
         if (ImGui.begin("ModifyFilePopup", open)) {
             fileName = new ImString(fileName.get(), fileName.getLength() + 8);

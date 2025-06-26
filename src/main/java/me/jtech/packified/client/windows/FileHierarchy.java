@@ -193,6 +193,8 @@ public class FileHierarchy {
         }
         alreadyRenderedHoverThisFrame = false;
 
+        ImGui.setNextWindowViewport(ImGui.getMainViewport().getID());
+
         ImGui.begin("File Hierarchy", isOpen);
 
         ImGuiImplementation.pushWindowCenterPos();

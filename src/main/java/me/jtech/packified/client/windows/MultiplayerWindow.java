@@ -26,6 +26,7 @@ public class MultiplayerWindow {
             return; // If the window is not open, do not render
         }
         // Render the multiplayer window
+        ImGui.setNextWindowViewport(ImGui.getMainViewport().getID());
         if (ImGui.begin("Multiplayer", isOpen)) {
             ImGui.imageButton(ImGuiImplementation.loadTextureFromIdentifier("textures/ui/neu_sync.png"), 14, 14);
             if (ImGui.isItemClicked()) {

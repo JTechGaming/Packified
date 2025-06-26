@@ -29,6 +29,7 @@ public class ConfirmWindow {
         // Set position to center of viewport
         ImVec2 centerPos = ImGuiImplementation.getLastWindowCenterPos();
         ImGui.setNextWindowPos(centerPos.x, centerPos.y, ImGuiCond.Always, 0.5f, 0.5f);
+        ImGui.setNextWindowViewport(ImGui.getMainViewport().getID());
 
         if (ImGui.begin("ConfirmPopup", open)) {
             ImGui.text("Are you sure you want to " + actionText + "?");

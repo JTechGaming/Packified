@@ -21,6 +21,7 @@ public class LogWindow {
             return; // If the window is not open, do not render
         }
 
+        ImGui.setNextWindowViewport(ImGui.getMainViewport().getID());
         if (ImGui.begin("Logs", isOpen, ImGuiWindowFlags.MenuBar)) {
             // Draw Menubar
             if (ImGui.beginMenuBar()) {
