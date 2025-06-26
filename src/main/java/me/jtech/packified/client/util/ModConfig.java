@@ -49,7 +49,7 @@ public class ModConfig {
         }
     }
 
-    public static Map<String, Object> getSettings() {
+    private static Map<String, Object> getSettings() {
         if (!Files.exists(CONFIG_FILE)) {
             CONFIG_FILE.getParent().toFile().mkdirs(); // Ensure the directory exists
             try {
@@ -69,5 +69,25 @@ public class ModConfig {
         } catch (IOException e) {
             throw new RuntimeException("Failed to read config file", e);
         }
+    }
+
+    public static int getInt(String key, int defaultValue) {
+        Map<String, Object> settings = getSettings();
+        return settings.containsKey(key) ? ((Number) settings.get(key)).intValue() : defaultValue;
+    }
+
+    public static float getFloat(String key, float defaultValue) {
+        Map<String, Object> settings = getSettings();
+        return settings.containsKey(key) ? ((Number) settings.get(key)).floatValue() : defaultValue;
+    }
+
+    public static boolean getBoolean(String key, boolean defaultValue) {
+        Map<String, Object> settings = getSettings();
+        return settings.containsKey(key) ? (boolean) settings.get(key) : defaultValue;
+    }
+
+    public static String getString(String key, String defaultValue) {
+        Map<String, Object> settings = getSettings();
+        return settings.containsKey(key) ? (String) settings.get(key) : defaultValue;
     }
 }

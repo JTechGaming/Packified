@@ -17,8 +17,8 @@ import me.jtech.packified.client.util.ModConfig;
 import java.util.Map;
 
 public class PreferencesWindow {
-    public static ImBoolean stayInCreative = new ImBoolean((boolean) ModConfig.getSettings().getOrDefault("stayincreateive", false));
-    public static ImInt maxBackupCount = new ImInt((int) ModConfig.getSettings().getOrDefault("maxBackupCount", 10)); // Maximum number of backups to keep
+    public static ImBoolean stayInCreative = new ImBoolean(ModConfig.getBoolean("stayincreateive", false));
+    public static ImInt maxBackupCount = new ImInt(ModConfig.getInt("maxBackupCount", 10)); // Maximum number of backups to keep
 
     public static ImBoolean isOpen = new ImBoolean(false);
 

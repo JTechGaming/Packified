@@ -23,6 +23,69 @@ import java.util.Arrays;
 import static org.lwjgl.glfw.GLFW.*;
 
 public class ModelEditorWindow {
+    private static final String URL = "https://github.com/CedricGuillemet/ImGuizmo/tree/f7bbbe";
+
+    private static final int CAM_DISTANCE = 8;
+    private static final float CAM_Y_ANGLE = 165.f / 180.f * (float) Math.PI;
+    private static final float CAM_X_ANGLE = 32.f / 180.f * (float) Math.PI;
+    private static final float FLT_EPSILON = 1.19209290E-07f;
+
+    private static float[][] OBJECT_MATRICES = {
+            {
+                    1.f, 0.f, 0.f, 0.f,
+                    0.f, 1.f, 0.f, 0.f,
+                    0.f, 0.f, 1.f, 0.f,
+                    0.f, 0.f, 0.f, 1.f
+            },
+            {
+                    1.f, 0.f, 0.f, 0.f,
+                    0.f, 1.f, 0.f, 0.f,
+                    0.f, 0.f, 1.f, 0.f,
+                    2.f, 0.f, 0.f, 1.f
+            },
+            {
+                    1.f, 0.f, 0.f, 0.f,
+                    0.f, 1.f, 0.f, 0.f,
+                    0.f, 0.f, 1.f, 0.f,
+                    2.f, 0.f, 2.f, 1.f
+            },
+            {
+                    1.f, 0.f, 0.f, 0.f,
+                    0.f, 1.f, 0.f, 0.f,
+                    0.f, 0.f, 1.f, 0.f,
+                    0.f, 0.f, 2.f, 1.f
+            }
+    };
+
+    private static final float[] IDENTITY_MATRIX = {
+            1.f, 0.f, 0.f, 0.f,
+            0.f, 1.f, 0.f, 0.f,
+            0.f, 0.f, 1.f, 0.f,
+            0.f, 0.f, 0.f, 1.f
+    };
+
+    private static final float[] EMPTY = new float[]{0};
+
+    private static final float[] INPUT_CAMERA_VIEW = {
+            1.f, 0.f, 0.f, 0.f,
+            0.f, 1.f, 0.f, 0.f,
+            0.f, 0.f, 1.f, 0.f,
+            0.f, 0.f, 0.f, 1.f
+    };
+
+    private static final float[] INPUT_BOUNDS = new float[]{-0.5f, -0.5f, -0.5f, 0.5f, 0.5f, 0.5f};
+    private static final float[] INPUT_BOUNDS_SNAP = new float[]{1f, 1f, 1f};
+
+    private static final float[] INPUT_SNAP_VALUE = new float[]{1f, 1f, 1f};
+    private static final float[] INPUT_MATRIX_TRANSLATION = new float[3];
+    private static final float[] INPUT_MATRIX_SCALE = new float[3];
+    private static final float[] INPUT_MATRIX_ROTATION = new float[3];
+
+    private static final ImFloat INPUT_FLOAT = new ImFloat();
+
+    private static final ImBoolean BOUNDING_SIZE = new ImBoolean(false);
+    private static final ImBoolean USE_SNAP = new ImBoolean(false);
+
     public static void loadModel(File modelFile) {
         Gson gson = new Gson();
         MinecraftModel model = null;
@@ -175,69 +238,6 @@ public class ModelEditorWindow {
         }
     }
 
-    private static final String URL = "https://github.com/CedricGuillemet/ImGuizmo/tree/f7bbbe";
-
-    private static final int CAM_DISTANCE = 8;
-    private static final float CAM_Y_ANGLE = 165.f / 180.f * (float) Math.PI;
-    private static final float CAM_X_ANGLE = 32.f / 180.f * (float) Math.PI;
-    private static final float FLT_EPSILON = 1.19209290E-07f;
-
-    private static float[][] OBJECT_MATRICES = {
-            {
-                    1.f, 0.f, 0.f, 0.f,
-                    0.f, 1.f, 0.f, 0.f,
-                    0.f, 0.f, 1.f, 0.f,
-                    0.f, 0.f, 0.f, 1.f
-            },
-            {
-                    1.f, 0.f, 0.f, 0.f,
-                    0.f, 1.f, 0.f, 0.f,
-                    0.f, 0.f, 1.f, 0.f,
-                    2.f, 0.f, 0.f, 1.f
-            },
-            {
-                    1.f, 0.f, 0.f, 0.f,
-                    0.f, 1.f, 0.f, 0.f,
-                    0.f, 0.f, 1.f, 0.f,
-                    2.f, 0.f, 2.f, 1.f
-            },
-            {
-                    1.f, 0.f, 0.f, 0.f,
-                    0.f, 1.f, 0.f, 0.f,
-                    0.f, 0.f, 1.f, 0.f,
-                    0.f, 0.f, 2.f, 1.f
-            }
-    };
-
-    private static final float[] IDENTITY_MATRIX = {
-            1.f, 0.f, 0.f, 0.f,
-            0.f, 1.f, 0.f, 0.f,
-            0.f, 0.f, 1.f, 0.f,
-            0.f, 0.f, 0.f, 1.f
-    };
-
-    private static final float[] EMPTY = new float[]{0};
-
-    private static final float[] INPUT_CAMERA_VIEW = {
-            1.f, 0.f, 0.f, 0.f,
-            0.f, 1.f, 0.f, 0.f,
-            0.f, 0.f, 1.f, 0.f,
-            0.f, 0.f, 0.f, 1.f
-    };
-
-    private static final float[] INPUT_BOUNDS = new float[]{-0.5f, -0.5f, -0.5f, 0.5f, 0.5f, 0.5f};
-    private static final float[] INPUT_BOUNDS_SNAP = new float[]{1f, 1f, 1f};
-
-    private static final float[] INPUT_SNAP_VALUE = new float[]{1f, 1f, 1f};
-    private static final float[] INPUT_MATRIX_TRANSLATION = new float[3];
-    private static final float[] INPUT_MATRIX_SCALE = new float[3];
-    private static final float[] INPUT_MATRIX_ROTATION = new float[3];
-
-    private static final ImFloat INPUT_FLOAT = new ImFloat();
-
-    private static final ImBoolean BOUNDING_SIZE = new ImBoolean(false);
-    private static final ImBoolean USE_SNAP = new ImBoolean(false);
-
     private static int currentMode = Mode.LOCAL;
     private static int currentGizmoOperation;
 
@@ -338,7 +338,9 @@ public class ModelEditorWindow {
 
         ImGui.checkbox("Snap Checkbox", USE_SNAP);
 
-        INPUT_FLOAT.set(INPUT_SNAP_VALUE[0]);
+        if (INPUT_SNAP_VALUE != null && INPUT_SNAP_VALUE.length > 0) {
+            INPUT_FLOAT.set(INPUT_SNAP_VALUE[0]);
+        }
         switch (currentGizmoOperation) {
             case Operation.TRANSLATE:
                 ImGui.inputFloat3("Snap Value", INPUT_SNAP_VALUE);
@@ -383,7 +385,7 @@ public class ModelEditorWindow {
 
         ImGuizmo.drawGrid(INPUT_CAMERA_VIEW, cameraProjection, IDENTITY_MATRIX, 100);
         ImGuizmo.setId(0);
-        ImGuizmo.drawCubes(INPUT_CAMERA_VIEW, cameraProjection, OBJECT_MATRICES[0]);
+        ImGuizmo.drawCubes(INPUT_CAMERA_VIEW, cameraProjection, OBJECT_MATRICES);
 
         if (!isIsCursorInsideWindow()) {
             ImGui.endChild();

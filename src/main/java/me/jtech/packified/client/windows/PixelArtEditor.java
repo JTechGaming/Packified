@@ -2,6 +2,7 @@ package me.jtech.packified.client.windows;
 
 import imgui.ImGui;
 import imgui.ImGuiIO;
+import imgui.ImVec2;
 import imgui.flag.ImGuiWindowFlags;
 import imgui.type.ImInt;
 import me.jtech.packified.client.imgui.ImGuiImplementation;
@@ -195,11 +196,12 @@ public class PixelArtEditor {
             }
         }
 
-        ImGui.setCursorPos(ImGui.getCursorPosX() + imagePosX, ImGui.getCursorPosY() + imagePosY);
+        ImVec2 canvasPos = new ImVec2(ImGui.getCursorPosX() + imagePosX, ImGui.getCursorPosY() + imagePosY);
+        ImGui.setCursorPos(canvasPos.x, canvasPos.y);
 
         ImGui.image(textureId, width * scale, height * scale);
 
-        renderPixelGuidelineGrid();
+        renderPixelGuidelineGrid(canvasPos);
 
         boolean mouseHovered = ImGui.isItemHovered();
         boolean leftMouseDown = ImGui.isMouseDown(0);
@@ -248,7 +250,7 @@ public class PixelArtEditor {
         ImGui.endChild();
     }
 
-    private void renderPixelGuidelineGrid() {
+    private void renderPixelGuidelineGrid(ImVec2 canvasPos) {
         if (image == null || !EditorWindow.showGrid) return;
 
         int width = image.getWidth();
@@ -257,9 +259,9 @@ public class PixelArtEditor {
         // Draw vertical lines
         for (int x = 0; x < width; x += toolSize.get()) {
             ImGui.getWindowDrawList().addLine(
-                    ImGui.getItemRectMinX() + x * scale + imagePosX,
+                    ImGui.getItemRectMinX() + x * scale - imagePosX,
                     ImGui.getItemRectMinY(),
-                    ImGui.getItemRectMinX() + x * scale + imagePosX,
+                    ImGui.getItemRectMinX() + x * scale - imagePosX,
                     ImGui.getItemRectMinY() + height * scale,
                     setColorOpacity(0xFF000000, scaleLineOpacity()), 1.0f);
         }
@@ -268,9 +270,9 @@ public class PixelArtEditor {
         for (int y = 0; y < height; y += toolSize.get()) {
             ImGui.getWindowDrawList().addLine(
                     ImGui.getItemRectMinX(),
-                    ImGui.getItemRectMinY() + y * scale + imagePosY,
+                    ImGui.getItemRectMinY() + y * scale - imagePosY,
                     ImGui.getItemRectMinX() + width * scale,
-                    ImGui.getItemRectMinY() + y * scale + imagePosY,
+                    ImGui.getItemRectMinY() + y * scale - imagePosY,
                     setColorOpacity(0xFF000000, scaleLineOpacity()), 1.0f);
         }
     }

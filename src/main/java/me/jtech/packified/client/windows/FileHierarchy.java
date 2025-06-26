@@ -8,6 +8,7 @@ import me.jtech.packified.client.PackifiedClient;
 import me.jtech.packified.client.imgui.ImGuiImplementation;
 import me.jtech.packified.client.util.FileDialog;
 import me.jtech.packified.client.util.FileUtils;
+import me.jtech.packified.client.util.PackUtils;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.fabricmc.loader.api.FabricLoader;
@@ -341,84 +342,105 @@ public class FileHierarchy {
                 ImGui.endMenu();
             }
             if (ImGui.beginMenu("Generate")) {
-                if (ImGui.menuItem("All")) {
-                    FileUtils.generateFolderStructure();
-                }
-                ImGui.separator();
-                if (ImGui.beginMenu("Models")) {
+                if (ImGui.beginMenu("Folders")) {
                     if (ImGui.menuItem("All")) {
-                        FileUtils.generateFolderStructure("models/");
+                        FileUtils.generateFolderStructure();
                     }
                     ImGui.separator();
-                    if (ImGui.menuItem("Item")) {
-                        FileUtils.generateFolderStructure("models/item/");
+                    if (ImGui.beginMenu("Models")) {
+                        if (ImGui.menuItem("All")) {
+                            FileUtils.generateFolderStructure("models/");
+                        }
+                        ImGui.separator();
+                        if (ImGui.menuItem("Item")) {
+                            FileUtils.generateFolderStructure("models/item/");
+                        }
+                        if (ImGui.menuItem("Block")) {
+                            FileUtils.generateFolderStructure("models/block/item/");
+                            FileUtils.generateFolderStructure("models/block/block/");
+                        }
+                        ImGui.endMenu();
                     }
-                    if (ImGui.menuItem("Block")) {
-                        FileUtils.generateFolderStructure("models/block/item/");
-                        FileUtils.generateFolderStructure("models/block/block/");
+                    if (ImGui.beginMenu("Textures")) {
+                        if (ImGui.menuItem("All")) {
+                            FileUtils.generateFolderStructure("textures/");
+                            FileUtils.generateFolderStructure("textures/item/");
+                            FileUtils.generateFolderStructure("textures/block/");
+                        }
+                        ImGui.separator();
+                        if (ImGui.menuItem("Item")) {
+                            FileUtils.generateFolderStructure("textures/item/");
+                        }
+                        if (ImGui.menuItem("Block")) {
+                            FileUtils.generateFolderStructure("textures/block/");
+                        }
+                        ImGui.endMenu();
+                    }
+                    if (ImGui.beginMenu("Shaders")) {
+                        if (ImGui.menuItem("All")) {
+                            FileUtils.generateFolderStructure("shaders/programs/");
+                            FileUtils.generateFolderStructure("shaders/core/");
+                        }
+                        ImGui.separator();
+                        if (ImGui.menuItem("Programs")) {
+                            FileUtils.generateFolderStructure("shaders/programs/");
+                        }
+                        if (ImGui.menuItem("Core")) {
+                            FileUtils.generateFolderStructure("shaders/core/");
+                        }
+                        ImGui.endMenu();
+                    }
+                    if (ImGui.beginMenu("Sounds")) {
+                        if (ImGui.menuItem("All")) {
+                            FileUtils.generateFolderStructure("sounds/block/");
+                            FileUtils.generateFolderStructure("sounds/records/");
+                        }
+                        ImGui.separator();
+                        if (ImGui.menuItem("Block")) {
+                            FileUtils.generateFolderStructure("sounds/block/");
+                        }
+                        if (ImGui.menuItem("Records")) {
+                            FileUtils.generateFolderStructure("sounds/records/");
+                        }
+                        ImGui.endMenu();
+                    }
+                    if (ImGui.menuItem("Lang")) {
+                        FileUtils.generateFolderStructure("lang/");
+                    }
+                    if (ImGui.menuItem("Blockstates")) {
+                        FileUtils.generateFolderStructure("blockstates/");
+                    }
+                    if (ImGui.menuItem("Font")) {
+                        FileUtils.generateFolderStructure("font/");
                     }
                     ImGui.endMenu();
-                }
-                if (ImGui.beginMenu("Textures")) {
-                    if (ImGui.menuItem("All")) {
-                        FileUtils.generateFolderStructure("textures/");
-                        FileUtils.generateFolderStructure("textures/item/");
-                        FileUtils.generateFolderStructure("textures/block/");
-                    }
-                    ImGui.separator();
-                    if (ImGui.menuItem("Item")) {
-                        FileUtils.generateFolderStructure("textures/item/");
-                    }
-                    if (ImGui.menuItem("Block")) {
-                        FileUtils.generateFolderStructure("textures/block/");
-                    }
-                    ImGui.endMenu();
-                }
-                if (ImGui.beginMenu("Shaders")) {
-                    if (ImGui.menuItem("All")) {
-                        FileUtils.generateFolderStructure("shaders/programs/");
-                        FileUtils.generateFolderStructure("shaders/core/");
-                    }
-                    ImGui.separator();
-                    if (ImGui.menuItem("Programs")) {
-                        FileUtils.generateFolderStructure("shaders/programs/");
-                    }
-                    if (ImGui.menuItem("Core")) {
-                        FileUtils.generateFolderStructure("shaders/core/");
-                    }
-                    ImGui.endMenu();
-                }
-                if (ImGui.beginMenu("Sounds")) {
-                    if (ImGui.menuItem("All")) {
-                        FileUtils.generateFolderStructure("sounds/block/");
-                        FileUtils.generateFolderStructure("sounds/records/");
-                    }
-                    ImGui.separator();
-                    if (ImGui.menuItem("Block")) {
-                        FileUtils.generateFolderStructure("sounds/block/");
-                    }
-                    if (ImGui.menuItem("Records")) {
-                        FileUtils.generateFolderStructure("sounds/records/");
-                    }
-                    ImGui.endMenu();
-                }
-                if (ImGui.menuItem("Lang")) {
-                    FileUtils.generateFolderStructure("lang/");
-                }
-                if (ImGui.menuItem("Blockstates")) {
-                    FileUtils.generateFolderStructure("blockstates/");
-                }
-                if (ImGui.menuItem("Font")) {
-                    FileUtils.generateFolderStructure("font/");
                 }
                 ImGui.endMenu();
             }
 
             ImGui.separator();
-            if (ImGui.menuItem("Load Pack")) {
-                selectedFile = path;
-                // Open the select pack window
-                SelectPackWindow.open.set(true);
+            if (ImGui.beginMenu("Pack")) {
+                if (ImGui.menuItem("Load")) {
+                    selectedFile = path;
+                    // Open the select pack window
+                    SelectPackWindow.open.set(true);
+                }
+                if (ImGui.menuItem("Close")) {
+                    selectedFile = null;
+                    PackifiedClient.currentPack = null; // Close the current pack
+                }
+                if (ImGui.menuItem("Reload")) {
+                    selectedFile = path;
+                    // Reload the current pack
+                    PackUtils.reloadPack();
+                }
+                ImGui.separator();
+                if (ImGui.menuItem("Export")) {
+                    selectedFile = path;
+                    // Export the current pack
+                    PackUtils.exportPack();
+                }
+                ImGui.endMenu();
             }
 
             if (!isFolder) {

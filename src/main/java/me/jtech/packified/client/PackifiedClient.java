@@ -338,7 +338,7 @@ public class PackifiedClient implements ClientModInitializer {
             lockCursor();
         }
 
-        if (!(boolean) ModConfig.getSettings().getOrDefault("stayincreative", false)) {
+        if (!(boolean) ModConfig.getBoolean("stayincreative", false)) {
             GameMode gameMode = shouldRender ? GameMode.SPECTATOR : getPreviousGameMode();
             changeGameMode(gameMode);
         }

@@ -329,6 +329,25 @@ public class PackUtils {
         return output;
     }
 
+    public static void exportPack() {
+        String defaultFolder = FabricLoader.getInstance().getConfigDir().resolve("packified/exports").toString();
+        File folderFile = Path.of(defaultFolder).toFile();
+        folderFile.mkdirs();
+        FileDialog.saveFileDialog(defaultFolder, PackifiedClient.currentPack.getDisplayName().getString() + ".zip", "json", "png").thenAccept(pathStr -> {
+            if (pathStr != null) {
+                Path path = Path.of(pathStr);
+                Path folderPath = path.getParent();
+                MinecraftClient.getInstance().submit(() -> {
+                    try {
+                        FileUtils.zip(folderPath.toFile(), path.getFileName().toString());
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+                });
+            }
+        });
+    }
+
     @FunctionalInterface
     public interface PacketAction {
         void execute(SyncPacketData data);

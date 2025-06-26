@@ -29,6 +29,12 @@ repositories {
     // Loom adds the essential maven repositories to download Minecraft and libraries from automatically.
     // See https://docs.gradle.org/current/userguide/declaring_repositories.html
     // for more information about repositories.
+    maven {
+        url = "https://pkgs.dev.azure.com/djtheredstoner/DevAuth/_packaging/public/maven/v1"
+        content {
+            includeGroup("me.djtheredstoner")
+        }
+    }
 }
 
 dependencies {
@@ -40,11 +46,11 @@ dependencies {
     modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
 
     // ImGui
-    modImplementation(rootProject.files('dependencies/imgui-java-binding-1.86.11-10-g0dbf36c.jar'))
-    modImplementation("io.github.spair:imgui-java-lwjgl3:1.86.10") {
+    shadow(implementation(rootProject.files('dependencies/imgui-java-binding-1.86.11-10-g0dbf36c.jar')))
+    shadow(implementation("io.github.spair:imgui-java-lwjgl3:1.86.10") {
         exclude group: 'org.lwjgl'
         exclude group: 'org.lwjgl.lwjgl'
-    }
+    })
     shadow(api(rootProject.files('dependencies/imgui-java-natives-linux-1.86.11-10-g0dbf36c.jar')))
     shadow(api(rootProject.files('dependencies/imgui-java-natives-macos-1.86.11-10-g0dbf36c.jar')))
     shadow(api(rootProject.files('dependencies/imgui-java-natives-windows-1.86.11-10-g0dbf36c.jar')))
@@ -84,7 +90,8 @@ dependencies {
     })
 
     include(implementation("com.moulberry:mixinconstraints:1.0.5"))
-    implementation 'com.fasterxml.jackson.core:jackson-databind:2.17.0'
+    modRuntimeOnly("me.djtheredstoner:DevAuth-fabric:1.1.2")
+    shadow(implementation('com.fasterxml.jackson.core:jackson-core:2.17.0'))
 }
 
 loom {
@@ -131,6 +138,20 @@ jar {
     from("LICENSE") {
         rename { "${it}_${project.archivesBaseName}" }
     }
+}
+
+shadowJar {
+    configurations = [project.configurations.shadow]
+    archiveBaseName = "Packified"
+    destinationDirectory = file("${buildDir}/tmp/allJar")
+
+    exclude("LICENSE")
+    exclude("LICENSE.txt")
+}
+
+remapJar {
+    dependsOn(shadowJar)
+    input = shadowJar.getArchiveFile()
 }
 
 // configure the maven publication

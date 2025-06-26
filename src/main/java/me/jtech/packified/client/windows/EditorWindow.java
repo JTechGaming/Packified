@@ -1,8 +1,9 @@
 package me.jtech.packified.client.windows;
 
+import com.fasterxml.jackson.core.JsonFactory;
 import com.fasterxml.jackson.core.JsonLocation;
 import com.fasterxml.jackson.core.JsonParseException;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.core.JsonParser;
 import imgui.ImGui;
 import imgui.extension.texteditor.TextEditor;
 import imgui.extension.texteditor.TextEditorLanguageDefinition;
@@ -440,16 +441,17 @@ public class EditorWindow {
 
     private static Map<Integer, String> checkForErrors(String content) {
         Map<Integer, String> errorMarkers = new HashMap<>();
-        ObjectMapper mapper = new ObjectMapper();
-        try {
-            mapper.readTree(content); // Tries parsing the JSON
+        JsonFactory factory = new JsonFactory();
+        try (JsonParser parser = factory.createParser(content)) {
+            while (parser.nextToken() != null) {
+                // If it reaches here, the current line in the JSON is valid
+            }
         } catch (JsonParseException e) {
             JsonLocation location = e.getLocation();
             int lineNumber = location.getLineNr() - 1;
             String errorMessage = e.getOriginalMessage();
             errorMarkers.put(lineNumber, errorMessage);
         } catch (IOException e) {
-            // General I/O error (not usually relevant for in-memory strings)
             errorMarkers.put(0, "Unknown error reading content");
         }
         return errorMarkers;

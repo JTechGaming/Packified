@@ -825,6 +825,24 @@ public class FileUtils {
         generateFolderStructure("textures/item/");
         generateFolderStructure("textures/block/");
         generateFolderStructure("textures/models/");
+        generateFolderStructure("textures/entity/");
+        generateFolderStructure("textures/colormap/");
+        generateFolderStructure("textures/misc/");
+        generateFolderStructure("textures/effect/");
+        generateFolderStructure("textures/entity/entity_type");
+        generateFolderStructure("textures/environment/");
+        generateFolderStructure("textures/gui/");
+        generateFolderStructure("textures/gui/texture/");
+        generateFolderStructure("textures/map/");
+        generateFolderStructure("textures/mob_effect/");
+        generateFolderStructure("textures/particle/");
+        generateFolderStructure("textures/painting/");
+        generateFolderStructure("textures/trims/");
+        generateFolderStructure("textures/trims/color_palettes/");
+        generateFolderStructure("textures/trims/entity/");
+        generateFolderStructure("textures/trims/entity/humanoid/");
+        generateFolderStructure("textures/trims/entity/humanoid_leggings/");
+        generateFolderStructure("textures/trims/items/");
         generateFolderStructure("models/");
         generateFolderStructure("models/item/");
         generateFolderStructure("models/block/");
@@ -835,6 +853,11 @@ public class FileUtils {
         generateFolderStructure("shaders/");
         generateFolderStructure("shaders/programs/");
         generateFolderStructure("shaders/core/");
+        generateFolderStructure("font/");
+        generateFolderStructure("font/include");
+        generateFolderStructure("atlases/");
+        generateFolderStructure("texts/");
+        generateFolderStructure("items/");
     }
 
     public static void generateFolderStructure(String s) {

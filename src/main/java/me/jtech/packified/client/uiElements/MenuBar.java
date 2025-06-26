@@ -1,7 +1,6 @@
 package me.jtech.packified.client.uiElements;
 
 import imgui.ImGui;
-import imgui.internal.flag.ImGuiItemFlags;
 import me.jtech.packified.Packified;
 import me.jtech.packified.client.PackifiedClient;
 import me.jtech.packified.client.util.FileDialog;
@@ -73,22 +72,7 @@ public class MenuBar {
                 }
                 if (PackifiedClient.currentPack != null) {
                     if (ImGui.menuItem("Export")) {
-                        String defaultFolder = FabricLoader.getInstance().getConfigDir().resolve("packified/exports").toString();
-                        File folderFile = Path.of(defaultFolder).toFile();
-                        folderFile.mkdirs();
-                        FileDialog.saveFileDialog(defaultFolder, PackifiedClient.currentPack.getDisplayName().getString() + ".zip", "json", "png").thenAccept(pathStr -> {
-                            if (pathStr != null) {
-                                Path path = Path.of(pathStr);
-                                Path folderPath = path.getParent();
-                                MinecraftClient.getInstance().submit(() -> {
-                                    try {
-                                        FileUtils.zip(folderPath.toFile(), path.getFileName().toString());
-                                    } catch (IOException e) {
-                                        e.printStackTrace();
-                                    }
-                                });
-                            }
-                        });
+                        PackUtils.exportPack();
                     }
                 }
                 ImGui.separator();
@@ -177,4 +161,5 @@ public class MenuBar {
             ImGui.endMainMenuBar();
         }
     }
+
 }

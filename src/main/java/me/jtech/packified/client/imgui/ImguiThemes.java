@@ -20,7 +20,7 @@ import java.util.Map;
 
 public class ImguiThemes {
     private static int oldTheme = 0;
-    private static ImInt currentTheme = new ImInt((int) Math.round((double) ModConfig.getSettings().getOrDefault("theme", 0))); // Default to Modern Dark
+    private static ImInt currentTheme = new ImInt(ModConfig.getInt("theme", 0)); // Default to Modern Dark
 
     public static void setModernDarkColors() {
         ImGuiStyle style = ImGui.getStyle();

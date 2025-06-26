@@ -233,6 +233,7 @@ public class ImGuiImplementation {
         CornerNotificationsHelper.render();
         PreferencesWindow.render();
         PackCreationWindow.render();
+        //ModelEditorWindow.show(new ImBoolean(true));
 
         // end frame
         ImGui.render();
