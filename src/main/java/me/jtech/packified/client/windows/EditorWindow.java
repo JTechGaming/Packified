@@ -8,10 +8,7 @@ import imgui.ImGui;
 import imgui.extension.texteditor.TextEditor;
 import imgui.extension.texteditor.TextEditorLanguageDefinition;
 import imgui.extension.texteditor.flag.TextEditorPaletteIndex;
-import imgui.flag.ImGuiCol;
-import imgui.flag.ImGuiTabBarFlags;
-import imgui.flag.ImGuiTabItemFlags;
-import imgui.flag.ImGuiWindowFlags;
+import imgui.flag.*;
 import imgui.type.ImBoolean;
 import me.jtech.packified.client.PackifiedClient;
 import me.jtech.packified.client.imgui.ImGuiImplementation;
@@ -30,6 +27,7 @@ import java.nio.ByteOrder;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 @Environment(EnvType.CLIENT)
@@ -50,6 +48,7 @@ public class EditorWindow {
         if (!isOpen.get()) {
             return; // If the window is not open, do not render
         }
+
         // Editor window code
         ImGui.setNextWindowViewport(ImGui.getMainViewport().getID());
 
@@ -103,7 +102,7 @@ public class EditorWindow {
 
             ImGui.pushStyleColor(ImGuiCol.FrameBg, 0x00000000);
             ImGui.beginChild("Toolbar", ImGui.getWindowWidth(), 40, false, ImGuiWindowFlags.HorizontalScrollbar);
-            ImGui.imageButton(ImGuiImplementation.loadTextureFromIdentifier("textures/ui/neu_save.png"), 24, 24);
+            ImGui.imageButton(ImGuiImplementation.loadTextureFromOwnIdentifier("textures/ui/neu_save.png"), 24, 24);
             if (ImGui.isItemClicked()) {
                 // Logic to save the current file
                 if (currentFile != null) {
@@ -114,7 +113,7 @@ public class EditorWindow {
                 ImGui.setTooltip("Save (Ctrl+S)");
             }
             ImGui.sameLine();
-            ImGui.imageButton(ImGuiImplementation.loadTextureFromIdentifier("textures/ui/neu_save-all.png"), 24, 24);
+            ImGui.imageButton(ImGuiImplementation.loadTextureFromOwnIdentifier("textures/ui/neu_save-all.png"), 24, 24);
             if (ImGui.isItemClicked()) {
                 // Logic to save all files
                 FileUtils.saveAllFiles();
@@ -123,10 +122,10 @@ public class EditorWindow {
                 ImGui.setTooltip("Save All (Ctrl+Shift+S)");
             }
             ImGui.sameLine();
-            ImGui.imageButton(ImGuiImplementation.loadTextureFromIdentifier("textures/ui/neu_reload.png"), 24, 24);
+            ImGui.imageButton(ImGuiImplementation.loadTextureFromOwnIdentifier("textures/ui/neu_reload.png"), 24, 24);
             if (ImGui.isItemClicked()) {
                 // Logic to save all files
-                PackUtils.reloadPack();
+                CompletableFuture.runAsync(PackUtils::reloadPack);
             }
             if (ImGui.isItemHovered()) {
                 ImGui.setTooltip("Reload Pack (Ctrl+R)");
@@ -441,7 +440,7 @@ public class EditorWindow {
         return lang;
     }
 
-    private static Map<Integer, String> checkForErrors(String content) {
+    protected static Map<Integer, String> checkForErrors(String content) {
         Map<Integer, String> errorMarkers = new HashMap<>();
         JsonFactory factory = new JsonFactory();
         try (JsonParser parser = factory.createParser(content)) {

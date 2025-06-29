@@ -10,6 +10,7 @@ import imgui.type.ImBoolean;
 import me.jtech.packified.client.PackifiedClient;
 import me.jtech.packified.client.imgui.ImGuiImplementation;
 import me.jtech.packified.client.util.FileUtils;
+import me.jtech.packified.client.util.PackFile;
 import me.jtech.packified.client.util.PackUtils;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
@@ -31,12 +32,19 @@ public class BackupWindow {
             return;
         }
 
-        // Set position to center of viewport
         ImVec2 centerPos = ImGuiImplementation.getCenterViewportPos();
-        ImGui.setNextWindowPos(centerPos.x, centerPos.y, ImGuiCond.Always, 0.5f, 0.5f);
+        ImGui.setNextWindowPos(centerPos.x, centerPos.y, ImGuiCond.Appearing, 0.5f, 0.5f);
         ImGui.setNextWindowViewport(ImGui.getMainViewport().getID());
 
         if (ImGui.begin("Backups", open, ImGuiWindowFlags.MenuBar)) {
+            if (ImGui.beginMenuBar()) {
+                if (ImGui.menuItem("Clear Backups")) {
+                    // Delete file
+                    ConfirmWindow.open("delete all backups", "They will be lost forever", FileUtils::clearBackups);
+                }
+                ImGui.endMenuBar();
+            }
+
             ResourcePackProfile pack = PackifiedClient.currentPack;
             if (pack == null) {
                 ImGui.setCursorPos((ImGui.getWindowWidth() - ImGui.calcTextSize("No pack loaded").x) / 2, (ImGui.getWindowHeight() - ImGui.getTextLineHeightWithSpacing()) / 2);

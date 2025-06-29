@@ -1,12 +1,17 @@
 package me.jtech.packified.client.util;
 
+import com.google.gson.JsonObject;
 import me.jtech.packified.Packified;
 import me.jtech.packified.client.PackifiedClient;
+import me.jtech.packified.client.imgui.ImGuiImplementation;
 import me.jtech.packified.client.windows.*;
 import me.jtech.packified.SyncPacketData;
 import net.fabricmc.loader.api.FabricLoader;
+import net.minecraft.SharedConstants;
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.gui.screen.pack.ResourcePackOrganizer;
 import net.minecraft.resource.*;
+import net.minecraft.resource.metadata.ResourceMetadataReader;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.InvalidIdentifierException;
 
@@ -19,6 +24,8 @@ import java.nio.file.*;
 import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.function.Function;
 
 public class FileUtils {
     public static String getFileExtension(String fileName) {
@@ -177,12 +184,6 @@ public class FileUtils {
         }
     }
 
-    public static void sendDebugChatMessage(String message) {
-//        if (Packified.debugMode) {
-//            MinecraftClient.getInstance().inGameHud.getChatHud().addMessage(Text.literal(message));
-//        }
-    }
-
     public static void saveAllFiles() {
         if (PackifiedClient.currentPack == null) {
             System.err.println("No pack selected");
@@ -214,49 +215,38 @@ public class FileUtils {
         try {
             // Get the resource pack folder path
             Path resourcePackFolder = getPackFolderPath();
-            sendDebugChatMessage("Resource pack folder: " + resourcePackFolder);
 
             if (resourcePackFolder == null || !Files.exists(resourcePackFolder)) {
                 System.err.println("Resource pack folder not found: " + resourcePackFolder);
-                sendDebugChatMessage("Resource pack folder not found: " + resourcePackFolder);
                 return;
             }
-            sendDebugChatMessage("Resource pack folder found: " + resourcePackFolder);
 
             // Check if the pack is a ZIP file
             if (isZipFile(resourcePackFolder.toFile())) {
-                sendDebugChatMessage("Resource pack is a zip file, cannot save to it: " + resourcePackFolder);
                 return;
             }
 
             // Determine the actual file path inside the pack
             Path targetFile = resourcePackFolder.resolve(path);
-            sendDebugChatMessage("Target file: " + targetFile);
 
             // Ensure parent directories exist
             Files.createDirectories(targetFile.getParent());
 
             if (!Files.exists(targetFile)) {
-                sendDebugChatMessage("Target file not found, creating a new one: " + targetFile);
                 Files.createFile(targetFile);
             }
 
             // Handle different file types
             if (fileType.equals(".json")) {
                 Files.write(targetFile, content.getBytes(StandardCharsets.UTF_8));
-                sendDebugChatMessage("JSON content saved: " + content);
             } else if (fileType.equals(".png")) {
                 BufferedImage image = FileUtils.decodeBase64ToImage(content);
                 if (image != null) {
                     ImageIO.write(image, "png", targetFile.toFile());
-                    sendDebugChatMessage("Image saved: " + targetFile);
                 } else {
                     System.err.println("No image found for: " + path);
-                    sendDebugChatMessage("No image found for: " + path);
                 }
             }
-
-            sendDebugChatMessage("File successfully saved: " + targetFile);
 
             // Update the file in the editor if it's open
             for (PackFile file : EditorWindow.openFiles) {
@@ -309,9 +299,6 @@ public class FileUtils {
             });
         }
         PackUtils.refresh();
-        for (ResourcePackProfile resourcePack : PackUtils.refresh()) {
-            System.out.println(resourcePack.getDisplayName().getString());
-        }
         PackifiedClient.currentPack = PackUtils.getPack(targetDir.getName().replace(".zip", ""));
         ResourcePackManager resourcePackManager = MinecraftClient.getInstance().getResourcePackManager();
         resourcePackManager.enable(PackifiedClient.currentPack.getId());
@@ -356,7 +343,6 @@ public class FileUtils {
 
     public static void makePackBackup(File resourcePackFolder) {
         try {
-            sendDebugChatMessage("Making a backup of the resource pack: " + resourcePackFolder.getAbsolutePath());
             Path backupDir = FabricLoader.getInstance().getConfigDir().resolve("packified-backups");
 
             int maxBackupCount = PreferencesWindow.maxBackupCount.get(); // Maximum number of backups to keep
@@ -368,7 +354,7 @@ public class FileUtils {
                     for (Path entry : stream) {
                         backups.add(entry);
                     }
-                    if (backups.size() >= maxBackupCount) {
+                    if (backups.size() > maxBackupCount) {
                         // Sort by last modified time and delete the oldest ones
                         backups.sort(Comparator.comparingLong(path -> {
                             try {
@@ -377,7 +363,7 @@ public class FileUtils {
                                 throw new RuntimeException("Failed to retrieve last modified time for backup", e);
                             }
                         }));
-                        for (int i = 0; i < backups.size() - maxBackupCount + 1; i++) {
+                        for (int i = 0; i < backups.size() - maxBackupCount; i++) {
                             Files.delete(backups.get(i));
                         }
                     }
@@ -389,7 +375,6 @@ public class FileUtils {
             if (!backupDir.toFile().exists()) {
                 Files.createDirectories(backupDir);
             }
-            sendDebugChatMessage("Backup folder: " + backupDir);
 
             String baseName = resourcePackFolder.getName(); // get the folder name
             String date = new SimpleDateFormat("yyyy-MM-dd").format(new Date()); // get the current date
@@ -415,8 +400,6 @@ public class FileUtils {
                 throw new RuntimeException(e);
             }
 
-            sendDebugChatMessage("Backup folder name pattern: " + folderNamePattern);
-
             String backupFileName = folderNamePattern + (highestId + 1) + ".zip";
             Path backupFilePath = backupDir.resolve(backupFileName);
 
@@ -435,14 +418,77 @@ public class FileUtils {
                     }
                 });
             }
-
-            sendDebugChatMessage("Backup created: " + backupFileName);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
     }
 
-    // Not used
+    public static void loadIdentifierPackAssets(ResourcePackProfile resourcePackProfile) {
+        ResourcePack resourcePack = resourcePackProfile.createResourcePack();
+        for (String namespace : resourcePack.getNamespaces(ResourceType.CLIENT_RESOURCES)) {
+            FabricLoader.getInstance().getGameDir().resolve("resourcepacks")
+                    .resolve(PackUtils.legalizeName(resourcePackProfile.getDisplayName().getString()))
+                    .resolve(namespace).toFile().mkdirs();
+            resourcePack.findResources(ResourceType.CLIENT_RESOURCES, namespace, "", (identifier, resourceSupplier) ->
+                    createFileFromIdentifier(resourcePackProfile, namespace, "", identifier)
+            );
+        }
+
+        constructPackMetaData(resourcePackProfile);
+    }
+
+    private static void constructPackMetaData(ResourcePackProfile packProfile) {
+        Path packMcMetaPath = FabricLoader.getInstance().getGameDir().resolve("resourcepacks")
+                .resolve(PackUtils.legalizeName(packProfile.getDisplayName().getString()))
+                .resolve("pack.mcmeta");
+        Path packPngPath = FabricLoader.getInstance().getGameDir().resolve("resourcepacks")
+                .resolve(PackUtils.legalizeName(packProfile.getDisplayName().getString()))
+                .resolve("pack.png");
+        packMcMetaPath.getParent().toFile().mkdirs();
+
+        String content = "{\n" +
+                "  \"pack\": {\n" +
+                "    \"pack_format\": " + SharedConstants.getGameVersion().getResourceVersion(ResourceType.CLIENT_RESOURCES) + ",\n" +
+                "    \"description\": \"" + packProfile.getDescription().getString() + "\"\n" +
+                "  }\n" +
+                "}";
+
+        BufferedImage image = ImGuiImplementation.bufferedImageFromIdentifier(Identifier.of(packProfile.getId(), "icon.png"));
+
+        if (!Files.exists(packMcMetaPath)) {
+            try {
+                Files.createFile(packMcMetaPath);
+                Files.writeString(packMcMetaPath, content, StandardCharsets.UTF_8);
+            } catch (IOException e) {
+                throw new RuntimeException("Failed to create pack.mcmeta file", e);
+            }
+        }
+
+        if (!Files.exists(packPngPath) && image != null) {
+            try {
+                Files.createFile(packPngPath);
+                ImageIO.write(image, "png", packPngPath.toFile());
+            } catch (IOException e) {
+                throw new RuntimeException("Failed to create pack.png file", e);
+            }
+        }
+    }
+
+    private static void createFileFromIdentifier(ResourcePackProfile packProfile, String namespace, String prefix, Identifier identifier) {
+        ResourcePack resourcePack = packProfile.createResourcePack();
+        try {
+            LogWindow.addDebugInfo("Creating file for identifier: " + identifier + " in namespace: " + namespace + " with prefix: " + prefix);
+            InputStream inputStream = Objects.requireNonNull(resourcePack.open(ResourceType.CLIENT_RESOURCES, identifier)).get();
+            Path targetPath = FabricLoader.getInstance().getGameDir().resolve("resourcepacks").resolve(PackUtils.legalizeName(packProfile.getDisplayName().getString()))
+                    .resolve(namespace).resolve(prefix)
+                    .resolve(identifier.getPath());
+            targetPath.toFile().mkdirs();
+            Files.copy(inputStream, targetPath, StandardCopyOption.REPLACE_EXISTING);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
     public static void clearBackups() {
         // Clear backups
         Path dir = FabricLoader.getInstance().getConfigDir().resolve("packified-backups");
@@ -540,7 +586,7 @@ public class FileUtils {
 
     public static String getMCMetaContent(ResourcePackProfile pack) {
         try {
-            File resourcePackFolder = new File("resourcepacks/" + pack.getDisplayName().getString());
+            File resourcePackFolder = new File("resourcepacks/" + PackUtils.legalizeName(pack.getDisplayName().getString()));
             File targetFile = new File(resourcePackFolder, "pack.mcmeta");
             return Files.readString(targetFile.toPath());
         } catch (IOException e) {
@@ -550,22 +596,12 @@ public class FileUtils {
 
     public static void setMCMetaContent(ResourcePackProfile pack, String content) {
         try {
-            File resourcePackFolder = new File("resourcepacks/" + pack.getDisplayName().getString());
+            File resourcePackFolder = new File("resourcepacks/" + PackUtils.legalizeName(pack.getDisplayName().getString()));
             File targetFile = new File(resourcePackFolder, "pack.mcmeta");
             Files.write(targetFile.toPath(), content.getBytes(StandardCharsets.UTF_8));
-            PackUtils.reloadPack();
+            CompletableFuture.runAsync(PackUtils::reloadPack);
         } catch (IOException e) {
             e.printStackTrace();
-        }
-    }
-
-    public static String getPackPngContent(ResourcePackProfile pack) {
-        try (ResourcePack resourcePack = pack.createResourcePack()) {
-            InputStream inputStream = Objects.requireNonNull(resourcePack.open(ResourceType.CLIENT_RESOURCES, Identifier.ofVanilla("pack.png"))).get();
-            return new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
-        } catch (IOException e) {
-            e.printStackTrace();
-            return null;
         }
     }
 
@@ -609,7 +645,6 @@ public class FileUtils {
                 } catch (IOException e) {
                     throw new RuntimeException(e);
                 }
-                sendDebugChatMessage("JSON content saved: " + asset.assetData());
             } else if (asset.extension().equals(".png")) {
                 // Save PNG image
                 BufferedImage image = FileUtils.decodeBase64ToImage(asset.assetData());
@@ -619,30 +654,25 @@ public class FileUtils {
                     } catch (IOException e) {
                         throw new RuntimeException(e);
                     }
-                    sendDebugChatMessage("Image saved: " + targetFile.getAbsolutePath());
                 } else {
-                    System.err.println("No image found for: " + asset.path());
-                    sendDebugChatMessage("No image found for: " + asset.path());
+                    LogWindow.addError("Failed to decode image for: " + asset.path());
                 }
             }
         }
-
-        sendDebugChatMessage("Resource pack created: " + packName);
 
         List<ResourcePackProfile> profiles = PackUtils.refresh();
         for (ResourcePackProfile profile : profiles) {
             if (profile.getDisplayName().getString().equals(packName)) {
                 PackifiedClient.currentPack = profile;
-                sendDebugChatMessage("Resource pack loaded: " + packName);
                 break;
             }
         }
         if (!Objects.equals(PackifiedClient.currentPack.getDisplayName().getString(), packName)) {
-            sendDebugChatMessage("Resource pack not found: " + packName);
+            LogWindow.addWarning("Pack with name '" + packName + "' not found in the list of resource packs.");
         }
 
         // Reload the resource packs
-        PackUtils.reloadPack();
+        CompletableFuture.runAsync(PackUtils::reloadPack);
     }
 
     public static Path validateIdentifier(String path) {
@@ -688,7 +718,7 @@ public class FileUtils {
         try {
             // Ensure new file does not already exist
             if (Files.exists(newFilePath)) {
-                LogWindow.addInfo("Could not move file: File with new path already exists -> " + newFilePath);
+                LogWindow.addWarning("Could not move file: File with new path already exists -> " + newFilePath);
                 return;
             }
 
@@ -759,51 +789,50 @@ public class FileUtils {
         return packFolderPath.relativize(filePath).toString();
     }
 
-    public static String getRelativePackPath(Path filePath, String name) {
-        Path packFolderPath = getPackFolderPath();
-        if (packFolderPath == null) {
-            System.err.println("Resource pack folder is not set.");
-            return filePath.toString();
-        }
-        return filePath.resolve(name).toString();
-    }
-
-    public static void updateTexture(BufferedImage image, PackFile imageFile) {
-        // Update the texture
-        String content = encodeImageToBase64(image);
-        imageFile.setImageEditorContent(content);
-        imageFile.saveFile();
-    }
+    private static final Map<Path, Integer> folderFileCountCache = new HashMap<>();
 
     public static int getFolderFileCount(Path folderPath) {
-        int fileCount = 0;
-        if (!folderPath.toFile().exists()) {
+        if (!Files.exists(folderPath) || !Files.isDirectory(folderPath)) {
             return 0;
         }
+
+        // Return cached result if available
+        if (folderFileCountCache.containsKey(folderPath)) {
+            return folderFileCountCache.get(folderPath);
+        }
+
         try {
-            fileCount = (int) Files.walk(folderPath)
+            int count = (int) Files.walk(folderPath)
                     .filter(Files::isRegularFile)
                     .count();
+            folderFileCountCache.put(folderPath, count);
+            return count;
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
-        return fileCount;
     }
 
+    private static final Map<Path, Integer> folderFileSizeCache = new HashMap<>();
+
     public static int getFolderSize(Path folderPath) {
-        int totalSize = 0;
-        if (!folderPath.toFile().exists()) {
+        if (!Files.exists(folderPath) || !Files.isDirectory(folderPath)) {
             return 0;
         }
+        // Return cached result if available
+        if (folderFileSizeCache.containsKey(folderPath)) {
+            return folderFileSizeCache.get(folderPath);
+        }
+
         try {
-            totalSize = (int) Files.walk(folderPath)
+            int size = (int) Files.walk(folderPath)
                     .filter(Files::isRegularFile)
                     .mapToLong(path -> path.toFile().length())
                     .sum();
+            folderFileSizeCache.put(folderPath, size);
+            return size;
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
-        return totalSize;
     }
 
     public static String readFile(Path path) {

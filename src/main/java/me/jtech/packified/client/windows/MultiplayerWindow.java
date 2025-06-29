@@ -28,7 +28,7 @@ public class MultiplayerWindow {
         // Render the multiplayer window
         ImGui.setNextWindowViewport(ImGui.getMainViewport().getID());
         if (ImGui.begin("Multiplayer", isOpen)) {
-            ImGui.imageButton(ImGuiImplementation.loadTextureFromIdentifier("textures/ui/neu_sync.png"), 14, 14);
+            ImGui.imageButton(ImGuiImplementation.loadTextureFromOwnIdentifier("textures/ui/neu_sync.png"), 14, 14);
             if (ImGui.isItemClicked()) {
                 // Sync the pack to all the server players
                 ResourcePackProfile pack = PackifiedClient.currentPack;
@@ -38,14 +38,14 @@ public class MultiplayerWindow {
                 ImGui.setTooltip("Sync your pack to all the server players");
             }
             ImGui.sameLine();
-            ImGui.imageButton(ImGuiImplementation.loadTextureFromIdentifier("textures/ui/neu_upload.png"), 14, 14);
+            ImGui.imageButton(ImGuiImplementation.loadTextureFromOwnIdentifier("textures/ui/neu_upload.png"), 14, 14);
             if (ImGui.isItemClicked()) {
                 // Upload the pack to the server
                 ResourcePackProfile pack = PackifiedClient.currentPack;
                 PackUtils.sendPackAsServerPack(pack);
             }
             if (ImGui.isItemHovered()) {
-                ImGui.setTooltip("Upload your pack to the server");
+                ImGui.setTooltip("Upload your pack to the server (This currently has no use)");
             }
             ImGui.separator();
 
@@ -107,9 +107,6 @@ public class MultiplayerWindow {
                     }
                 });
                 ImGui.endTable();
-                if (Packified.debugMode) {
-                    ImGui.inputInt("packets per tick: ", Packified.packetsPerTick);
-                }
             }
         }
         ImGui.end();

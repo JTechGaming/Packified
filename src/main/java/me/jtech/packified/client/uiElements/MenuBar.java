@@ -6,6 +6,7 @@ import me.jtech.packified.client.PackifiedClient;
 import me.jtech.packified.client.util.FileDialog;
 import me.jtech.packified.client.util.FileUtils;
 import me.jtech.packified.client.util.PackUtils;
+import me.jtech.packified.client.util.TutorialHelper;
 import me.jtech.packified.client.windows.*;
 import me.jtech.packified.packets.C2SInfoPacket;
 import net.fabricmc.api.EnvType;
@@ -13,6 +14,7 @@ import net.fabricmc.api.Environment;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.resource.ResourcePackManager;
 import net.minecraft.resource.ResourcePackProfile;
 
 import java.io.File;
@@ -20,11 +22,13 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 
 @Environment(EnvType.CLIENT)
 public class MenuBar {
     private static List<ResourcePackProfile> packs = new ArrayList<>();
-    private static boolean first = true;
+    private static boolean firstOpenPack = true;
+    private static boolean firstOpenInternalPack = true;
 
     public static void render() {
         if (ImGui.beginMainMenuBar()) {
@@ -81,23 +85,57 @@ public class MenuBar {
                 }
                 ImGui.separator();
                 if (ImGui.beginMenu("Open Pack")) {
-                    if (first) {
+                    if (firstOpenPack) {
                         packs = PackUtils.refresh();
-                        first = false;
+                        firstOpenPack = false;
                     }
                     for (ResourcePackProfile pack : packs) {
                         if (ImGui.menuItem(pack.getDisplayName().getString())) {
                             EditorWindow.openFiles.clear();
                             PackifiedClient.currentPack = pack;
                             PackUtils.checkPackType(pack);
+                            ResourcePackManager resourcePackManager = MinecraftClient.getInstance().getResourcePackManager();
+
                             if (PackifiedClient.currentPack != null) {
+                                resourcePackManager.enable(PackifiedClient.currentPack.getDisplayName().getString());
                                 ClientPlayNetworking.send(new C2SInfoPacket(PackifiedClient.currentPack.getDisplayName().getString(), MinecraftClient.getInstance().player.getUuid()));
                             }
                         }
                     }
                     ImGui.endMenu();
                 } else {
-                    first = true;
+                    firstOpenPack = true;
+                }
+                if (ImGui.isItemHovered()) {
+                    ImGui.setTooltip("Open a pack from your resource packs folder");
+                }
+                if (ImGui.beginMenu("Open Internal Pack")) {
+                    if (firstOpenInternalPack) {
+                        packs = PackUtils.refreshInternalPacks();
+                        firstOpenInternalPack = false;
+                    }
+                    for (ResourcePackProfile pack : packs) {
+                        if (ImGui.menuItem(pack.getDisplayName().getString())) {
+                            ConfirmWindow.open("do that?", "You are about to load a pack from another mod. Before you do this, make sure that '" + pack.getDisplayName().getString() + "' has a license that allows you to look at/modify it's resources. Continue at your own risk.", () -> {
+                                FileUtils.loadIdentifierPackAssets(pack);
+                                EditorWindow.openFiles.clear();
+                                PackUtils.refresh();
+                                PackifiedClient.currentPack = PackUtils.getPack(PackUtils.legalizeName(pack.getDisplayName().getString()));
+                                ResourcePackManager resourcePackManager = MinecraftClient.getInstance().getResourcePackManager();
+
+                                if (PackifiedClient.currentPack != null) {
+                                    resourcePackManager.enable(PackifiedClient.currentPack.getDisplayName().getString());
+                                    ClientPlayNetworking.send(new C2SInfoPacket(PackifiedClient.currentPack.getDisplayName().getString(), MinecraftClient.getInstance().player.getUuid()));
+                                }
+                            });
+                        }
+                    }
+                    ImGui.endMenu();
+                } else {
+                    firstOpenInternalPack = true;
+                }
+                if (ImGui.isItemHovered()) {
+                    ImGui.setTooltip("Open one of the internal resource packs (like packs from the game or mods)");
                 }
                 ImGui.separator();
                 if (ImGui.menuItem("Exit")) {
@@ -108,7 +146,7 @@ public class MenuBar {
 
             if (ImGui.beginMenu("Edit")) {
                 if (ImGui.menuItem("Force Reload")) {
-                    PackUtils.reloadPack();
+                    CompletableFuture.runAsync(PackUtils::reloadPack);
                 }
                 ImGui.separator();
                 if (ImGui.menuItem("Undo", "CTRL+Z")) {
@@ -154,6 +192,13 @@ public class MenuBar {
                     ImGui.beginTooltip();
                     ImGui.text("Is: " + Packified.debugMode);
                     ImGui.endTooltip();
+                }
+                if (ImGui.menuItem("Reset Tutorial")) {
+                    ConfirmWindow.open("reset the tutorial", "This will reset the tutorial progress.", () -> {
+                        TutorialHelper.resetTutorial();
+                        TutorialHelper.updateTutorialConfig();
+                        TutorialHelper.isOpen.set(true);
+                    });
                 }
                 ImGui.endMenu();
             }

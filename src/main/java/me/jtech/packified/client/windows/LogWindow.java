@@ -5,7 +5,10 @@ import imgui.ImVec2;
 import imgui.flag.ImGuiCond;
 import imgui.flag.ImGuiWindowFlags;
 import imgui.type.ImBoolean;
+import me.jtech.packified.Packified;
+import me.jtech.packified.client.PackifiedClient;
 import me.jtech.packified.client.imgui.ImGuiImplementation;
+import me.jtech.packified.client.util.ModConfig;
 
 import java.awt.*;
 import java.text.SimpleDateFormat;
@@ -14,7 +17,7 @@ import java.util.LinkedList;
 
 public class LogWindow {
     public static ImBoolean isOpen = new ImBoolean(true);
-    private static LinkedList<LogEntry> logEntries = new LinkedList<>();
+    private static final LinkedList<LogEntry> logEntries = new LinkedList<>();
 
     public static void render() {
         if (!isOpen.get()) {
@@ -35,13 +38,16 @@ public class LogWindow {
             }
 
             // Display log entries
-            for (LogEntry entry : logEntries) {
-                Color color = entry.getColor();
-                float r = color.getRed() / 255.0f;
-                float g = color.getGreen() / 255.0f;
-                float b = color.getBlue() / 255.0f;
-                float alpha = 1.0f;
-                ImGui.textColored(r, g, b, alpha, "[" + timestampToString(entry.getTimestamp()) + "] " + entry.getMessage());
+            synchronized (logEntries) {
+                for (LogEntry entry : new LinkedList<>(logEntries)) { // Create a copy to avoid concurrent modification
+                    if (entry == null) continue; // Skip null entries
+                    Color color = entry.getColor();
+                    float r = color.getRed() / 255.0f;
+                    float g = color.getGreen() / 255.0f;
+                    float b = color.getBlue() / 255.0f;
+                    float alpha = 1.0f;
+                    ImGui.textColored(r, g, b, alpha, "[" + timestampToString(entry.getTimestamp()) + "] " + entry.getMessage());
+                }
             }
         }
         ImGui.end();
@@ -54,6 +60,24 @@ public class LogWindow {
 
     public static void addInfo(String message) {
         addLog(message, LogType.INFO.getColor());
+    }
+
+    public static void addPackReloadInfo(String message) {
+        if (ModConfig.getBoolean("packreloadlogging", true)) {
+            addLog(message, LogType.INFO.getColor());
+        }
+    }
+
+    public static void addPackDownloadInfo(String message) {
+        if (ModConfig.getBoolean("packdownloadlogging", true)) {
+            addLog(message, LogType.INFO.getColor());
+        }
+    }
+
+    public static void addDebugInfo(String message) {
+        if (Packified.debugMode) {
+            addLog(message, LogType.INFO.getColor());
+        }
     }
 
     public static void addWarning(String message) {

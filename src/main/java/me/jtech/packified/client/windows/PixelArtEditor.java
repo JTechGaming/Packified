@@ -40,6 +40,10 @@ public class PixelArtEditor {
         PEN, PAINT_BUCKET, SELECT, ERASER
     }
 
+    private enum SelectionMode {
+        RECTANGLE, CIRCLE, LASSO, MAGIC_WAND
+    }
+
     private Tool currentTool = Tool.PEN;
     private ImInt toolSize = new ImInt(1);
 
@@ -121,12 +125,12 @@ public class PixelArtEditor {
         int height = image.getHeight();
 
         // Tool Buttons
-        ImGui.imageButton(ImGuiImplementation.loadTextureFromIdentifier("textures/ui/neu_pencil.png"), 14, 14);
+        ImGui.imageButton(ImGuiImplementation.loadTextureFromOwnIdentifier("textures/ui/neu_pencil.png"), 14, 14);
         if (ImGui.isItemClicked()) {
             currentTool = Tool.PEN;
         }
         ImGui.sameLine();
-        ImGui.imageButton(ImGuiImplementation.loadTextureFromIdentifier("textures/ui/neu_bucket.png"), 14, 14);
+        ImGui.imageButton(ImGuiImplementation.loadTextureFromOwnIdentifier("textures/ui/neu_bucket.png"), 14, 14);
         if (ImGui.isItemClicked()) {
             currentTool = Tool.PAINT_BUCKET;
         }
@@ -135,12 +139,15 @@ public class PixelArtEditor {
             ImGui.endPopup();
         }
         ImGui.sameLine();
-        ImGui.imageButton(ImGuiImplementation.loadTextureFromIdentifier("textures/ui/neu_select.png"), 14, 14);
+        ImGui.imageButton(ImGuiImplementation.loadTextureFromOwnIdentifier("textures/ui/neu_select.png"), 14, 14);
         if (ImGui.isItemClicked()) {
             currentTool = Tool.SELECT;
         }
+        if (ImGui.beginPopupContextItem("Selection Mode")) {
+
+        }
         ImGui.sameLine();
-        ImGui.imageButton(ImGuiImplementation.loadTextureFromIdentifier("textures/ui/neu_eraser.png"), 14, 14);
+        ImGui.imageButton(ImGuiImplementation.loadTextureFromOwnIdentifier("textures/ui/neu_eraser.png"), 14, 14);
         if (ImGui.isItemClicked()) {
             currentTool = Tool.ERASER;
         }
@@ -153,18 +160,6 @@ public class PixelArtEditor {
         ImGui.sameLine();
         ImGui.setNextItemWidth(120);
         ImGui.sliderFloat("Opacity", currentAlpha, 0.0f, 1.0f);
-
-//        if (ImGui.button("Save Image")) {
-//            saveImage(image, currentFile);
-//        }
-//        ImGui.sameLine();
-//        if (ImGui.button("Undo (Ctrl+Z)")) {
-//            undo();
-//        }
-//        ImGui.sameLine();
-//        if (ImGui.button("Redo (Ctrl+Y)")) {
-//            redo();
-//        }
 
         ImGui.beginChild("Canvas##", 0, 0, false, ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse);
 

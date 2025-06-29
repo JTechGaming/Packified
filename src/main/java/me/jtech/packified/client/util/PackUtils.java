@@ -26,6 +26,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.stream.Stream;
 
@@ -64,14 +65,21 @@ public class PackUtils {
         ResourcePackManager resourcePackManager = MinecraftClient.getInstance().getResourcePackManager();
         resourcePackManager.scanPacks();
         Path resourcePacksPath = FabricLoader.getInstance().getGameDir().resolve("resourcepacks");
+
         resourcePacks = resourcePackManager.getProfiles().stream()
-                .filter(pack -> resourcePacksPath.resolve(legalizeName(pack.getDisplayName().getString())).toFile().exists() || pack.getDisplayName().getString().equalsIgnoreCase("Default"))
+                .filter(pack -> resourcePacksPath.resolve(legalizeName(pack.getDisplayName().getString())).toFile().exists())
                 .toList();
         return resourcePacks;
     }
 
-    private static String legalizeName(String name) {
-        return name.replaceAll("[^a-zA-Z0-9._-]", "_");
+    public static List<ResourcePackProfile> refreshInternalPacks() {
+        ResourcePackManager resourcePackManager = MinecraftClient.getInstance().getResourcePackManager();
+        resourcePackManager.scanPacks();
+        return resourcePackManager.getProfiles().stream().toList();
+    }
+
+    public static String legalizeName(String name) {
+        return name.replaceAll("[^a-zA-Z0-9()' ._-]", "_");
     }
 
     public static void sendPackAsServerPack(ResourcePackProfile currentPack) {
@@ -80,7 +88,7 @@ public class PackUtils {
         }
         List<PackFile> changedAssets = EditorWindow.changedAssets;
         accumulatePacketData(currentPack, changedAssets, data -> {
-            ClientPlayNetworking.send(new C2SSyncPackChanges(data, List.of(new UUID(0, 0))));
+            PacketSender.queuePacket(new C2SSyncPackChanges(data, List.of(new UUID(0, 0))));
         });
     }
 
@@ -90,7 +98,7 @@ public class PackUtils {
         }
         List<PackFile> changedAssets = EditorWindow.changedAssets;
         accumulatePacketData(currentPack, changedAssets, data -> {
-            ClientPlayNetworking.send(new C2SSyncPackChanges(data, PackifiedClient.markedPlayers));
+            PacketSender.queuePacket(new C2SSyncPackChanges(data, PackifiedClient.markedPlayers));
         });
     }
 
@@ -274,6 +282,8 @@ public class PackUtils {
     public static void loadPack(ResourcePackProfile currentPack) {
         ResourcePackManager resourcePackManager = MinecraftClient.getInstance().getResourcePackManager();
         resourcePackManager.enable(currentPack.getId());
+
+        CompletableFuture.runAsync(PackUtils::reloadPack);
     }
 
     public static void unloadPack(ResourcePackProfile currentPack) {

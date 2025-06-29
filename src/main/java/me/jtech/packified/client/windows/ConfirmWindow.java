@@ -33,7 +33,8 @@ public class ConfirmWindow {
 
         if (ImGui.begin("ConfirmPopup", open)) {
             ImGui.text("Are you sure you want to " + actionText + "?");
-            ImGui.text(additionalText);
+            ImGui.spacing();
+            ImGuiImplementation.centeredText(additionalText);
             if (ImGui.button("Cancel")) {
                 open.set(false);
             }

@@ -8,6 +8,7 @@ import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.server.network.ServerPlayerEntity;
+import net.minecraft.util.Identifier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -29,7 +30,9 @@ public class Packified implements ModInitializer {
 
     public static final int MAX_PACKET_SIZE = 32767 / 4; // 32KB - 1KB for overhead
 
-    public static ImInt packetsPerTick = new ImInt(1);
+    public static Identifier identifier(String name) {
+        return Identifier.of(MOD_ID, name);
+    }
 
     @Override
     public void onInitialize() {

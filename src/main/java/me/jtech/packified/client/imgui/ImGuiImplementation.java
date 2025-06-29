@@ -1,20 +1,18 @@
 package me.jtech.packified.client.imgui;
 
 import com.mojang.blaze3d.platform.GlStateManager;
-import imgui.ImGui;
-import imgui.ImGuiIO;
-import imgui.ImVec2;
+import imgui.*;
 import imgui.extension.implot.ImPlot;
 import imgui.flag.ImGuiConfigFlags;
 import imgui.flag.ImGuiDockNodeFlags;
 import imgui.flag.ImGuiWindowFlags;
 import imgui.internal.ImGuiContext;
-import imgui.type.ImBoolean;
 import me.jtech.packified.Packified;
 import me.jtech.packified.client.CornerNotificationsHelper;
 import me.jtech.packified.client.NotificationHelper;
 import me.jtech.packified.client.uiElements.MenuBar;
 import me.jtech.packified.client.util.IniUtil;
+import me.jtech.packified.client.util.TutorialHelper;
 import me.jtech.packified.client.windows.*;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
@@ -31,8 +29,13 @@ import org.lwjgl.opengl.GL11;
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.MissingResourceException;
+import java.util.function.Predicate;
 
 import static org.lwjgl.glfw.GLFW.*;
 
@@ -63,6 +66,10 @@ public class ImGuiImplementation {
 
     public static boolean grabbed = false;
 
+    public static List<ImFont> loadedFonts = new ArrayList<>();
+    public static List<String> loadedFontNames = new ArrayList<>();
+    public static ImFont currentFont = null;
+
     public static void create(final long handle) {
         if (initialized) {
             throw new IllegalStateException("Imlib initialized twice");
@@ -84,10 +91,42 @@ public class ImGuiImplementation {
 
         ImguiThemes.setDeepDarkTheme();
 
-        // The "generatedFonts" list now contains an ImFont for each scale from 5 to 50, you should save the font scales you want as global fields here to use them later:
-        // For example:
-        // defaultFont = generatedFonts.get(30); // Font scale is 30
-        // How you can apply the font then, you can see in ExampleMixin
+        // font initialization
+        float sizeScalar = 1.5f; // Render a higher quality font texture (for sizing)
+
+        loadedFonts.add(ImGui.getFont());
+        loadedFontNames.add("Default Font");
+        currentFont = ImGui.getFont();
+
+        for (Identifier identifier : findFonts()) {
+            final ImFontConfig fontConfig = new ImFontConfig();
+
+            String name = buildFontDisplayName(identifier);
+
+            fontConfig.setName(name);
+            fontConfig.setGlyphOffset(0, 0);
+
+            short[] glyphRanges = new short[] {
+                    0x0020, 0x00FF, // Basic Latin + Latin-1 Supplement
+                    0x0000 // End of ranges
+            };
+            ImFont font = data.getFonts().addFontFromMemoryTTF(
+                    loadFont(identifier.getPath().replace("fonts/", "")),
+                    16 * sizeScalar,
+                    fontConfig,
+                    glyphRanges
+            );
+            font.setScale(1 / sizeScalar);
+            loadedFonts.add(font);
+            loadedFontNames.add(name);
+
+            fontConfig.destroy();
+        }
+
+        data.getFonts().build();
+
+        ImGui.getIO().setFontGlobalScale(PreferencesWindow.fontSize.get() / 14.0f);
+        currentFont = loadedFonts.get(PreferencesWindow.selectedFont.get());
 
         data.setConfigFlags(ImGuiConfigFlags.DockingEnable | ImGuiConfigFlags.ViewportsEnable);
         data.setConfigMacOSXBehaviors(MinecraftClient.IS_SYSTEM_MAC);
@@ -98,6 +137,49 @@ public class ImGuiImplementation {
         ImGuiContext currentContext = ImGui.getCurrentContext();
         if (oldImGuiContext != -1) currentContext.ptr = oldImGuiContext;
         ImGui.setCurrentContext(currentContext);
+    }
+
+    private static List<Identifier> findFonts() {
+        Predicate<Identifier> fontFilter = id -> id.getPath().startsWith("fonts/") && (id.getPath().endsWith(".ttf") || id.getPath().endsWith(".otf"));
+        return MinecraftClient.getInstance().getResourceManager().findResources("fonts", fontFilter
+        ).keySet().stream().toList();
+    }
+
+    private static byte[] loadFont(String name) {
+        try {
+            var resource = MinecraftClient.getInstance().getResourceManager().getResource(Packified.identifier("fonts/" + name));
+            if (resource.isEmpty()) throw new MissingResourceException("Missing font: " + name, "Font", "");
+            try (InputStream is = resource.get().getInputStream()) {
+                return is.readAllBytes();
+            }
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private static String buildFontDisplayName(Identifier identifier) {
+        String baseName = identifier.getPath()
+                .replace("fonts/", "")
+                .replace(".ttf", "")
+                .replace(".otf", "");
+        String[] parts = baseName.split("-");
+        StringBuilder displayName = new StringBuilder();
+        for (int i = 0; i < parts.length; i++) {
+            String part = parts[i];
+            if (part.isEmpty()) continue;
+            if (i > 0) {
+                displayName.append(" (");
+            }
+            // Capitalize the first letter and make the rest lowercase
+            displayName.append(part.substring(0, 1).toUpperCase());
+            if (part.length() > 1) {
+                displayName.append(part.substring(1).toLowerCase());
+            }
+            if (i > 0) {
+                displayName.append(")");
+            }
+        }
+        return displayName.toString().trim();
     }
 
     public static void draw() {
@@ -132,6 +214,8 @@ public class ImGuiImplementation {
         imGuiImplGl3.newFrame();
         imGuiImplGlfw.newFrame(); // Handle keyboard and mouse interactions
         ImGui.newFrame();
+
+        ImGui.pushFont(currentFont);
 
         // do rendering logic
         MenuBar.render();
@@ -174,12 +258,12 @@ public class ImGuiImplementation {
             float currentAspectRatio = frameWidth / (float) frameHeight;
 
             if (currentAspectRatio < aspectRatio) {
-                int newHeight = (int)(frameWidth / aspectRatio);
-                frameY += (frameHeight - newHeight)/2;
+                int newHeight = (int) (frameWidth / aspectRatio);
+                frameY += (frameHeight - newHeight) / 2;
                 frameHeight = newHeight;
             } else if (currentAspectRatio > aspectRatio) {
-                int newWidth = (int)(frameHeight * aspectRatio);
-                frameX += (frameWidth - newWidth)/2;
+                int newWidth = (int) (frameHeight * aspectRatio);
+                frameX += (frameWidth - newWidth) / 2;
                 frameWidth = newWidth;
             }
 
@@ -233,7 +317,12 @@ public class ImGuiImplementation {
         CornerNotificationsHelper.render();
         PreferencesWindow.render();
         PackCreationWindow.render();
+        AssetInspectorWindow.render();
         //ModelEditorWindow.show(new ImBoolean(true));
+
+        TutorialHelper.render();
+
+        ImGui.popFont();
 
         // end frame
         ImGui.render();
@@ -258,7 +347,7 @@ public class ImGuiImplementation {
         ImPlot.destroyContext(ImPlot.getCurrentContext());
     }
 
-    public static int loadTextureFromIdentifier(String identifierPath) {
+    public static int loadTextureFromOwnIdentifier(String identifierPath) {
         try {
             Resource resource = MinecraftClient.getInstance().getResourceManager().getResource(Identifier.of(Packified.MOD_ID, identifierPath)).get();
             BufferedImage image = ImageIO.read(resource.getInputStream());
@@ -267,6 +356,19 @@ public class ImGuiImplementation {
             e.printStackTrace();
             return -1;
         }
+    }
+
+    public static BufferedImage bufferedImageFromIdentifier(Identifier identifier) {
+        try {
+            if (MinecraftClient.getInstance().getResourceManager().getResource(identifier).isEmpty()) {
+                return null; // Resource not found
+            }
+            Resource resource = MinecraftClient.getInstance().getResourceManager().getResource(identifier).get();
+            return ImageIO.read(resource.getInputStream());
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        return null;
     }
 
     public static int loadTextureFromPath(Path filePath) {
@@ -354,7 +456,7 @@ public class ImGuiImplementation {
             long handle = ImGui.getMainViewport().getPlatformHandle();
             if (GLFW.glfwGetInputMode(handle, GLFW.GLFW_CURSOR) != GLFW.GLFW_CURSOR_NORMAL) {
                 GLFW.glfwSetInputMode(handle, GLFW.GLFW_CURSOR, GLFW.GLFW_CURSOR_NORMAL);
-                GLFW.glfwSetCursorPos(handle, ImGui.getMainViewport().getSizeX()/2f, ImGui.getMainViewport().getSizeY()/2f);
+                GLFW.glfwSetCursorPos(handle, ImGui.getMainViewport().getSizeX() / 2f, ImGui.getMainViewport().getSizeY() / 2f);
             }
         }
     }
@@ -460,10 +562,32 @@ public class ImGuiImplementation {
     }
 
     public static ImVec2 getCurrentWindowCenterPos() {
-        return new ImVec2(ImGui.getWindowPosX() + ImGui.getWindowSizeX() / 2f, ImGui.getWindowPosY() + ImGui.getWindowSizeY() / 2f);
+        //return new ImVec2(ImGui.getWindowPosX() + ImGui.getWindowSizeX() / 2f, ImGui.getWindowPosY() + ImGui.getWindowSizeY() / 2f);
+        return getCenterViewportPos();
     }
 
     public static boolean shouldModifyViewport() {
         return isActive();
+    }
+
+    public static void centeredText(String text) {
+        float win_width = ImGui.getWindowWidth();
+        float text_width = ImGui.calcTextSize(text).x;
+
+        // calculate the indentation that centers the text on one line, relative
+        // to window left, regardless of the `ImGuiStyleVar_WindowPadding` value
+        float text_indentation = (win_width - text_width) * 0.5f;
+
+        // if text is too long to be drawn on one line, `text_indentation` can
+        // become too small or even negative, so we check a minimum indentation
+        float min_indentation = 20.0f;
+        if (text_indentation <= min_indentation) {
+            text_indentation = min_indentation;
+        }
+
+        ImGui.sameLine(text_indentation);
+        ImGui.pushTextWrapPos(win_width - text_indentation);
+        ImGui.textWrapped(text);
+        ImGui.popTextWrapPos();
     }
 }

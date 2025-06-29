@@ -1,24 +1,29 @@
 package me.jtech.packified.client.windows;
 
+import imgui.ImFont;
 import imgui.ImGui;
 import imgui.ImVec2;
 import imgui.extension.texteditor.flag.TextEditorPaletteIndex;
 import imgui.flag.ImGuiCond;
-import imgui.flag.ImGuiWindowFlags;
 import imgui.type.ImBoolean;
 import imgui.type.ImInt;
-import me.jtech.packified.Packified;
-import me.jtech.packified.client.NotificationHelper;
 import me.jtech.packified.client.PackifiedClient;
 import me.jtech.packified.client.imgui.ImGuiImplementation;
 import me.jtech.packified.client.imgui.ImguiThemes;
 import me.jtech.packified.client.util.ModConfig;
 
+import java.util.Arrays;
 import java.util.Map;
 
 public class PreferencesWindow {
-    public static ImBoolean stayInCreative = new ImBoolean(ModConfig.getBoolean("stayincreateive", false));
+    public static ImBoolean stayInCreative = new ImBoolean(ModConfig.getBoolean("stayincreative", false));
     public static ImInt maxBackupCount = new ImInt(ModConfig.getInt("maxBackupCount", 10)); // Maximum number of backups to keep
+    public static ImBoolean logPackReloadData = new ImBoolean(ModConfig.getBoolean("packreloadlogging", true));
+    public static ImBoolean logPackDownloadInfo = new ImBoolean(ModConfig.getBoolean("packdownloadlogging", true));
+    public static ImInt fontSize = new ImInt(ModConfig.getInt("fontsize", 14));
+    public static ImInt selectedFont = new ImInt(ModConfig.getInt("font",
+            ImGuiImplementation.loadedFontNames.indexOf("Roboto (Medium)")
+    ));
 
     public static ImBoolean isOpen = new ImBoolean(false);
 
@@ -37,7 +42,7 @@ public class PreferencesWindow {
                     ModConfig.updateSettings(Map.of("stayincreative", stayInCreative.get()));
                     PackifiedClient.changeGameMode(PackifiedClient.getPreviousGameMode());
                 }
-                if (ImGui.inputInt("Max backups" , maxBackupCount)) {
+                if (ImGui.inputInt("Max backups", maxBackupCount)) {
                     ModConfig.updateSettings(Map.of("maxBackupCount", maxBackupCount.get()));
                 }
             }
@@ -45,10 +50,34 @@ public class PreferencesWindow {
                 if (ImGui.combo("Theme", ImguiThemes.getCurrentTheme(), ImguiThemes.getAvailableThemes())) {
                     ImguiThemes.setTheme(ImguiThemes.getCurrentTheme());
                 }
+                if (ImGui.inputInt("Font size", fontSize)) {
+                    ImGui.getIO().setFontGlobalScale(fontSize.get() / 14.0f);
+                    ModConfig.updateSettings(Map.of("fontsize", fontSize.get()));
+                }
+                if (ImGui.combo("Font", selectedFont, ImGuiImplementation.loadedFontNames.toArray(String[]::new))) {
+                    ImGuiImplementation.currentFont = ImGuiImplementation.loadedFonts.get(selectedFont.get());
+                    ModConfig.updateSettings(Map.of("font", selectedFont.get()));
+                }
+                if (ImGui.checkbox("Log unimportant pack data", logPackReloadData)) {
+                    ModConfig.updateSettings(Map.of("packreloadlogging", logPackReloadData.get()));
+                }
+                if (ImGui.isItemHovered()) {
+                    ImGui.setTooltip("Whether the log window should display unimportant pack reload data like:\n 'Created: 1024x1024x4 minecraft:textures/atlas/armor_trims.png-atlas'");
+                }
+                if (ImGui.checkbox("Log pack download info", logPackDownloadInfo)) {
+                    ModConfig.updateSettings(Map.of("packdownloadlogging", logPackDownloadInfo.get()));
+                }
+                if (ImGui.isItemHovered()) {
+                    ImGui.setTooltip("Whether the log window should display info about pack downloading progress");
+                }
+                if (ImGui.collapsingHeader("Editor")) {
+                    renderTextEditorColorSettings();
+                }
             }
-            if (ImGui.collapsingHeader("Editor")) {
-                renderTextEditorColorSettings();
-            }
+//            if (ImGui.collapsingHeader("Keymap")) {
+//                ImGui.text("This feature is still in development");
+//            }
+
 
             // Close button in bottom right
             ImGui.setCursorPosY(ImGui.getWindowHeight() - ImGui.getFrameHeightWithSpacing());

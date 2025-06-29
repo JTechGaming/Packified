@@ -6,10 +6,7 @@ import me.jtech.packified.Packified;
 import me.jtech.packified.SyncPacketData;
 import me.jtech.packified.client.imgui.CustomImGuiImplGlfw;
 import me.jtech.packified.client.imgui.ImGuiImplementation;
-import me.jtech.packified.client.util.FileUtils;
-import me.jtech.packified.client.util.ModConfig;
-import me.jtech.packified.client.util.PackFile;
-import me.jtech.packified.client.util.PackUtils;
+import me.jtech.packified.client.util.*;
 import me.jtech.packified.client.windows.ConfirmWindow;
 import me.jtech.packified.client.windows.EditorWindow;
 import me.jtech.packified.client.windows.LogWindow;
@@ -81,7 +78,7 @@ public class PackifiedClient implements ClientModInitializer {
             }
         });
 
-        LogWindow.addLog("Packified Client initialized", LogWindow.LogType.INFO.getColor());
+        TutorialHelper.init();
 
         // Prevent Minecraft from locking the cursor when clicking
         ClientTickEvents.START_CLIENT_TICK.register(client -> {
@@ -127,8 +124,8 @@ public class PackifiedClient implements ClientModInitializer {
                 notification.get().setProgress(notification.get().getProgress() + 1);
             }
 
-            LogWindow.addLog("Downloading pack from server: " + payload.packetData().packName(), LogWindow.LogType.INFO.getColor());
-            LogWindow.addLog(notification.get().getProgress() + " / " + notification.get().getMaxProgress(), LogWindow.LogType.INFO.getColor());
+            LogWindow.addPackDownloadInfo("Downloading pack from server: " + payload.packetData().packName());
+            LogWindow.addPackDownloadInfo(notification.get().getProgress() + " / " + notification.get().getMaxProgress());
 
             accumulativeAssetDownload(data, currentPack, notification.get());
         });
@@ -170,6 +167,8 @@ public class PackifiedClient implements ClientModInitializer {
                 ClientPlayNetworking.send(new C2SInfoPacket(currentPack.getDisplayName().getString(), MinecraftClient.getInstance().player.getUuid()));
             }
         });
+
+        LogWindow.addInfo("Packified Client initialized");
     }
 
     public static void sendBlockUpdateToLoadedChunks() {
@@ -223,12 +222,12 @@ public class PackifiedClient implements ClientModInitializer {
         if (data.lastData()) {
             PackifiedClient.LOGGER.info("lastData");
             FileUtils.setMCMetaContent(pack, data.metadata());
-            PackUtils.reloadPack();
+            CompletableFuture.runAsync(PackUtils::reloadPack);
             if (notification != null) {
                 notification.setProgress(notification.getMaxProgress());
             }
             isFirstPacket = true;
-            LogWindow.addLog("Pack " + pack.getDisplayName().getString() + " downloaded successfully!", LogWindow.LogType.INFO.getColor());
+            LogWindow.addInfo("Pack " + pack.getDisplayName().getString() + " downloaded successfully!");
         }
     }
 

@@ -9,11 +9,14 @@
     "compat.AxiomCompatMixin"
   ],
   "client": [
+    "FontInfoMixin",
     "FramebufferMixin",
     "MinecraftClientMixin",
     "MouseMixin",
-    "ShaderModelErrorsMixin",
+    "ShaderErrorsMixin",
     "SoundErrorMixin",
+    "SpriteAtlasInfoMixin",
+    "UnihexFontLoaderMixin",
     "WindowMixin"
   ],
   "injectors": {
