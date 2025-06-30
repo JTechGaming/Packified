@@ -3,6 +3,7 @@ package me.jtech.packified.client.windows;
 import imgui.ImGui;
 import imgui.ImVec2;
 import imgui.flag.ImGuiCond;
+import imgui.flag.ImGuiStyleVar;
 import imgui.flag.ImGuiWindowFlags;
 import imgui.internal.ImGuiWindow;
 import imgui.type.ImBoolean;
@@ -32,12 +33,18 @@ public class ConfirmWindow {
         ImGui.setNextWindowViewport(ImGui.getMainViewport().getID());
 
         if (ImGui.begin("ConfirmPopup", open)) {
-            ImGui.text("Are you sure you want to " + actionText + "?");
+            ImGuiImplementation.centeredText("Are you sure you want to " + actionText + "?");
+            ImGui.spacing();
             ImGui.spacing();
             ImGuiImplementation.centeredText(additionalText);
+            ImGui.spacing();
+            ImGui.spacing();
+            ImGui.spacing();
             if (ImGui.button("Cancel")) {
                 open.set(false);
             }
+            ImGui.sameLine();
+            ImGui.setCursorPosX(ImGui.getCursorPosX() + ImGui.getContentRegionAvailX() - ImGui.calcTextSize("Confirm  ").x);
             if (ImGui.button("Confirm")) {
                 open.set(false);
                 action.execute();

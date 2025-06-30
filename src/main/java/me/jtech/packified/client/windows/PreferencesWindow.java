@@ -22,7 +22,7 @@ public class PreferencesWindow {
     public static ImBoolean logPackDownloadInfo = new ImBoolean(ModConfig.getBoolean("packdownloadlogging", true));
     public static ImInt fontSize = new ImInt(ModConfig.getInt("fontsize", 14));
     public static ImInt selectedFont = new ImInt(ModConfig.getInt("font",
-            ImGuiImplementation.loadedFontNames.indexOf("Roboto (Medium)")
+            ImGuiImplementation.loadedFontNames.indexOf("Roboto (Regular)")
     ));
 
     public static ImBoolean isOpen = new ImBoolean(false);

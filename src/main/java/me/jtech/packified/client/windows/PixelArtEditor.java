@@ -3,10 +3,13 @@ package me.jtech.packified.client.windows;
 import imgui.ImGui;
 import imgui.ImGuiIO;
 import imgui.ImVec2;
+import imgui.flag.ImGuiCol;
+import imgui.flag.ImGuiStyleVar;
 import imgui.flag.ImGuiWindowFlags;
 import imgui.type.ImInt;
 import me.jtech.packified.client.imgui.ImGuiImplementation;
 import org.lwjgl.BufferUtils;
+import org.lwjgl.glfw.GLFW;
 
 import javax.imageio.ImageIO;
 import java.awt.*;
@@ -35,6 +38,7 @@ public class PixelArtEditor {
 
     private final Stack<BufferedImage> undoStack = new Stack<>();
     private final Stack<BufferedImage> redoStack = new Stack<>();
+    private boolean finalizedSelection = false;
 
     private enum Tool {
         PEN, PAINT_BUCKET, SELECT, ERASER
@@ -43,6 +47,8 @@ public class PixelArtEditor {
     private enum SelectionMode {
         RECTANGLE, CIRCLE, LASSO, MAGIC_WAND
     }
+
+    private SelectionMode selectionMode = SelectionMode.RECTANGLE;
 
     private Tool currentTool = Tool.PEN;
     private ImInt toolSize = new ImInt(1);
@@ -56,11 +62,14 @@ public class PixelArtEditor {
     private float zoomSensitivity = 1.0f; // sensitivity for zooming
     private float panSensitivity = 10.0f; // sensitivity for panning
 
-    private ImInt floodFillTolerance = new ImInt(20); // Tolerance for flood fill color matching
+    private ImInt magicWandTolerance = new ImInt(20); // Tolerance for flood fill color matching
 
     public boolean wasModified = false; // Track if the image was modified
 
     private boolean firstRender = true; // Track if this is the first render to clamp image position
+
+    private Point selectionStart = null;
+    private Point selectionEnd = null;
 
     // Load image and create OpenGL texture
     public void loadImage(BufferedImage img, Path path) {
@@ -125,31 +134,80 @@ public class PixelArtEditor {
         int height = image.getHeight();
 
         // Tool Buttons
+        if (currentTool == Tool.PEN) {
+            ImGui.pushStyleVar(ImGuiStyleVar.FrameBorderSize, 2.0f);
+            ImGui.pushStyleColor(ImGuiCol.Border, 0xFFFF0000);
+        }
         ImGui.imageButton(ImGuiImplementation.loadTextureFromOwnIdentifier("textures/ui/neu_pencil.png"), 14, 14);
+        if (currentTool == Tool.PEN) {
+            ImGui.popStyleVar();
+            ImGui.popStyleColor();
+        }
         if (ImGui.isItemClicked()) {
             currentTool = Tool.PEN;
         }
+        if (ImGui.isItemHovered()) {
+            ImGui.setTooltip("Pen Tool");
+        }
         ImGui.sameLine();
+        if (currentTool == Tool.PAINT_BUCKET) {
+            ImGui.pushStyleVar(ImGuiStyleVar.FrameBorderSize, 2.0f);
+            ImGui.pushStyleColor(ImGuiCol.Border, 0xFFFF0000);
+        }
         ImGui.imageButton(ImGuiImplementation.loadTextureFromOwnIdentifier("textures/ui/neu_bucket.png"), 14, 14);
+        if (currentTool == Tool.PAINT_BUCKET) {
+            ImGui.popStyleVar();
+            ImGui.popStyleColor();
+        }
         if (ImGui.isItemClicked()) {
             currentTool = Tool.PAINT_BUCKET;
         }
-        if (ImGui.beginPopupContextItem("Floodfill Settings")) {
-            ImGui.inputInt("Tolerance", floodFillTolerance);
-            ImGui.endPopup();
+        if (ImGui.isItemHovered()) {
+            ImGui.setTooltip("Paint Bucket Tool");
         }
         ImGui.sameLine();
+        if (currentTool == Tool.SELECT) {
+            ImGui.pushStyleVar(ImGuiStyleVar.FrameBorderSize, 2.0f);
+            ImGui.pushStyleColor(ImGuiCol.Border, 0xFFFF0000);
+        }
         ImGui.imageButton(ImGuiImplementation.loadTextureFromOwnIdentifier("textures/ui/neu_select.png"), 14, 14);
+        if (currentTool == Tool.SELECT) {
+            ImGui.popStyleVar();
+            ImGui.popStyleColor();
+        }
         if (ImGui.isItemClicked()) {
             currentTool = Tool.SELECT;
         }
+        if (ImGui.isItemHovered()) {
+            ImGui.setTooltip("Selection Tool (This tool is still in development)");
+        }
         if (ImGui.beginPopupContextItem("Selection Mode")) {
-
+            for (SelectionMode mode : SelectionMode.values()) {
+                if (ImGui.menuItem(mode.name(), null, mode == selectionMode)) {
+                    selectionMode = mode;
+                }
+            }
+            if (selectionMode == SelectionMode.MAGIC_WAND) {
+                ImGui.separator();
+                ImGui.inputInt("Tolerance", magicWandTolerance);
+            }
+            ImGui.endPopup();
         }
         ImGui.sameLine();
+        if (currentTool == Tool.ERASER) {
+            ImGui.pushStyleVar(ImGuiStyleVar.FrameBorderSize, 2.0f);
+            ImGui.pushStyleColor(ImGuiCol.Border, 0xFFFF0000);
+        }
         ImGui.imageButton(ImGuiImplementation.loadTextureFromOwnIdentifier("textures/ui/neu_eraser.png"), 14, 14);
+        if (currentTool == Tool.ERASER) {
+            ImGui.popStyleVar();
+            ImGui.popStyleColor();
+        }
         if (ImGui.isItemClicked()) {
             currentTool = Tool.ERASER;
+        }
+        if (ImGui.isItemHovered()) {
+            ImGui.setTooltip("Eraser Tool");
         }
         ImGui.sameLine();
         ImGui.setNextItemWidth(150);
@@ -234,6 +292,13 @@ public class PixelArtEditor {
             isDrawing = false;
         }
 
+        if (currentTool == Tool.SELECT) {
+            if (selectionMode == SelectionMode.RECTANGLE) {
+                //renderSelection();
+                //handleSelection();
+            }
+        }
+
         // Handle undo/redo shortcuts
         if (io.getKeyCtrl() && ImGui.isKeyPressed('Z', false)) {
             undo();
@@ -299,6 +364,80 @@ public class PixelArtEditor {
         if (imagePosY < windowHeight - height * scale) imagePosY = Math.min(0, windowHeight - height * scale);
     }
 
+    private void renderSelection() {
+        if (selectionStart != null && selectionEnd != null) {
+            int x1 = Math.min(selectionStart.x, selectionEnd.x);
+            int y1 = Math.min(selectionStart.y, selectionEnd.y);
+            int x2 = Math.max(selectionStart.x, selectionEnd.x);
+            int y2 = Math.max(selectionStart.y, selectionEnd.y);
+
+            ImGui.getWindowDrawList().addRect(
+                    ImGui.getItemRectMinX() + x1 * scale - imagePosX,
+                    ImGui.getItemRectMinY() + y1 * scale - imagePosY,
+                    ImGui.getItemRectMinX() + x2 * scale - imagePosX,
+                    ImGui.getItemRectMinY() + y2 * scale - imagePosY,
+                    0xFF00FF00, // Green color
+                    0.0f,       // No rounding
+                    0           // Thickness
+            );
+        }
+    }
+
+    private void handleSelection() {
+        ImGuiIO io = ImGui.getIO();
+        boolean mouseHovered = ImGui.isItemHovered();
+        boolean leftMouseDown = ImGui.isMouseDown(0);
+
+        if (mouseHovered && leftMouseDown) {
+            if (finalizedSelection) {
+                selectionStart = null;
+                selectionEnd = null;
+            }
+            float mouseX = io.getMousePosX();
+            float mouseY = io.getMousePosY();
+
+            float imageScreenX = ImGui.getItemRectMinX();
+            float imageScreenY = ImGui.getItemRectMinY();
+
+            float localX = (mouseX - imageScreenX) / scale;
+            float localY = (mouseY - imageScreenY) / scale;
+
+            int pixelX = (int) localX;
+            int pixelY = (int) localY;
+
+            if (selectionStart == null) {
+                selectionStart = new Point(pixelX, pixelY);
+            }
+            selectionEnd = new Point(pixelX, pixelY);
+        } else if (!leftMouseDown) {
+            finalizedSelection = true;
+        }
+
+        if (ImGui.getIO().getKeysDown(GLFW.GLFW_KEY_DELETE)) {
+            if (selectionStart != null && selectionEnd != null) {
+                deleteSelection();
+                selectionStart = null;
+                selectionEnd = null;
+            }
+        }
+    }
+
+    private void deleteSelection() {
+        int x1 = Math.min(selectionStart.x, selectionEnd.x);
+        int y1 = Math.min(selectionStart.y, selectionEnd.y);
+        int x2 = Math.max(selectionStart.x, selectionEnd.x);
+        int y2 = Math.max(selectionStart.y, selectionEnd.y);
+
+        for (int y = y1; y <= y2; y++) {
+            for (int x = x1; x <= x2; x++) {
+                if (x >= 0 && x < image.getWidth() && y >= 0 && y < image.getHeight()) {
+                    image.setRGB(x, y, 0x00000000);
+                }
+            }
+        }
+        updateTexture();
+    }
+
     private void drawInterpolatedLine(int x0, int y0, int x1, int y1) {
         int dx = Math.abs(x1 - x0);
         int dy = Math.abs(y1 - y0);
@@ -342,7 +481,7 @@ public class PixelArtEditor {
             int y = p.y;
 
             if (x < 0 || x >= width || y < 0 || y >= height) continue;
-            if (!colorsMatch(image.getRGB(x, y), targetColor, floodFillTolerance.get())) continue; // Allow 10 tolerance
+            if (!colorsMatch(image.getRGB(x, y), targetColor, magicWandTolerance.get())) continue; // Allow 10 tolerance
 
             image.setRGB(x, y, fillColor);
 

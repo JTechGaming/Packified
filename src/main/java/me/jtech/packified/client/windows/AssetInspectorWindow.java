@@ -4,13 +4,23 @@ import imgui.ImGui;
 import imgui.ImVec2;
 import imgui.extension.texteditor.TextEditor;
 import imgui.extension.texteditor.flag.TextEditorPaletteIndex;
+import imgui.flag.ImGuiCol;
 import imgui.flag.ImGuiCond;
 import imgui.flag.ImGuiWindowFlags;
 import imgui.internal.ImGuiWindow;
 import imgui.type.ImBoolean;
+import me.jtech.packified.client.PackifiedClient;
 import me.jtech.packified.client.imgui.ImGuiImplementation;
 import me.jtech.packified.client.util.PackFile;
+import me.jtech.packified.client.util.PackUtils;
+import me.jtech.packified.packets.C2SInfoPacket;
+import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
+import net.minecraft.client.MinecraftClient;
+import net.minecraft.resource.ResourcePackManager;
+import net.minecraft.resource.ResourcePackProfile;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 
 import static me.jtech.packified.client.windows.EditorWindow.checkForErrors;
@@ -20,6 +30,11 @@ public class AssetInspectorWindow {
 
     private static PackFile base = null;
     private static PackFile compare = null;
+
+    private static boolean firstBase = true;
+    private static List<ResourcePackProfile> packs = new ArrayList<>();
+    private static ResourcePackProfile baseProfile = null;
+    private static ResourcePackProfile compareProfile = null;
 
     public static void render() {
         if (!isOpen.get()) {
@@ -40,21 +55,39 @@ public class AssetInspectorWindow {
             }
             ImGui.endMenuBar();
 
-            // Split screen
-            if (ImGui.beginChild("Base")) {
-                if (base == null) {
-                    //ImGui.setCursorPos((ImGui.getContentRegionAvailX() - ImGui.calcTextSize("No file loaded").x) / 2, (ImGui.getContentRegionAvailY() - ImGui.getTextLineHeightWithSpacing()) / 2);
-                    ImGui.text("No file loaded");
-                    if (ImGui.button("Load File")) {
+            ImGui.pushStyleColor(ImGuiCol.ChildBg, 0x15FFFFFF);
 
+            // Split screen
+            if (ImGui.beginChild("Base", ImGui.getContentRegionAvailX()/2 - 30, ImGui.getContentRegionAvailY())) {
+                if (compare == null) {
+                    ImGui.setCursorPos((ImGui.getContentRegionAvailX() - ImGui.calcTextSize("No file loaded").x) / 2, (ImGui.getContentRegionAvailY() - ImGui.getTextLineHeightWithSpacing()) / 2);
+                    ImGui.text("No file loaded");
+                    ImGui.setCursorPos((ImGui.getContentRegionAvailX() - ImGui.calcTextSize("Load File ").x) / 2, ImGui.getCursorPosY() + ImGui.getTextLineHeightWithSpacing()-20);
+                    if (ImGui.button("Load File")) {
+                        if (baseProfile == null) {
+                            ImGui.openPopup("Select Pack");
+                            if (firstBase) {
+                                firstBase = false;
+                                packs = PackUtils.refreshInternalPacks();
+                            }
+                            for (ResourcePackProfile pack : packs) {
+                                if (ImGui.menuItem(pack.getDisplayName().getString())) {
+                                    baseProfile = pack;
+                                }
+                            }
+                            ImGui.endPopup();
+                        }
+                    }
+                    if (ImGui.isItemHovered() && baseProfile != null) {
+                        ImGui.setTooltip("Open a file from the file hierarchy");
                     }
                 } else {
                     renderTextFileEditor(base);
                 }
+                ImGui.endChild();
             }
-            ImGui.endChild();
             ImGui.sameLine();
-            ImGui.imageButton(ImGuiImplementation.loadTextureFromOwnIdentifier("textures/ui/neu_arrow.png"), 48, 48);
+            ImGui.imageButton(ImGuiImplementation.loadTextureFromOwnIdentifier("textures/ui/neu_arrow.png"), 24, 24);
             if (ImGui.isItemHovered()) {
                 ImGui.setTooltip("Transfer");
             }
@@ -64,18 +97,28 @@ public class AssetInspectorWindow {
                 }
             }
             ImGui.sameLine();
-            if (ImGui.beginChild("Compare")) {
+            if (ImGui.beginChild("Compare", ImGui.getContentRegionAvailX(), ImGui.getContentRegionAvailY())) {
                 if (compare == null) {
-                    //ImGui.setCursorPos((ImGui.getContentRegionAvailX() - ImGui.calcTextSize("No file loaded").x) / 2, (ImGui.getContentRegionAvailY() - ImGui.getTextLineHeightWithSpacing()) / 2);
+                    ImGui.setCursorPos((ImGui.getContentRegionAvailX() - ImGui.calcTextSize("No file loaded").x) / 2, (ImGui.getContentRegionAvailY() - ImGui.getTextLineHeightWithSpacing()) / 2);
                     ImGui.text("No file loaded");
-                    if (ImGui.button("Load File")) {
+                    ImGui.setCursorPos((ImGui.getContentRegionAvailX() - ImGui.calcTextSize("Load File ").x) / 2, ImGui.getCursorPosY() + ImGui.getTextLineHeightWithSpacing()-20);
+                    if (ImGui.button(PackifiedClient.currentPack == null ? "Open Pack" : "Create File")) {
+                        if (PackifiedClient.currentPack != null) {
 
+                        } else {
+                            SelectPackWindow.open.set(true);
+                        }
+                    }
+                    if (ImGui.isItemHovered()) {
+                        ImGui.setTooltip("Create a new file by clicking this button, or open one from the file hierarchy");
                     }
                 } else {
                     renderTextFileEditor(base);
                 }
+                ImGui.endChild();
             }
-            ImGui.endChild();
+
+            ImGui.popStyleColor();
         }
         ImGui.end();
     }

@@ -159,38 +159,55 @@ public class MenuBar {
                         EditorWindow.currentFile.getTextEditor().redo(1);
                     }
                 }
-                if (ImGui.menuItem("Preferences")) {
+                ImGui.separator();
+                if (ImGui.menuItem("Open Pack Folder")) {
+                    FileUtils.openFileInExplorer(new File("resourcepacks/").toPath());
+                }
+                ImGui.separator();
+                if (ImGui.menuItem("Preferences", "Ctrl+Alt+S", PreferencesWindow.isOpen.get())) {
                     PreferencesWindow.isOpen.set(!PreferencesWindow.isOpen.get());
                 }
                 ImGui.endMenu();
             }
 
             if (ImGui.beginMenu("Window")) {
-                if (ImGui.menuItem("Multiplayer")) {
+                if (ImGui.menuItem("Multiplayer", null, MultiplayerWindow.isOpen.get())) {
                     MultiplayerWindow.isOpen.set(!MultiplayerWindow.isOpen.get());
                 }
-                if (ImGui.menuItem("File Hierarchy")) {
+                if (ImGui.menuItem("File Hierarchy", null, FileHierarchy.isOpen.get())) {
                     FileHierarchy.isOpen.set(!FileHierarchy.isOpen.get());
                 }
-                if (ImGui.menuItem("File Editor")) {
+                if (ImGui.menuItem("File Editor", null, EditorWindow.isOpen.get())) {
                     EditorWindow.isOpen.set(!EditorWindow.isOpen.get());
                 }
-                if (ImGui.menuItem("Log")) {
+                if (ImGui.menuItem("Log", null, LogWindow.isOpen.get())) {
                     LogWindow.isOpen.set(!LogWindow.isOpen.get());
                 }
                 ImGui.endMenu();
+            }
+
+            if (Packified.debugMode) {
+                if (ImGui.beginMenu("Debug")) {
+                    if (ImGui.menuItem("Send pack to self") && PackifiedClient.currentPack != null) {
+                        PackUtils.sendFullPack(PackifiedClient.currentPack, MinecraftClient.getInstance().player.getUuid());
+                    }
+                    if (ImGui.isItemHovered()) {
+                        ImGui.setTooltip("Please do not use this......");
+                    }
+                    ImGui.endMenu();
+                }
             }
 
             if (ImGui.beginMenu("Help")) {
                 if (ImGui.menuItem("About")) {
                     System.out.println("Show About Window");
                 }
-                if (ImGui.menuItem("Toggle Debug Mode")) {
+                if (ImGui.menuItem("Toggle Debug Mode", null, Packified.debugMode)) {
                     Packified.debugMode = !Packified.debugMode;
                 }
                 if (ImGui.isItemHovered()) {
                     ImGui.beginTooltip();
-                    ImGui.text("Is: " + Packified.debugMode);
+                    ImGui.text("This enables some debugging features.");
                     ImGui.endTooltip();
                 }
                 if (ImGui.menuItem("Reset Tutorial")) {

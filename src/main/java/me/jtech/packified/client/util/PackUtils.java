@@ -75,7 +75,12 @@ public class PackUtils {
     public static List<ResourcePackProfile> refreshInternalPacks() {
         ResourcePackManager resourcePackManager = MinecraftClient.getInstance().getResourcePackManager();
         resourcePackManager.scanPacks();
-        return resourcePackManager.getProfiles().stream().toList();
+        Path resourcePacksPath = FabricLoader.getInstance().getGameDir().resolve("resourcepacks");
+
+        resourcePacks = resourcePackManager.getProfiles().stream()
+                .filter(pack -> !resourcePacksPath.resolve(legalizeName(pack.getDisplayName().getString())).toFile().exists())
+                .toList();
+        return resourcePacks;
     }
 
     public static String legalizeName(String name) {

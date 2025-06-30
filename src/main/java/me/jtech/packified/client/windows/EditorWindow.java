@@ -91,7 +91,7 @@ public class EditorWindow {
                 }
                 if (currentFile != null && currentFile.getExtension().equalsIgnoreCase(".png")) {
                     if (ImGui.beginMenu("Image")) {
-                        if (ImGui.menuItem("Show Grid")) {
+                        if (ImGui.menuItem("Show Grid", null, showGrid)) {
                             showGrid = !showGrid; // Toggle grid visibility
                         }
                         ImGui.endMenu();
@@ -216,9 +216,6 @@ public class EditorWindow {
 
         return waveform;
     }
-
-    private static Clip audioClip;
-    private static float[] playbackPosition = new float[]{0f}; // Current play position in seconds
 
     private static void renderTabPopup() {
         if (currentFile == null) {
