@@ -32,9 +32,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.MissingResourceException;
+import java.util.*;
 import java.util.function.Predicate;
 
 import static org.lwjgl.glfw.GLFW.*;
@@ -131,7 +129,7 @@ public class ImGuiImplementation {
         data.setConfigFlags(ImGuiConfigFlags.DockingEnable | ImGuiConfigFlags.ViewportsEnable);
         data.setConfigMacOSXBehaviors(MinecraftClient.IS_SYSTEM_MAC);
 
-        imGuiImplGlfw.init(handle, true);
+        imGuiImplGlfw.init(MinecraftClient.getInstance().getWindow().getHandle(), true);
         imGuiImplGl3.init();
 
         ImGuiContext currentContext = ImGui.getCurrentContext();
@@ -347,15 +345,36 @@ public class ImGuiImplementation {
         ImPlot.destroyContext(ImPlot.getCurrentContext());
     }
 
+    private static final Map<String, Integer> textureCache = new HashMap<>();
+
     public static int loadTextureFromOwnIdentifier(String identifierPath) {
+        // Check if the texture is already cached
+        if (textureCache.containsKey(identifierPath)) {
+            return textureCache.get(identifierPath);
+        }
+
         try {
-            Resource resource = MinecraftClient.getInstance().getResourceManager().getResource(Identifier.of(Packified.MOD_ID, identifierPath)).get();
+            Resource resource = MinecraftClient.getInstance().getResourceManager()
+                    .getResource(Identifier.of(Packified.MOD_ID, identifierPath)).get();
             BufferedImage image = ImageIO.read(resource.getInputStream());
-            return fromBufferedImage(image);
+            int textureId = fromBufferedImage(image);
+
+            // Cache the texture ID
+            if (textureId != -1) {
+                textureCache.put(identifierPath, textureId);
+            }
+
+            return textureId;
         } catch (IOException e) {
             e.printStackTrace();
             return -1;
         }
+    }
+
+    public static void clearTextureCache() {
+        // Clear cached textures
+        textureCache.forEach((key, textureId) -> GlStateManager._deleteTexture(textureId));
+        textureCache.clear();
     }
 
     public static BufferedImage bufferedImageFromIdentifier(Identifier identifier) {

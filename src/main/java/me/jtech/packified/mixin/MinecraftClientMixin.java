@@ -6,6 +6,7 @@ import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.RunArgs;
+import net.minecraft.client.gl.Framebuffer;
 import net.minecraft.client.util.Window;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
@@ -31,16 +32,10 @@ public class MinecraftClientMixin {
         ImGuiImplementation.dispose();
     }
 
-    @Inject(method = "openGameMenu", at = @At("HEAD"), cancellable = true)
-    public void openGameMenu(CallbackInfo ci) {
-        if (ImGuiImplementation.isActive()) {
-            ci.cancel();
-        }
-    }
-
-    @Inject(method = "render", at=@At(value = "INVOKE", target = "Lnet/minecraft/client/gl/Framebuffer;draw(II)V", shift = At.Shift.AFTER))
+    @Inject(method = "render", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/gl/Framebuffer;draw(II)V", shift = At.Shift.AFTER))
     public void afterMainBlit(boolean bl, CallbackInfo ci) {
-        if (!RenderSystem.isOnRenderThread()) return;
-        ImGuiImplementation.draw();
+        if (RenderSystem.isOnRenderThread()) {
+            ImGuiImplementation.draw();
+        }
     }
 }

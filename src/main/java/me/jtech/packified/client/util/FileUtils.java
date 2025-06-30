@@ -11,7 +11,6 @@ import net.minecraft.SharedConstants;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.screen.pack.ResourcePackOrganizer;
 import net.minecraft.resource.*;
-import net.minecraft.resource.metadata.ResourceMetadataReader;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.InvalidIdentifierException;
 

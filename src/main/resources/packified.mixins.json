@@ -4,19 +4,12 @@
   "package": "me.jtech.packified.mixin",
   "compatibilityLevel": "JAVA_21",
   "mixins": [
-    "JsonModelErrorsMixin",
-    "PlayerInventoryMixin",
     "compat.AxiomCompatMixin"
   ],
   "client": [
-    "FontInfoMixin",
     "FramebufferMixin",
     "MinecraftClientMixin",
     "MouseMixin",
-    "ShaderErrorsMixin",
-    "SoundErrorMixin",
-    "SpriteAtlasInfoMixin",
-    "UnihexFontLoaderMixin",
     "WindowMixin"
   ],
   "injectors": {
