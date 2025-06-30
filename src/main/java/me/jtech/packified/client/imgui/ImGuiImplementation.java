@@ -339,6 +339,9 @@ public class ImGuiImplementation {
 
     @ApiStatus.Internal
     public static void dispose() {
+        clearTextureCache();
+        FileHierarchy.clearCache();
+
         imGuiImplGl3.shutdown();
 
         ImGui.destroyContext();

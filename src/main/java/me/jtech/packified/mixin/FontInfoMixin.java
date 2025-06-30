@@ -16,12 +16,21 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
+import java.io.Reader;
 import java.util.List;
 
 @Mixin(FontManager.class)
 public class FontInfoMixin {
-//    @Inject(method = "loadFontProviders", at = @At(value = "INVOKE", target = "Lorg/slf4j/Logger;warn(Ljava/lang/String;[Ljava/lang/Object;)V", shift = At.Shift.AFTER))
-//    private static void packified$notifyFontLoadError(List<Resource> fontResources, Identifier id, CallbackInfoReturnable<List<Pair<FontManager.FontKey, FontLoader.Provider>>> cir, @Local Resource resource, @Local Exception exception) {
-//        LogWindow.addWarning(String.format("Unable to load font '%s' in %s in resourcepack: '%s'", id, "fonts.json", resource.getPackId()));
-//    }
+    @Inject(method = "loadFontProviders", at = @At(value = "INVOKE", target = "Lnet/minecraft/resource/Resource;getPackId()Ljava/lang/String;", shift = At.Shift.AFTER))
+    private static void packified$logFontLoadError(List<Resource> fontResources, Identifier id, CallbackInfoReturnable<List<Pair<FontManager.FontKey, FontLoader.Provider>>> cir,
+                                                   @Local Resource resource) {
+        try (Reader reader = resource.getReader()) {
+            JsonElement jsonElement = FontManager.GSON.fromJson(reader, JsonElement.class);
+            if (jsonElement == null || !jsonElement.isJsonObject()) {
+                throw new JsonParseException("Expected a JSON object");
+            }
+        } catch (Exception e) {
+            LogWindow.addWarning(String.format("Unable to load font '%s' in %s in resourcepack: '%s'", id, "fonts.json", resource.getPackId()));
+        }
+    }
 }
