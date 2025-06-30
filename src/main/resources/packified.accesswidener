@@ -15,3 +15,5 @@ accessible field net/minecraft/client/MinecraftClient COMPLETED_UNIT_FUTURE Ljav
 accessible field net/minecraft/client/MinecraftClient resourcePackManager Lnet/minecraft/resource/ResourcePackManager;
 accessible method net/minecraft/client/render/WorldRenderer scheduleChunkRender (IIIZ)V
 accessible class net/minecraft/client/font/FontManager$FontKey
+accessible class net/minecraft/client/render/model/BakedModelManager$BakingResult
+accessible field net/minecraft/client/font/FontManager GSON Lcom/google/gson/Gson;

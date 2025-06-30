@@ -96,6 +96,20 @@ public class FileHierarchy {
         return cachedHierarchy;
     }
 
+    public static void clearCache() {
+        textureCache.clear();
+        cachedHierarchy = null;
+        if (watcher != null) {
+            try {
+                watcher.stop();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+            watcher = null; // Reset the watcher
+        }
+        LogWindow.addDebugInfo("PackWatcher: Cache cleared and watcher reset.");
+    }
+
     public FileHierarchy(Path filePath) {
         this.filePath = filePath;
     }

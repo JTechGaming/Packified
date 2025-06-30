@@ -31,10 +31,12 @@ public abstract class FramebufferMixin {
     public void blitToScreen(int width, int height, CallbackInfo ci) {
         if ((Object)this == MinecraftClient.getInstance().getFramebuffer() && ImGuiImplementation.isActive()) {
             var window = MinecraftClient.getInstance().getWindow();
-            float frameLeft = (float) ImGuiImplementation.getFrameX() / ImGuiImplementation.getViewportSizeX();
-            float frameTop = (float) ImGuiImplementation.getFrameY() / ImGuiImplementation.getViewportSizeY();
-            float frameWidth = (float) Math.max(1, ImGuiImplementation.getFrameWidth()) / ImGuiImplementation.getViewportSizeX();
-            float frameHeight = (float) Math.max(1, ImGuiImplementation.getFrameHeight()) / ImGuiImplementation.getViewportSizeY();
+            int paddingX = (int) ImGui.getStyle().getWindowPaddingX();
+            int paddingY = (int) ImGui.getStyle().getWindowPaddingY();
+            float frameLeft = (float) (ImGuiImplementation.getFrameX()-paddingX) / ImGuiImplementation.getViewportSizeX();
+            float frameTop = (float) (ImGuiImplementation.getFrameY()-paddingY) / ImGuiImplementation.getViewportSizeY();
+            float frameWidth = (float) Math.max(1, (ImGuiImplementation.getFrameWidth()+paddingX*2)) / ImGuiImplementation.getViewportSizeX();
+            float frameHeight = (float) Math.max(1, (ImGuiImplementation.getFrameHeight()+paddingY*2)) / ImGuiImplementation.getViewportSizeY();
 
             int realWidth = WindowSizeTracker.getWidth(window);
             int realHeight = WindowSizeTracker.getHeight(window);

@@ -1,6 +1,7 @@
 package me.jtech.packified.mixin;
 
 import com.mojang.blaze3d.systems.RenderSystem;
+import me.jtech.packified.client.PackifiedClient;
 import me.jtech.packified.client.imgui.ImGuiImplementation;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;

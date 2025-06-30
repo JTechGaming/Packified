@@ -339,6 +339,9 @@ public class ImGuiImplementation {
 
     @ApiStatus.Internal
     public static void dispose() {
+        clearTextureCache();
+        FileHierarchy.clearCache();
+
         imGuiImplGl3.shutdown();
 
         ImGui.destroyContext();
@@ -354,6 +357,10 @@ public class ImGuiImplementation {
         }
 
         try {
+            if (MinecraftClient.getInstance().getResourceManager()
+                    .getResource(Identifier.of(Packified.MOD_ID, identifierPath)).isEmpty()) {
+                throw new IllegalArgumentException("Provided texture could not be found: " + identifierPath);
+            }
             Resource resource = MinecraftClient.getInstance().getResourceManager()
                     .getResource(Identifier.of(Packified.MOD_ID, identifierPath)).get();
             BufferedImage image = ImageIO.read(resource.getInputStream());
