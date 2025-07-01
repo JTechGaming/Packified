@@ -25,6 +25,8 @@ import org.jetbrains.annotations.ApiStatus;
 import org.lwjgl.BufferUtils;
 import org.lwjgl.glfw.GLFW;
 import org.lwjgl.opengl.GL11;
+import org.lwjgl.opengl.GL30;
+import org.lwjgl.opengl.GL32;
 
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
@@ -364,6 +366,7 @@ public class ImGuiImplementation {
             Resource resource = MinecraftClient.getInstance().getResourceManager()
                     .getResource(Identifier.of(Packified.MOD_ID, identifierPath)).get();
             BufferedImage image = ImageIO.read(resource.getInputStream());
+
             int textureId = fromBufferedImage(image);
 
             // Cache the texture ID
@@ -448,8 +451,10 @@ public class ImGuiImplementation {
 
         GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MIN_FILTER, GL11.GL_LINEAR);
         GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MAG_FILTER, GL11.GL_LINEAR);
+        GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_S, GL30.GL_CLAMP_TO_EDGE);
+        GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_T, GL30.GL_CLAMP_TO_EDGE);
 
-        GL11.glTexImage2D(GL11.GL_TEXTURE_2D, 0, GL11.GL_RGBA8, image.getWidth(), image.getHeight(), 0, GL11.GL_RGBA, GL11.GL_UNSIGNED_BYTE, buffer);
+        GL11.glTexImage2D(GL11.GL_TEXTURE_2D, 0, GL11.GL_RGBA16, image.getWidth(), image.getHeight(), 0, GL11.GL_RGBA, GL11.GL_UNSIGNED_BYTE, buffer);
 
         return texture;
     }

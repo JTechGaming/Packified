@@ -36,49 +36,53 @@ public class CornerNotificationsHelper {
         int index = 0;
         Iterator<ImGuiNotification> iterator = notifications.iterator();
         while (iterator.hasNext()) {
-            ImGuiNotification notification = iterator.next();
+            try {
+                ImGuiNotification notification = iterator.next();
 
-            if (index > 5) {
-                // If the notification would be off-screen, pause the timer and skip rendering
-                notification.paused = true;
-                continue;
+                if (index > 5) {
+                    // If the notification would be off-screen, pause the timer and skip rendering
+                    notification.paused = true;
+                    continue;
+                }
+
+                if (notification.isExpired()) {
+                    iterator.remove();
+                    continue;
+                }
+
+                notification.paused = false;
+
+                float alpha = notification.getAlpha();
+                ImGui.setNextWindowBgAlpha(alpha * 0.8f);
+
+                ImGui.setNextWindowPos(screenWidth - notificationWidth + padding * -1,
+                        screenHeight - (notificationHeight + padding) * (index + 1),
+                        ImGuiCond.Always);
+                ImGui.setNextWindowSize(notificationWidth, notificationHeight);
+
+                ImGui.begin("Notification_" + index, ImGuiWindowFlags.NoTitleBar | ImGuiWindowFlags.AlwaysAutoResize |
+                        ImGuiWindowFlags.NoMove | ImGuiWindowFlags.NoScrollbar |
+                        ImGuiWindowFlags.NoInputs | ImGuiWindowFlags.NoSavedSettings);
+
+                // Render title (bold)
+                Color color = notification.color;
+                float r = color.getRed() / 255.0f;
+                float g = color.getGreen() / 255.0f;
+                float b = color.getBlue() / 255.0f;
+                ImGui.textColored(r, g, b, alpha, notification.title); // Yellow title
+
+                // Slight spacing between title and description
+                ImGui.spacing();
+
+                // Render description (regular text)
+                ImGui.textWrapped(notification.description);
+
+                ImGui.end();
+
+                index++;
+            } catch (NullPointerException exception) {
+                LogWindow.addWarning("Error rendering notification: " + exception.getMessage());
             }
-
-            if (notification.isExpired()) {
-                iterator.remove();
-                continue;
-            }
-
-            notification.paused = false;
-
-            float alpha = notification.getAlpha();
-            ImGui.setNextWindowBgAlpha(alpha * 0.8f);
-
-            ImGui.setNextWindowPos(screenWidth - notificationWidth + padding * -1,
-                    screenHeight - (notificationHeight + padding) * (index + 1),
-                    ImGuiCond.Always);
-            ImGui.setNextWindowSize(notificationWidth, notificationHeight);
-
-            ImGui.begin("Notification_" + index, ImGuiWindowFlags.NoTitleBar | ImGuiWindowFlags.AlwaysAutoResize |
-                    ImGuiWindowFlags.NoMove | ImGuiWindowFlags.NoScrollbar |
-                    ImGuiWindowFlags.NoInputs | ImGuiWindowFlags.NoSavedSettings);
-
-            // Render title (bold)
-            Color color = notification.color;
-            float r = color.getRed() / 255.0f;
-            float g = color.getGreen() / 255.0f;
-            float b = color.getBlue() / 255.0f;
-            ImGui.textColored(r, g, b, alpha, notification.title); // Yellow title
-
-            // Slight spacing between title and description
-            ImGui.spacing();
-
-            // Render description (regular text)
-            ImGui.textWrapped(notification.description);
-
-            ImGui.end();
-
-            index++;
         }
     }
 
