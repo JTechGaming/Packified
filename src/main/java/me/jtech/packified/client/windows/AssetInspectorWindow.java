@@ -7,16 +7,12 @@ import imgui.extension.texteditor.flag.TextEditorPaletteIndex;
 import imgui.flag.ImGuiCol;
 import imgui.flag.ImGuiCond;
 import imgui.flag.ImGuiWindowFlags;
-import imgui.internal.ImGuiWindow;
 import imgui.type.ImBoolean;
 import me.jtech.packified.client.PackifiedClient;
 import me.jtech.packified.client.imgui.ImGuiImplementation;
 import me.jtech.packified.client.util.PackFile;
 import me.jtech.packified.client.util.PackUtils;
-import me.jtech.packified.packets.C2SInfoPacket;
-import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.resource.ResourcePackManager;
+import me.jtech.packified.client.windows.popups.SelectPackWindow;
 import net.minecraft.resource.ResourcePackProfile;
 
 import java.util.ArrayList;

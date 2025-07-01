@@ -1,7 +1,7 @@
 package me.jtech.packified.mixin;
 
 import com.llamalad7.mixinextras.sugar.Local;
-import me.jtech.packified.client.CornerNotificationsHelper;
+import me.jtech.packified.client.helpers.CornerNotificationsHelper;
 import net.minecraft.client.sound.SoundManager;
 import net.minecraft.client.sound.SoundSystem;
 import net.minecraft.registry.Registries;
@@ -13,8 +13,6 @@ import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
-
-import java.awt.*;
 
 @Mixin(SoundSystem.class)
 public class SoundErrorMixin {

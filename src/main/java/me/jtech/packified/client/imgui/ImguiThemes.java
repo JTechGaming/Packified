@@ -4,7 +4,7 @@ import imgui.ImGui;
 import imgui.ImGuiStyle;
 import imgui.flag.ImGuiCol;
 import imgui.type.ImInt;
-import me.jtech.packified.client.util.ModConfig;
+import me.jtech.packified.client.config.ModConfig;
 
 import java.util.Map;
 

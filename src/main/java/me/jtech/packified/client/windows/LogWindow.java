@@ -1,14 +1,10 @@
 package me.jtech.packified.client.windows;
 
 import imgui.ImGui;
-import imgui.ImVec2;
-import imgui.flag.ImGuiCond;
 import imgui.flag.ImGuiWindowFlags;
 import imgui.type.ImBoolean;
 import me.jtech.packified.Packified;
-import me.jtech.packified.client.PackifiedClient;
-import me.jtech.packified.client.imgui.ImGuiImplementation;
-import me.jtech.packified.client.util.ModConfig;
+import me.jtech.packified.client.config.ModConfig;
 
 import java.awt.*;
 import java.text.SimpleDateFormat;

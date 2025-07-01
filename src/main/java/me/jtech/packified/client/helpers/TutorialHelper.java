@@ -1,4 +1,4 @@
-package me.jtech.packified.client.util;
+package me.jtech.packified.client.helpers;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;

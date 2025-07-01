@@ -1,11 +1,10 @@
-package me.jtech.packified;
+package me.jtech.packified.client.networking;
 
 import me.jtech.packified.client.windows.LogWindow;
-import me.jtech.packified.packets.C2SSendFullPack;
-import me.jtech.packified.packets.C2SSyncPackChanges;
+import me.jtech.packified.client.networking.packets.C2SSendFullPack;
+import me.jtech.packified.client.networking.packets.C2SSyncPackChanges;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.network.packet.CustomPayload;
-import org.slf4j.Logger;
 
 import java.util.concurrent.ConcurrentLinkedQueue;
 

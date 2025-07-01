@@ -1,10 +1,9 @@
-package me.jtech.packified.client;
+package me.jtech.packified.client.helpers;
 
 import imgui.ImGui;
 import imgui.flag.ImGuiCond;
 import imgui.flag.ImGuiWindowFlags;
 import me.jtech.packified.client.windows.LogWindow;
-import net.minecraft.client.MinecraftClient;
 
 import java.awt.*;
 import java.util.Iterator;

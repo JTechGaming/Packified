@@ -1,4 +1,4 @@
-package me.jtech.packified.client.uiElements;
+package me.jtech.packified.client.windows.elements;
 
 import imgui.ImGui;
 import me.jtech.packified.Packified;
@@ -6,9 +6,10 @@ import me.jtech.packified.client.PackifiedClient;
 import me.jtech.packified.client.util.FileDialog;
 import me.jtech.packified.client.util.FileUtils;
 import me.jtech.packified.client.util.PackUtils;
-import me.jtech.packified.client.util.TutorialHelper;
+import me.jtech.packified.client.helpers.TutorialHelper;
 import me.jtech.packified.client.windows.*;
-import me.jtech.packified.packets.C2SInfoPacket;
+import me.jtech.packified.client.networking.packets.C2SInfoPacket;
+import me.jtech.packified.client.windows.popups.ConfirmWindow;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;

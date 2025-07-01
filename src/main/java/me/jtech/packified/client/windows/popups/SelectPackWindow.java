@@ -1,4 +1,4 @@
-package me.jtech.packified.client.windows;
+package me.jtech.packified.client.windows.popups;
 
 import imgui.ImGui;
 import imgui.ImVec2;
@@ -6,19 +6,15 @@ import imgui.flag.ImGuiCond;
 import imgui.type.ImBoolean;
 import me.jtech.packified.client.PackifiedClient;
 import me.jtech.packified.client.imgui.ImGuiImplementation;
-import me.jtech.packified.client.util.FileUtils;
 import me.jtech.packified.client.util.PackUtils;
-import me.jtech.packified.packets.C2SInfoPacket;
+import me.jtech.packified.client.networking.packets.C2SInfoPacket;
+import me.jtech.packified.client.windows.EditorWindow;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.resource.ResourcePackProfile;
 
-import java.io.File;
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 

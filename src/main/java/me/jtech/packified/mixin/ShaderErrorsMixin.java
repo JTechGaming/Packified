@@ -1,17 +1,12 @@
 package me.jtech.packified.mixin;
 
 import com.google.common.collect.ImmutableMap;
-import com.llamalad7.mixinextras.sugar.Local;
-import me.jtech.packified.client.CornerNotificationsHelper;
-import net.minecraft.client.gl.GlUniform;
+import me.jtech.packified.client.helpers.CornerNotificationsHelper;
 import net.minecraft.client.gl.ShaderLoader;
-import net.minecraft.client.gl.ShaderProgram;
 import net.minecraft.client.gl.ShaderProgramDefinition;
 import net.minecraft.resource.Resource;
 import net.minecraft.util.Identifier;
-import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
-import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;

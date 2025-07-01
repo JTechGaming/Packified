@@ -1,4 +1,4 @@
-package me.jtech.packified.packets;
+package me.jtech.packified.client.networking.packets;
 
 import net.minecraft.network.RegistryByteBuf;
 import net.minecraft.network.codec.PacketCodec;

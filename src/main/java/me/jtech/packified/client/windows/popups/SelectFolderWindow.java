@@ -1,11 +1,11 @@
-package me.jtech.packified.client.windows;
+package me.jtech.packified.client.windows.popups;
 
 import imgui.ImGui;
 import imgui.flag.ImGuiTableFlags;
 import imgui.type.ImBoolean;
-import imgui.type.ImString;
 import me.jtech.packified.client.PackifiedClient;
 import me.jtech.packified.client.util.FileUtils;
+import me.jtech.packified.client.windows.LogWindow;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.fabricmc.loader.api.FabricLoader;

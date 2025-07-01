@@ -1,16 +1,18 @@
 package me.jtech.packified.client;
 
 import imgui.ImGui;
-import me.jtech.packified.PacketSender;
+import me.jtech.packified.client.config.ModConfig;
+import me.jtech.packified.client.helpers.NotificationHelper;
+import me.jtech.packified.client.helpers.TutorialHelper;
+import me.jtech.packified.client.networking.PacketSender;
 import me.jtech.packified.Packified;
-import me.jtech.packified.SyncPacketData;
-import me.jtech.packified.client.imgui.CustomImGuiImplGlfw;
+import me.jtech.packified.client.util.SyncPacketData;
 import me.jtech.packified.client.imgui.ImGuiImplementation;
 import me.jtech.packified.client.util.*;
-import me.jtech.packified.client.windows.ConfirmWindow;
+import me.jtech.packified.client.windows.popups.ConfirmWindow;
 import me.jtech.packified.client.windows.EditorWindow;
 import me.jtech.packified.client.windows.LogWindow;
-import me.jtech.packified.packets.*;
+import me.jtech.packified.client.networking.packets.*;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;

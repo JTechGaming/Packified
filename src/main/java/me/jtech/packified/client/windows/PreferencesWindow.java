@@ -1,6 +1,5 @@
 package me.jtech.packified.client.windows;
 
-import imgui.ImFont;
 import imgui.ImGui;
 import imgui.ImVec2;
 import imgui.extension.texteditor.flag.TextEditorPaletteIndex;
@@ -10,9 +9,8 @@ import imgui.type.ImInt;
 import me.jtech.packified.client.PackifiedClient;
 import me.jtech.packified.client.imgui.ImGuiImplementation;
 import me.jtech.packified.client.imgui.ImguiThemes;
-import me.jtech.packified.client.util.ModConfig;
+import me.jtech.packified.client.config.ModConfig;
 
-import java.util.Arrays;
 import java.util.Map;
 
 public class PreferencesWindow {

@@ -1,15 +1,13 @@
 package me.jtech.packified.client.util;
 
-import com.google.gson.JsonObject;
 import me.jtech.packified.Packified;
 import me.jtech.packified.client.PackifiedClient;
 import me.jtech.packified.client.imgui.ImGuiImplementation;
 import me.jtech.packified.client.windows.*;
-import me.jtech.packified.SyncPacketData;
+import me.jtech.packified.client.windows.popups.SelectFolderWindow;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.SharedConstants;
 import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gui.screen.pack.ResourcePackOrganizer;
 import net.minecraft.resource.*;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.InvalidIdentifierException;
@@ -24,7 +22,6 @@ import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
-import java.util.function.Function;
 
 public class FileUtils {
     public static String getFileExtension(String fileName) {

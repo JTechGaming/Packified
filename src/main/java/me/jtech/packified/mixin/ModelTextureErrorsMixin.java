@@ -2,27 +2,15 @@ package me.jtech.packified.mixin;
 
 import com.google.common.collect.HashMultimap;
 import com.google.common.collect.Multimap;
-import com.llamalad7.mixinextras.sugar.Local;
-import it.unimi.dsi.fastutil.objects.Object2IntMap;
-import me.jtech.packified.client.CornerNotificationsHelper;
-import net.minecraft.block.BlockState;
-import net.minecraft.client.render.block.entity.LoadedBlockEntityModels;
-import net.minecraft.client.render.entity.model.LoadedEntityModels;
+import me.jtech.packified.client.helpers.CornerNotificationsHelper;
 import net.minecraft.client.render.model.BakedModelManager;
-import net.minecraft.client.render.model.ModelBaker;
-import net.minecraft.client.render.model.SpriteAtlasManager;
-import net.minecraft.client.texture.Sprite;
 import net.minecraft.client.util.SpriteIdentifier;
-import net.minecraft.util.Identifier;
-import net.minecraft.util.profiler.Profiler;
-import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 import java.awt.*;
-import java.util.Map;
 import java.util.stream.Collectors;
 
 @Mixin(BakedModelManager.class)

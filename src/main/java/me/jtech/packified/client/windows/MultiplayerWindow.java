@@ -8,7 +8,7 @@ import me.jtech.packified.Packified;
 import me.jtech.packified.client.PackifiedClient;
 import me.jtech.packified.client.imgui.ImGuiImplementation;
 import me.jtech.packified.client.util.PackUtils;
-import me.jtech.packified.packets.C2SRequestFullPack;
+import me.jtech.packified.client.networking.packets.C2SRequestFullPack;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;

@@ -1,4 +1,4 @@
-package me.jtech.packified.packets;
+package me.jtech.packified.client.networking.packets;
 
 import me.jtech.packified.Packified;
 import net.minecraft.util.Identifier;

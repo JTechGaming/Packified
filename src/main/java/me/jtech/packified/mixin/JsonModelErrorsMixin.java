@@ -1,17 +1,12 @@
 package me.jtech.packified.mixin;
 
-import com.llamalad7.mixinextras.sugar.Local;
-import com.mojang.datafixers.util.Either;
-import me.jtech.packified.client.CornerNotificationsHelper;
+import me.jtech.packified.client.helpers.CornerNotificationsHelper;
 import net.minecraft.client.render.model.ModelTextures;
-import net.minecraft.client.render.model.json.JsonUnbakedModel;
-import net.minecraft.client.util.SpriteIdentifier;
 import net.minecraft.util.Identifier;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
-import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 import java.awt.*;
 
