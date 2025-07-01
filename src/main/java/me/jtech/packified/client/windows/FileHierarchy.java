@@ -49,6 +49,9 @@ public class FileHierarchy {
 
     private static final Map<Path, Integer> textureCache = new HashMap<>();
 
+    private static final int importIcon = ImGuiImplementation.loadTextureFromOwnIdentifier("textures/ui/neu_import.png");
+    private static final int deleteIcon = ImGuiImplementation.loadTextureFromOwnIdentifier("textures/ui/neu_delete.png");
+
     private static int getOrLoadTexture(Path filePath) {
         if (textureCache.size() >= 40 && !textureCache.containsKey(filePath)) { // prevent the cache from growing too large
             textureCache.clear();
@@ -317,7 +320,7 @@ public class FileHierarchy {
         }
 
         if (PackifiedClient.currentPack != null) {
-            ImGui.imageButton(ImGuiImplementation.loadTextureFromOwnIdentifier("textures/ui/neu_import.png"), 14, 14);
+            ImGui.imageButton(importIcon, 14, 14);
             if (ImGui.isItemClicked()) {
                 // Logic to import a file
                 String defaultFolder = FabricLoader.getInstance().getConfigDir().resolve("packified").toString();
@@ -331,7 +334,7 @@ public class FileHierarchy {
                 });
             }
             ImGui.sameLine();
-            ImGui.imageButton(ImGuiImplementation.loadTextureFromOwnIdentifier("textures/ui/neu_delete.png"), 14, 14);
+            ImGui.imageButton(deleteIcon, 14, 14);
             if (ImGui.isItemClicked()) {
                 // Logic to delete a file
                 ConfirmWindow.open("delete this file", "The file will be lost forever.", () -> {
