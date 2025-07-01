@@ -1,17 +1,12 @@
 package me.jtech.packified.client.util;
 
-import com.google.gson.JsonObject;
-import me.jtech.packified.PacketSender;
+import me.jtech.packified.client.networking.PacketSender;
 import me.jtech.packified.Packified;
 import me.jtech.packified.client.PackifiedClient;
 import me.jtech.packified.client.windows.EditorWindow;
-import me.jtech.packified.client.windows.PackCreationWindow;
-import me.jtech.packified.packets.C2SSendFullPack;
-import me.jtech.packified.packets.C2SSyncPackChanges;
-import me.jtech.packified.SyncPacketData;
-import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
+import me.jtech.packified.client.networking.packets.C2SSendFullPack;
+import me.jtech.packified.client.networking.packets.C2SSyncPackChanges;
 import net.fabricmc.loader.api.FabricLoader;
-import net.minecraft.SharedConstants;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.resource.ResourceReloadLogger;
 import net.minecraft.resource.*;

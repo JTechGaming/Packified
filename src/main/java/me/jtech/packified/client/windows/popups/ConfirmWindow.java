@@ -1,11 +1,8 @@
-package me.jtech.packified.client.windows;
+package me.jtech.packified.client.windows.popups;
 
 import imgui.ImGui;
 import imgui.ImVec2;
 import imgui.flag.ImGuiCond;
-import imgui.flag.ImGuiStyleVar;
-import imgui.flag.ImGuiWindowFlags;
-import imgui.internal.ImGuiWindow;
 import imgui.type.ImBoolean;
 import me.jtech.packified.client.imgui.ImGuiImplementation;
 

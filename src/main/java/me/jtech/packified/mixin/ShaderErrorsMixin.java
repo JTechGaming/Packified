@@ -1,7 +1,7 @@
 package me.jtech.packified.mixin;
 
 import com.llamalad7.mixinextras.sugar.Local;
-import me.jtech.packified.client.CornerNotificationsHelper;
+import me.jtech.packified.client.helpers.CornerNotificationsHelper;
 import net.minecraft.client.gl.GlUniform;
 import net.minecraft.client.gl.ShaderProgram;
 import org.spongepowered.asm.mixin.Final;

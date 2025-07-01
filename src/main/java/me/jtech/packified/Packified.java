@@ -1,8 +1,7 @@
 package me.jtech.packified;
 
-import imgui.type.ImFloat;
-import imgui.type.ImInt;
-import me.jtech.packified.packets.*;
+import me.jtech.packified.client.util.SyncPacketData;
+import me.jtech.packified.client.networking.packets.*;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
@@ -15,8 +14,6 @@ import org.slf4j.LoggerFactory;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
-
-import static com.mojang.text2speech.Narrator.LOGGER;
 
 public class Packified implements ModInitializer {
     public static final String MOD_ID = "packified";

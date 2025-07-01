@@ -2,9 +2,7 @@ package me.jtech.packified.client.util;
 
 import imgui.extension.texteditor.TextEditor;
 import imgui.extension.texteditor.TextEditorLanguageDefinition;
-import me.jtech.packified.client.windows.PixelArtEditor;
-import net.minecraft.client.sound.OggAudioStream;
-import net.minecraft.util.Identifier;
+import me.jtech.packified.client.windows.elements.PixelArtEditor;
 
 import java.awt.image.BufferedImage;
 import java.nio.file.Path;

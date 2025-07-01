@@ -1,12 +1,10 @@
-package me.jtech.packified.client.util;
+package me.jtech.packified.client.config;
 
 import com.google.common.reflect.TypeToken;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import net.minecraft.client.MinecraftClient;
-import net.minecraft.util.math.BlockPos;
 
-import java.awt.*;
 import java.io.IOException;
 import java.io.Reader;
 import java.io.Writer;
@@ -14,7 +12,6 @@ import java.lang.reflect.Type;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 public class ModConfig {

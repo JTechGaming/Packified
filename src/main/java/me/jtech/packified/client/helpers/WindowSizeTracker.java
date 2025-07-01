@@ -1,4 +1,4 @@
-package me.jtech.packified.client;
+package me.jtech.packified.client.helpers;
 
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;

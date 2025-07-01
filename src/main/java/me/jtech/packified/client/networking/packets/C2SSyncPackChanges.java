@@ -1,7 +1,7 @@
-package me.jtech.packified.packets;
+package me.jtech.packified.client.networking.packets;
 
-import me.jtech.packified.SyncPacketData;
-import me.jtech.packified.CustomCodecs;
+import me.jtech.packified.client.util.SyncPacketData;
+import me.jtech.packified.client.networking.CustomCodecs;
 import net.minecraft.network.RegistryByteBuf;
 import net.minecraft.network.codec.PacketCodec;
 import net.minecraft.network.packet.CustomPayload;

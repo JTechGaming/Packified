@@ -1,4 +1,4 @@
-package me.jtech.packified.client;
+package me.jtech.packified.client.helpers;
 
 import imgui.ImGui;
 import imgui.ImVec2;

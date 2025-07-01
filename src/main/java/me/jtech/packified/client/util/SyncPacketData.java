@@ -1,4 +1,4 @@
-package me.jtech.packified;
+package me.jtech.packified.client.util;
 
 import net.minecraft.network.PacketByteBuf;
 import net.minecraft.network.codec.PacketCodec;

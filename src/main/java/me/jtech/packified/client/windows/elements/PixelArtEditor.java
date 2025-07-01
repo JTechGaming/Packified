@@ -1,4 +1,4 @@
-package me.jtech.packified.client.windows;
+package me.jtech.packified.client.windows.elements;
 
 import imgui.ImGui;
 import imgui.ImGuiIO;
@@ -8,6 +8,7 @@ import imgui.flag.ImGuiStyleVar;
 import imgui.flag.ImGuiWindowFlags;
 import imgui.type.ImInt;
 import me.jtech.packified.client.imgui.ImGuiImplementation;
+import me.jtech.packified.client.windows.EditorWindow;
 import org.lwjgl.BufferUtils;
 import org.lwjgl.glfw.GLFW;
 

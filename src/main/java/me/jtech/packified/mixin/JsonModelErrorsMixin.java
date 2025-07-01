@@ -1,7 +1,7 @@
 package me.jtech.packified.mixin;
 
 import com.mojang.datafixers.util.Either;
-import me.jtech.packified.client.CornerNotificationsHelper;
+import me.jtech.packified.client.helpers.CornerNotificationsHelper;
 import net.minecraft.client.render.model.json.JsonUnbakedModel;
 import net.minecraft.client.util.SpriteIdentifier;
 import net.minecraft.util.Identifier;
