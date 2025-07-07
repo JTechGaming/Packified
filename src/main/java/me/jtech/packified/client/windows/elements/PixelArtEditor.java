@@ -1,5 +1,6 @@
 package me.jtech.packified.client.windows.elements;
 
+import com.mojang.blaze3d.systems.RenderSystem;
 import imgui.ImGui;
 import imgui.ImGuiIO;
 import imgui.ImVec2;
@@ -9,6 +10,8 @@ import imgui.flag.ImGuiWindowFlags;
 import imgui.type.ImInt;
 import me.jtech.packified.client.imgui.ImGuiImplementation;
 import me.jtech.packified.client.windows.EditorWindow;
+import net.minecraft.client.texture.NativeImage;
+import net.minecraft.client.texture.NativeImageBackedTexture;
 import org.lwjgl.BufferUtils;
 import org.lwjgl.glfw.GLFW;
 
@@ -72,46 +75,106 @@ public class PixelArtEditor {
     private Point selectionStart = null;
     private Point selectionEnd = null;
 
+    private static final int pencilIcon = ImGuiImplementation.loadTextureFromOwnIdentifier("textures/ui/neu_pencil.png");
+    private static final int bucketIcon = ImGuiImplementation.loadTextureFromOwnIdentifier("textures/ui/neu_bucket.png");
+    private static final int selectIcon = ImGuiImplementation.loadTextureFromOwnIdentifier("textures/ui/neu_select.png");
+    private static final int eraserIcon = ImGuiImplementation.loadTextureFromOwnIdentifier("textures/ui/neu_eraser.png");
+
     // Load image and create OpenGL texture
+    private NativeImageBackedTexture texture;
+
     public void loadImage(BufferedImage img, Path path) {
         currentFile = path;
-        if (textureId != -1) {
-            glDeleteTextures(textureId);
+
+        // Free previous GPU texture if it exists
+        if (texture != null) {
+            texture.close(); // also deletes the GL texture
+            texture = null;
+            textureId = -1;
         }
 
-        image = img;
+        if (img == null) {
+            System.err.println("Image is null");
+            return;
+        }
 
-        textureId = glGenTextures();
-        glBindTexture(GL_TEXTURE_2D, textureId);
+        // Store for future logic (e.g. editor features)
+        this.image = img;
 
-        updateTexture();
+        // Convert to TYPE_INT_ARGB if needed
+        if (img.getType() != BufferedImage.TYPE_INT_ARGB) {
+            BufferedImage converted = new BufferedImage(img.getWidth(), img.getHeight(), BufferedImage.TYPE_INT_ARGB);
+            Graphics2D g = converted.createGraphics();
+            g.drawImage(img, 0, 0, null);
+            g.dispose();
+            img = converted;
+        }
+
+        // Create NativeImage and upload pixels to GPU
+        try (NativeImage nativeImage = new NativeImage(img.getWidth(), img.getHeight(), true)) {
+            for (int y = 0; y < img.getHeight(); y++) {
+                for (int x = 0; x < img.getWidth(); x++) {
+                    int argb = img.getRGB(x, y);
+
+                    int a = (argb >> 24) & 0xFF;
+                    int r = (argb >> 16) & 0xFF;
+                    int g = (argb >> 8) & 0xFF;
+                    int b = argb & 0xFF;
+
+                    int abgr = (a << 24) | (b << 16) | (g << 8) | r; // Convert to ABGR format for OpenGL
+                    nativeImage.setColor(x, y, abgr);
+                }
+            }
+
+            texture = new NativeImageBackedTexture(nativeImage);
+            textureId = texture.getGlId(); // For use with ImGui
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 
-    private void updateTexture() {
-        if (image == null || textureId == -1) return;
-
-        int width = image.getWidth();
-        int height = image.getHeight();
-
-        int[] pixels = new int[width * height];
-        image.getRGB(0, 0, width, height, pixels, 0, width);
-
-        ByteBuffer buffer = BufferUtils.createByteBuffer(width * height * 4);
-        for (int y = 0; y < height; y++) {
-            for (int x = 0; x < width; x++) {
-                int pixel = pixels[y * width + x];
-                buffer.put((byte) ((pixel >> 16) & 0xFF)); // Red
-                buffer.put((byte) ((pixel >> 8) & 0xFF));  // Green
-                buffer.put((byte) (pixel & 0xFF));         // Blue
-                buffer.put((byte) ((pixel >> 24) & 0xFF)); // Alpha
-            }
+    public void updateTexture() {
+        if (image == null) {
+            System.err.println("No image to update texture from.");
+            return;
         }
-        buffer.flip();
 
-        glBindTexture(GL_TEXTURE_2D, textureId);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, buffer);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        // Dispose previous texture (same ID will be reused)
+        if (texture != null) {
+            texture.close();
+            texture = null;
+            textureId = -1;
+        }
+
+        try (NativeImage nativeImage = new NativeImage(image.getWidth(), image.getHeight(), true)) {
+            for (int y = 0; y < image.getHeight(); y++) {
+                for (int x = 0; x < image.getWidth(); x++) {
+                    int argb = image.getRGB(x, y);
+
+                    int a = (argb >> 24) & 0xFF;
+                    int r = (argb >> 16) & 0xFF;
+                    int g = (argb >> 8) & 0xFF;
+                    int b = argb & 0xFF;
+
+                    int rgba = (r << 24) | (g << 16) | (b << 8) | a;
+                    int abgr = (a << 24) | (b << 16) | (g << 8) | r; // Convert to ABGR format for OpenGL
+                    nativeImage.setColor(x, y, abgr);
+                }
+            }
+
+            texture = new NativeImageBackedTexture(nativeImage);
+            textureId = texture.getGlId(); // Re-uploaded GL texture
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    public void dispose() {
+        if (texture != null) {
+            texture.close();
+            texture = null;
+            textureId = -1;
+        }
     }
 
     // Render the image in an ImGui window and handle pixel editing
@@ -139,7 +202,7 @@ public class PixelArtEditor {
             ImGui.pushStyleVar(ImGuiStyleVar.FrameBorderSize, 2.0f);
             ImGui.pushStyleColor(ImGuiCol.Border, 0xFFFF0000);
         }
-        ImGui.imageButton(ImGuiImplementation.loadTextureFromOwnIdentifier("textures/ui/neu_pencil.png"), 14, 14);
+        ImGui.imageButton(pencilIcon, 14, 14);
         if (currentTool == Tool.PEN) {
             ImGui.popStyleVar();
             ImGui.popStyleColor();
@@ -155,7 +218,7 @@ public class PixelArtEditor {
             ImGui.pushStyleVar(ImGuiStyleVar.FrameBorderSize, 2.0f);
             ImGui.pushStyleColor(ImGuiCol.Border, 0xFFFF0000);
         }
-        ImGui.imageButton(ImGuiImplementation.loadTextureFromOwnIdentifier("textures/ui/neu_bucket.png"), 14, 14);
+        ImGui.imageButton(bucketIcon, 14, 14);
         if (currentTool == Tool.PAINT_BUCKET) {
             ImGui.popStyleVar();
             ImGui.popStyleColor();
@@ -171,7 +234,7 @@ public class PixelArtEditor {
             ImGui.pushStyleVar(ImGuiStyleVar.FrameBorderSize, 2.0f);
             ImGui.pushStyleColor(ImGuiCol.Border, 0xFFFF0000);
         }
-        ImGui.imageButton(ImGuiImplementation.loadTextureFromOwnIdentifier("textures/ui/neu_select.png"), 14, 14);
+        ImGui.imageButton(selectIcon, 14, 14);
         if (currentTool == Tool.SELECT) {
             ImGui.popStyleVar();
             ImGui.popStyleColor();
@@ -199,7 +262,7 @@ public class PixelArtEditor {
             ImGui.pushStyleVar(ImGuiStyleVar.FrameBorderSize, 2.0f);
             ImGui.pushStyleColor(ImGuiCol.Border, 0xFFFF0000);
         }
-        ImGui.imageButton(ImGuiImplementation.loadTextureFromOwnIdentifier("textures/ui/neu_eraser.png"), 14, 14);
+        ImGui.imageButton(eraserIcon, 14, 14);
         if (currentTool == Tool.ERASER) {
             ImGui.popStyleVar();
             ImGui.popStyleColor();

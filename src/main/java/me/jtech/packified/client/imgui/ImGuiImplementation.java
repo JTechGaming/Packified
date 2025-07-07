@@ -8,6 +8,7 @@ import imgui.flag.ImGuiDockNodeFlags;
 import imgui.flag.ImGuiWindowFlags;
 import imgui.internal.ImGuiContext;
 import me.jtech.packified.Packified;
+import me.jtech.packified.client.PackifiedClient;
 import me.jtech.packified.client.helpers.CornerNotificationsHelper;
 import me.jtech.packified.client.helpers.NotificationHelper;
 import me.jtech.packified.client.windows.elements.MenuBar;
@@ -32,6 +33,7 @@ import org.lwjgl.opengl.GL30;
 
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
+import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;

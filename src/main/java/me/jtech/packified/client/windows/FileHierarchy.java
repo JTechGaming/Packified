@@ -52,17 +52,14 @@ public class FileHierarchy {
 
     private static final Map<Path, Integer> textureCache = new HashMap<>();
 
-    private static int inportIcon = ImGuiImplementation.loadTextureFromOwnIdentifier("textures/ui/neu_import.png");
-    private static int deleteIcon = ImGuiImplementation.loadTextureFromOwnIdentifier("textures/ui/neu_delete.png");
+    private static final int inportIcon = ImGuiImplementation.loadTextureFromOwnIdentifier("textures/ui/neu_import.png");
+    private static final int deleteIcon = ImGuiImplementation.loadTextureFromOwnIdentifier("textures/ui/neu_delete.png");
 
     private static int getOrLoadTexture(Path filePath) {
         if (textureCache.size() >= 40 && !textureCache.containsKey(filePath)) { // prevent the cache from growing too large
             textureCache.clear();
         }
-        return textureCache.computeIfAbsent(filePath, path -> {
-            BufferedImage image = ImGuiImplementation.getBufferedImageFromPath(path);
-            return image != null ? ImGuiImplementation.loadTextureFromBufferedImage(image) : -1;
-        });
+        return textureCache.computeIfAbsent(filePath, ImGuiImplementation::loadTextureFromPath);
     }
 
     public static FileHierarchy getCachedHierarchy(Path rootPath) {
@@ -222,9 +219,9 @@ public class FileHierarchy {
 
                 ImGui.setNextWindowSize(200, 200);
                 if (FileUtils.getFileExtension(filePath.getFileName().toString()).equalsIgnoreCase(".png")) {
-                    int texId = getOrLoadTexture(filePath);
-                    if (texId != -1) {
-                        ImGui.image(texId, 100, 100);
+                    int textureId = SafeTextureLoader.load(filePath);
+                    if (textureId != -1) {
+                        ImGui.image(textureId, 100, 100);
                     }
                 }
                 ImGui.text(String.format("Path: %s\nSize: %s" + (isFolder ? "\nType: %s\nFiles: %s" : "\nType: %s%s"),
