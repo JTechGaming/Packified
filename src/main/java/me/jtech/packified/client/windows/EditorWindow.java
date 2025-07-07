@@ -78,7 +78,7 @@ public class EditorWindow {
                                             openFiles.add(new PackFile(path.getFileName().toString(), bytes));
                                         }
                                     } catch (IOException e) {
-                                        throw new RuntimeException(e);
+                                        LogWindow.addError("Failed to open file: " + path + e);
                                     }
                                 });
                             }

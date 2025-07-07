@@ -14,6 +14,7 @@ import net.minecraft.client.texture.NativeImage;
 import net.minecraft.client.texture.NativeImageBackedTexture;
 import org.lwjgl.BufferUtils;
 import org.lwjgl.glfw.GLFW;
+import org.lwjgl.opengl.GL11;
 
 import javax.imageio.ImageIO;
 import java.awt.*;
@@ -75,16 +76,15 @@ public class PixelArtEditor {
     private Point selectionStart = null;
     private Point selectionEnd = null;
 
-    private static final int pencilIcon = ImGuiImplementation.loadTextureFromOwnIdentifier("textures/ui/neu_pencil.png");
-    private static final int bucketIcon = ImGuiImplementation.loadTextureFromOwnIdentifier("textures/ui/neu_bucket.png");
-    private static final int selectIcon = ImGuiImplementation.loadTextureFromOwnIdentifier("textures/ui/neu_select.png");
-    private static final int eraserIcon = ImGuiImplementation.loadTextureFromOwnIdentifier("textures/ui/neu_eraser.png");
-
     // Load image and create OpenGL texture
     private NativeImageBackedTexture texture;
 
     public void loadImage(BufferedImage img, Path path) {
         currentFile = path;
+        if (img == null) {
+            System.err.println("Cannot load null image");
+            return;
+        }
 
         // Free previous GPU texture if it exists
         if (texture != null) {
@@ -127,7 +127,14 @@ public class PixelArtEditor {
             }
 
             texture = new NativeImageBackedTexture(nativeImage);
-            textureId = texture.getGlId(); // For use with ImGui
+            int id = texture.getGlId(); // after texture is uploaded
+
+            GL11.glBindTexture(GL11.GL_TEXTURE_2D, id);
+            GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MIN_FILTER, GL11.GL_NEAREST);
+            GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MAG_FILTER, GL11.GL_NEAREST);
+            GL11.glBindTexture(GL11.GL_TEXTURE_2D, 0);
+
+            textureId = id;
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -163,10 +170,21 @@ public class PixelArtEditor {
             }
 
             texture = new NativeImageBackedTexture(nativeImage);
-            textureId = texture.getGlId(); // Re-uploaded GL texture
+            int id = texture.getGlId(); // after texture is re-uploaded
+
+            GL11.glBindTexture(GL11.GL_TEXTURE_2D, id); // this is done to prevent the image from looking blurry when zoomed in
+            GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MIN_FILTER, GL11.GL_NEAREST);
+            GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MAG_FILTER, GL11.GL_NEAREST);
+            GL11.glBindTexture(GL11.GL_TEXTURE_2D, 0);
+
+            textureId = id;
         } catch (Exception e) {
             e.printStackTrace();
         }
+    }
+
+    public BufferedImage getImage() {
+        return image;
     }
 
     public void dispose() {
@@ -177,11 +195,21 @@ public class PixelArtEditor {
         }
     }
 
+    ImInt createNewImageWidth = new ImInt(16);
+    ImInt createNewImageHeight = new ImInt(16);
+
     // Render the image in an ImGui window and handle pixel editing
     public void render() {
         if (image == null || textureId == -1) {
             //ImGui.begin("Pixel Art Editor");
-            ImGui.text("No image loaded.");
+            ImGui.text("Create new image:");
+            ImGui.inputInt("Width", createNewImageWidth);
+            ImGui.inputInt("Height", createNewImageHeight);
+            if (ImGui.button("Create")) {
+                BufferedImage newImage = new BufferedImage(createNewImageWidth.get(), createNewImageHeight.get(), BufferedImage.TYPE_INT_ARGB);
+                loadImage(newImage, currentFile); // No path for new images
+                firstRender = true; // Reset first render state
+            }
             ImGui.end();
             return;
         }
@@ -202,7 +230,7 @@ public class PixelArtEditor {
             ImGui.pushStyleVar(ImGuiStyleVar.FrameBorderSize, 2.0f);
             ImGui.pushStyleColor(ImGuiCol.Border, 0xFFFF0000);
         }
-        ImGui.imageButton(pencilIcon, 14, 14);
+        ImGui.imageButton(ImGuiImplementation.loadTextureFromOwnIdentifier("textures/ui/neu_pencil.png"), 14, 14);
         if (currentTool == Tool.PEN) {
             ImGui.popStyleVar();
             ImGui.popStyleColor();
@@ -218,7 +246,7 @@ public class PixelArtEditor {
             ImGui.pushStyleVar(ImGuiStyleVar.FrameBorderSize, 2.0f);
             ImGui.pushStyleColor(ImGuiCol.Border, 0xFFFF0000);
         }
-        ImGui.imageButton(bucketIcon, 14, 14);
+        ImGui.imageButton(ImGuiImplementation.loadTextureFromOwnIdentifier("textures/ui/neu_bucket.png"), 14, 14);
         if (currentTool == Tool.PAINT_BUCKET) {
             ImGui.popStyleVar();
             ImGui.popStyleColor();
@@ -234,7 +262,7 @@ public class PixelArtEditor {
             ImGui.pushStyleVar(ImGuiStyleVar.FrameBorderSize, 2.0f);
             ImGui.pushStyleColor(ImGuiCol.Border, 0xFFFF0000);
         }
-        ImGui.imageButton(selectIcon, 14, 14);
+        ImGui.imageButton(ImGuiImplementation.loadTextureFromOwnIdentifier("textures/ui/neu_select.png"), 14, 14);
         if (currentTool == Tool.SELECT) {
             ImGui.popStyleVar();
             ImGui.popStyleColor();
@@ -262,7 +290,7 @@ public class PixelArtEditor {
             ImGui.pushStyleVar(ImGuiStyleVar.FrameBorderSize, 2.0f);
             ImGui.pushStyleColor(ImGuiCol.Border, 0xFFFF0000);
         }
-        ImGui.imageButton(eraserIcon, 14, 14);
+        ImGui.imageButton(ImGuiImplementation.loadTextureFromOwnIdentifier("textures/ui/neu_eraser.png"), 14, 14);
         if (currentTool == Tool.ERASER) {
             ImGui.popStyleVar();
             ImGui.popStyleColor();

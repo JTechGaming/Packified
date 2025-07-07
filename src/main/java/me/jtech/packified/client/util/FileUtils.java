@@ -200,7 +200,7 @@ public class FileUtils {
             try {
                 Files.createDirectories(resourcePackFolder.toPath());
             } catch (IOException e) {
-                throw new RuntimeException(e);
+                LogWindow.addError("Failed to create resource pack folder: " + e.getMessage());
             }
         }
         makePackBackup(resourcePackFolder);
@@ -290,7 +290,7 @@ public class FileUtils {
                         Files.copy(path, destPath, StandardCopyOption.REPLACE_EXISTING);
                     }
                 } catch (IOException e) {
-                    throw new RuntimeException(e);
+                    LogWindow.addError("Failed to unzip file: " + e.getMessage());
                 }
             });
         }
@@ -317,7 +317,7 @@ public class FileUtils {
                         Files.copy(path, destPath, StandardCopyOption.REPLACE_EXISTING);
                     }
                 } catch (IOException e) {
-                    throw new RuntimeException(e);
+                    LogWindow.addError("Failed to zip file: " + e.getMessage());
                 }
             });
         }
@@ -343,6 +343,11 @@ public class FileUtils {
 
             int maxBackupCount = PreferencesWindow.maxBackupCount.get(); // Maximum number of backups to keep
 
+            if (!backupDir.toFile().exists()) {
+                Files.createDirectories(backupDir);
+                backupDir.toFile().mkdirs();
+            }
+
             // Clean up old backups if they exceed the maximum count
             if (maxBackupCount > 0) {
                 try (DirectoryStream<Path> stream = Files.newDirectoryStream(backupDir)) {
@@ -356,7 +361,8 @@ public class FileUtils {
                             try {
                                 return Files.getLastModifiedTime(path).toMillis();
                             } catch (IOException e) {
-                                throw new RuntimeException("Failed to retrieve last modified time for backup", e);
+                                LogWindow.addError("Failed to retrieve last modified time for backup" + e);
+                                return Long.MAX_VALUE; // If we can't get the time, treat it as the oldest
                             }
                         }));
                         for (int i = 0; i < backups.size() - maxBackupCount; i++) {
@@ -364,7 +370,7 @@ public class FileUtils {
                         }
                     }
                 } catch (IOException e) {
-                    throw new RuntimeException(e);
+                    LogWindow.addError("Failed to clean up old backups: " + e.getMessage());
                 }
             }
 
@@ -393,7 +399,7 @@ public class FileUtils {
                     }
                 }
             } catch (IOException e) {
-                throw new RuntimeException(e);
+                LogWindow.addError("Failed to read backup directory: " + e.getMessage());
             }
 
             String backupFileName = folderNamePattern + (highestId + 1) + ".zip";
@@ -410,12 +416,12 @@ public class FileUtils {
                             Files.copy(path, destPath, StandardCopyOption.REPLACE_EXISTING);
                         }
                     } catch (IOException e) {
-                        throw new RuntimeException(e);
+                        LogWindow.addError("Failed to create backup file: " + e.getMessage());
                     }
                 });
             }
         } catch (IOException e) {
-            throw new RuntimeException(e);
+            LogWindow.addError("Failed to create backup: " + e.getMessage());
         }
     }
 
@@ -456,7 +462,7 @@ public class FileUtils {
                 Files.createFile(packMcMetaPath);
                 Files.writeString(packMcMetaPath, content, StandardCharsets.UTF_8);
             } catch (IOException e) {
-                throw new RuntimeException("Failed to create pack.mcmeta file", e);
+                LogWindow.addError("Failed to create pack.mcmeta file" + e);
             }
         }
 
@@ -465,7 +471,7 @@ public class FileUtils {
                 Files.createFile(packPngPath);
                 ImageIO.write(image, "png", packPngPath.toFile());
             } catch (IOException e) {
-                throw new RuntimeException("Failed to create pack.png file", e);
+                LogWindow.addError("Failed to create pack.png file" + e);
             }
         }
     }
@@ -481,7 +487,7 @@ public class FileUtils {
             targetPath.toFile().mkdirs();
             Files.copy(inputStream, targetPath, StandardCopyOption.REPLACE_EXISTING);
         } catch (IOException e) {
-            throw new RuntimeException(e);
+            LogWindow.addError("Failed to create file for identifier: " + identifier + " in namespace: " + namespace + " with prefix: " + prefix + ". Error: " + e.getMessage());
         }
     }
 
@@ -586,7 +592,8 @@ public class FileUtils {
             File targetFile = new File(resourcePackFolder, "pack.mcmeta");
             return Files.readString(targetFile.toPath());
         } catch (IOException e) {
-            throw new RuntimeException(e);
+            LogWindow.addError("Failed to read pack.mcmeta file: " + e.getMessage());
+            return null;
         }
     }
 
@@ -602,7 +609,7 @@ public class FileUtils {
     }
 
     public static void createPack(String packName, List<SyncPacketData.AssetData> assets, String metadata) {
-        System.out.println("Creating pack: " + packName);
+        LogWindow.addInfo("Creating pack: " + packName);
         // Create the resource pack folder
         File resourcePackFolder = new File("resourcepacks/" + packName);
         if (!resourcePackFolder.exists()) {
@@ -639,7 +646,7 @@ public class FileUtils {
                 try {
                     Files.write(targetFile.toPath(), asset.assetData().getBytes(StandardCharsets.UTF_8));
                 } catch (IOException e) {
-                    throw new RuntimeException(e);
+                    LogWindow.addError("Failed to write JSON file for: " + asset.path() + " - " + e.getMessage());
                 }
             } else if (asset.extension().equals(".png")) {
                 // Save PNG image
@@ -648,7 +655,7 @@ public class FileUtils {
                     try {
                         ImageIO.write(image, "png", targetFile);
                     } catch (IOException e) {
-                        throw new RuntimeException(e);
+                        LogWindow.addError("Failed to write PNG image for: " + asset.path() + " - " + e.getMessage());
                     }
                 } else {
                     LogWindow.addError("Failed to decode image for: " + asset.path());
@@ -804,7 +811,8 @@ public class FileUtils {
             folderFileCountCache.put(folderPath, count);
             return count;
         } catch (IOException e) {
-            throw new RuntimeException(e);
+            LogWindow.addError("Failed to count files in folder: " + e.getMessage());
+            return 0;
         }
     }
 
@@ -827,7 +835,8 @@ public class FileUtils {
             folderFileSizeCache.put(folderPath, size);
             return size;
         } catch (IOException e) {
-            throw new RuntimeException(e);
+            LogWindow.addError("Failed to calculate folder size: " + e.getMessage());
+            return 0;
         }
     }
 

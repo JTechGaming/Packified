@@ -110,7 +110,8 @@ public class PackFile {
     }
 
     public BufferedImage getImageEditorContent() {
-        return imageEditorContent;
+        //return imageEditorContent;
+        return pixelArtEditor.getImage();
     }
 
     public boolean isModified() {

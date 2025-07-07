@@ -9,6 +9,7 @@ import me.jtech.packified.Packified;
 import me.jtech.packified.client.util.SyncPacketData;
 import me.jtech.packified.client.imgui.ImGuiImplementation;
 import me.jtech.packified.client.util.*;
+import me.jtech.packified.client.windows.elements.PixelArtEditor;
 import me.jtech.packified.client.windows.popups.ConfirmWindow;
 import me.jtech.packified.client.windows.EditorWindow;
 import me.jtech.packified.client.windows.LogWindow;
@@ -55,10 +56,6 @@ public class PackifiedClient implements ClientModInitializer {
 
     private static final List<SyncPacketData.AssetData> chunkedAssetsBuffer = new ArrayList<>();
     private static boolean isFirstPacket = true;
-
-    //TODO fix known incompatibility: shared resources mod
-    //TODO fix known incompatibility: ImmediatelyFast ???
-    //TODO fix known incompatibility: Essential Mod
 
     @Override
     public void onInitializeClient() {
@@ -189,7 +186,7 @@ public class PackifiedClient implements ClientModInitializer {
                 }
                 int ySections = ChunkSectionPos.getSectionCoord(client.world.getHeight());
                 for (int chunkY = 0; chunkY < ySections; chunkY++) {
-                    client.worldRenderer.scheduleChunkRender(chunkX, chunkY, chunkZ, true);
+                    client.worldRenderer.scheduleChunkRender(chunkX, chunkY, chunkZ);
                 }
             }
         }

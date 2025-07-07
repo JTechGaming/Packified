@@ -80,7 +80,7 @@ public class CornerNotificationsHelper {
                 ImGui.end();
 
                 index++;
-            } catch (ConcurrentModificationException exception) {
+            } catch (ConcurrentModificationException | NullPointerException exception) {
                 LogWindow.addWarning("Error rendering notification: " + exception.getMessage());
             }
         }

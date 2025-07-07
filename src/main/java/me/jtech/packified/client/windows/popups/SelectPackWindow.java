@@ -50,9 +50,6 @@ public class SelectPackWindow {
                     PackUtils.checkPackType(pack);
                     open.set(false);
                     first = true;
-                    if (PackifiedClient.currentPack != null) {
-                        ClientPlayNetworking.send(new C2SInfoPacket(PackifiedClient.currentPack.getDisplayName().getString(), MinecraftClient.getInstance().player.getUuid()));
-                    }
                 }
 //                if (ImGui.beginPopupContextItem("Pack Options")) {
 //                    if (ImGui.menuItem("Open")) {

@@ -7,6 +7,7 @@ import imgui.flag.ImGuiConfigFlags;
 import imgui.flag.ImGuiDockNodeFlags;
 import imgui.flag.ImGuiWindowFlags;
 import imgui.internal.ImGuiContext;
+import imgui.type.ImBoolean;
 import me.jtech.packified.Packified;
 import me.jtech.packified.client.PackifiedClient;
 import me.jtech.packified.client.helpers.CornerNotificationsHelper;
@@ -15,6 +16,7 @@ import me.jtech.packified.client.windows.elements.MenuBar;
 import me.jtech.packified.client.util.IniUtil;
 import me.jtech.packified.client.helpers.TutorialHelper;
 import me.jtech.packified.client.windows.*;
+import me.jtech.packified.client.windows.elements.PixelArtEditor;
 import me.jtech.packified.client.windows.popups.ConfirmWindow;
 import me.jtech.packified.client.windows.popups.SelectFolderWindow;
 import me.jtech.packified.client.windows.popups.SelectPackWindow;
@@ -73,6 +75,8 @@ public class ImGuiImplementation {
     public static List<ImFont> loadedFonts = new ArrayList<>();
     public static List<String> loadedFontNames = new ArrayList<>();
     public static ImFont currentFont = null;
+
+    private static final Map<String, Integer> textureCache = new HashMap<>();
 
     public static void create(final long handle) {
         if (initialized) {
@@ -353,8 +357,6 @@ public class ImGuiImplementation {
         ImGui.destroyContext();
         ImPlot.destroyContext(ImPlot.getCurrentContext());
     }
-
-    private static final Map<String, Integer> textureCache = new HashMap<>();
 
     public static int loadTextureFromOwnIdentifier(String identifierPath) {
         // Check if the texture is already cached

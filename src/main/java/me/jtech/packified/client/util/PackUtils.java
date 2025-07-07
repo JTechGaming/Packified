@@ -3,9 +3,12 @@ package me.jtech.packified.client.util;
 import me.jtech.packified.client.networking.PacketSender;
 import me.jtech.packified.Packified;
 import me.jtech.packified.client.PackifiedClient;
+import me.jtech.packified.client.networking.packets.C2SInfoPacket;
 import me.jtech.packified.client.windows.EditorWindow;
 import me.jtech.packified.client.networking.packets.C2SSendFullPack;
 import me.jtech.packified.client.networking.packets.C2SSyncPackChanges;
+import me.jtech.packified.client.windows.LogWindow;
+import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.resource.ResourceReloadLogger;
@@ -172,8 +175,7 @@ public class PackUtils {
                     if (extension.equals(".png")) {
                         BufferedImage image = ImageIO.read(inputStream);
                         if (image == null) {
-                            System.err.println("Failed to read image: " + path);
-                            throw new IOException("Failed to read image");
+                            LogWindow.addError("Failed to read image: " + path);
                         }
                         content = FileUtils.encodeImageToBase64(image);
                     } else if (extension.equals(".ogg")) {
@@ -228,7 +230,7 @@ public class PackUtils {
             sendFullPackPacket(data, player);
             assets.clear();
         } catch (IOException e) {
-            throw new RuntimeException("Failed to load assets", e);
+            LogWindow.addError("Failed to access resource pack files: " + pack.getDisplayName().getString() + e);
         }
     }
 
@@ -247,7 +249,7 @@ public class PackUtils {
                 }
             }
         } catch (IOException e) {
-            throw new RuntimeException("Failed to predict packet amount", e);
+            LogWindow.addWarning("Failed to predict packet amount for resource pack: " + packPath + " - " + e.getMessage());
         }
         return packetAmount;
     }
@@ -274,7 +276,7 @@ public class PackUtils {
             try {
                 FileUtils.unzipPack(resourcePackFolder, tempDir);
             } catch (IOException e) {
-                throw new RuntimeException(e);
+                LogWindow.addError("Failed to unzip resource pack: " + packProfile.getDisplayName().getString() + e);
             }
         }
     }
@@ -284,6 +286,9 @@ public class PackUtils {
         resourcePackManager.enable(currentPack.getId());
 
         CompletableFuture.runAsync(PackUtils::reloadPack);
+        if (PackifiedClient.currentPack != null) {
+            ClientPlayNetworking.send(new C2SInfoPacket(PackifiedClient.currentPack.getDisplayName().getString(), MinecraftClient.getInstance().player.getUuid()));
+        }
     }
 
     public static void unloadPack(ResourcePackProfile currentPack) {
