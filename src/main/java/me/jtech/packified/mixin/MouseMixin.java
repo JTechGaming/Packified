@@ -1,7 +1,6 @@
 package me.jtech.packified.mixin;
 
 import me.jtech.packified.client.PackifiedClient;
-import me.jtech.packified.client.imgui.CustomImGuiImplGlfw;
 import me.jtech.packified.client.imgui.ImGuiImplementation;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;

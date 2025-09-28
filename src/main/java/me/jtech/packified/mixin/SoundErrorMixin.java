@@ -17,15 +17,16 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(SoundSystem.class)
 public class SoundErrorMixin {
     @Final
-    @Shadow
-    private SoundManager loader;
+    private SoundManager soundManager;
 
     @Inject(method = "reloadSounds", at = @At(value = "INVOKE", target = "Lnet/minecraft/sound/SoundEvent;id()Lnet/minecraft/util/Identifier;"))
     private void packified$reloadSounds(CallbackInfo ci, @Local SoundEvent soundEvent) {
         Identifier identifier = soundEvent.id();
-        if (this.loader.get(identifier) == null) {
+        if (this.soundManager != null) {
+        if (this.soundManager.get(identifier) == null) {
             CornerNotificationsHelper.addNotification("Sound Warning", "Missing sound for event: " + Registries.SOUND_EVENT.getId(soundEvent),
                     new java.awt.Color(0xffcc00), 5.0f);
+        }
         }
     }
 }

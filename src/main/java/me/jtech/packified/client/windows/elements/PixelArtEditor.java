@@ -10,6 +10,7 @@ import imgui.flag.ImGuiWindowFlags;
 import imgui.type.ImInt;
 import me.jtech.packified.client.imgui.ImGuiImplementation;
 import me.jtech.packified.client.windows.EditorWindow;
+import net.minecraft.client.texture.GlTexture;
 import net.minecraft.client.texture.NativeImage;
 import net.minecraft.client.texture.NativeImageBackedTexture;
 import org.lwjgl.BufferUtils;
@@ -86,19 +87,14 @@ public class PixelArtEditor {
             return;
         }
 
-        // Free previous GPU texture if it exists
+        // Dispose previous GPU texture properly
         if (texture != null) {
-            texture.close(); // also deletes the GL texture
+            texture.close();
             texture = null;
             textureId = -1;
         }
 
-        if (img == null) {
-            System.err.println("Image is null");
-            return;
-        }
-
-        // Store for future logic (e.g. editor features)
+        // Keep Java image copy for UI operations
         this.image = img;
 
         // Convert to TYPE_INT_ARGB if needed
@@ -108,79 +104,90 @@ public class PixelArtEditor {
             g.drawImage(img, 0, 0, null);
             g.dispose();
             img = converted;
+            this.image = img;
         }
 
-        // Create NativeImage and upload pixels to GPU
-        try (NativeImage nativeImage = new NativeImage(img.getWidth(), img.getHeight(), true)) {
-            for (int y = 0; y < img.getHeight(); y++) {
-                for (int x = 0; x < img.getWidth(); x++) {
-                    int argb = img.getRGB(x, y);
-
-                    int a = (argb >> 24) & 0xFF;
-                    int r = (argb >> 16) & 0xFF;
-                    int g = (argb >> 8) & 0xFF;
-                    int b = argb & 0xFF;
-
-                    int abgr = (a << 24) | (b << 16) | (g << 8) | r; // Convert to ABGR format for OpenGL
-                    nativeImage.setColor(x, y, abgr);
-                }
+        // Build a NativeImage and fill it once, then hand it to NativeImageBackedTexture
+        NativeImage nativeImage = new NativeImage(img.getWidth(), img.getHeight(), true);
+        for (int y = 0; y < img.getHeight(); y++) {
+            for (int x = 0; x < img.getWidth(); x++) {
+                int argb = img.getRGB(x, y);
+                int a = (argb >> 24) & 0xFF;
+                int r = (argb >> 16) & 0xFF;
+                int g2 = (argb >> 8) & 0xFF;
+                int b = argb & 0xFF;
+                int abgr = (a << 24) | (b << 16) | (g2 << 8) | r;
+                nativeImage.setColor(x, y, abgr);
             }
-
-            texture = new NativeImageBackedTexture(nativeImage);
-            int id = texture.getGlId(); // after texture is uploaded
-
-            GL11.glBindTexture(GL11.GL_TEXTURE_2D, id);
-            GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MIN_FILTER, GL11.GL_NEAREST);
-            GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MAG_FILTER, GL11.GL_NEAREST);
-            GL11.glBindTexture(GL11.GL_TEXTURE_2D, 0);
-
-            textureId = id;
-        } catch (Exception e) {
-            e.printStackTrace();
         }
+
+        // Construct texture (this will call createTexture(...) and upload() in the constructor)
+        texture = new NativeImageBackedTexture(nativeImage::toString, nativeImage);
+
+        // Record GL id for ImGui rendering (safe on render thread)
+        RenderSystem.assertOnRenderThread();
+        textureId = ((GlTexture) texture.getGlTexture()).getGlId();
+        GL11.glBindTexture(GL11.GL_TEXTURE_2D, textureId);
+
+        // Disable linear filtering (use nearest neighbor)
+        GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MIN_FILTER, GL11.GL_NEAREST);
+        GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MAG_FILTER, GL11.GL_NEAREST);
+
+        // Prevent tiling if you pan/zoom past edges
+        GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_S, GL_CLAMP);
+        GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_T, GL_CLAMP);
+
+        GL11.glBindTexture(GL11.GL_TEXTURE_2D, 0); // unbind for safety
     }
+
 
     public void updateTexture() {
         if (image == null) {
             System.err.println("No image to update texture from.");
             return;
         }
-
-        // Dispose previous texture (same ID will be reused)
-        if (texture != null) {
-            texture.close();
-            texture = null;
-            textureId = -1;
+        if (texture == null) {
+            System.err.println("Texture not initialized.");
+            return;
         }
 
-        try (NativeImage nativeImage = new NativeImage(image.getWidth(), image.getHeight(), true)) {
+        // Must be on render thread when calling texture.upload()
+        RenderSystem.assertOnRenderThread();
+
+        NativeImage nativeImage = texture.getImage();
+        if (nativeImage == null) {
+            // fallback: replace the texture's image
+            NativeImage newImg = new NativeImage(image.getWidth(), image.getHeight(), true);
             for (int y = 0; y < image.getHeight(); y++) {
                 for (int x = 0; x < image.getWidth(); x++) {
                     int argb = image.getRGB(x, y);
-
                     int a = (argb >> 24) & 0xFF;
                     int r = (argb >> 16) & 0xFF;
-                    int g = (argb >> 8) & 0xFF;
+                    int g2 = (argb >> 8) & 0xFF;
                     int b = argb & 0xFF;
-
-                    int rgba = (r << 24) | (g << 16) | (b << 8) | a;
-                    int abgr = (a << 24) | (b << 16) | (g << 8) | r; // Convert to ABGR format for OpenGL
-                    nativeImage.setColor(x, y, abgr);
+                    int abgr = (a << 24) | (b << 16) | (g2 << 8) | r;
+                    newImg.setColor(x, y, abgr);
                 }
             }
-
-            texture = new NativeImageBackedTexture(nativeImage);
-            int id = texture.getGlId(); // after texture is re-uploaded
-
-            GL11.glBindTexture(GL11.GL_TEXTURE_2D, id); // this is done to prevent the image from looking blurry when zoomed in
-            GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MIN_FILTER, GL11.GL_NEAREST);
-            GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MAG_FILTER, GL11.GL_NEAREST);
-            GL11.glBindTexture(GL11.GL_TEXTURE_2D, 0);
-
-            textureId = id;
-        } catch (Exception e) {
-            e.printStackTrace();
+            texture.setImage(newImg);
+            texture.upload();
+            return;
         }
+
+        // Copy only once, not per pixel GL calls
+        for (int y = 0; y < image.getHeight(); y++) {
+            for (int x = 0; x < image.getWidth(); x++) {
+                int argb = image.getRGB(x, y);
+                int a = (argb >> 24) & 0xFF;
+                int r = (argb >> 16) & 0xFF;
+                int g2 = (argb >> 8) & 0xFF;
+                int b = argb & 0xFF;
+                int abgr = (a << 24) | (b << 16) | (g2 << 8) | r;
+                nativeImage.setColor(x, y, abgr);
+            }
+        }
+
+        texture.upload(); // push all changed pixels in one call
     }
 
     public BufferedImage getImage() {
@@ -200,6 +207,7 @@ public class PixelArtEditor {
 
     // Render the image in an ImGui window and handle pixel editing
     public void render() {
+        RenderSystem.assertOnRenderThread();
         if (image == null || textureId == -1) {
             //ImGui.begin("Pixel Art Editor");
             ImGui.text("Create new image:");
@@ -553,7 +561,14 @@ public class PixelArtEditor {
         }
     }
 
+    // Flood fill: modify BufferedImage and nativeImage, then upload once at the end
     private void floodFill(int startX, int startY) {
+        if (image == null || texture == null) return;
+        RenderSystem.assertOnRenderThread();
+
+        int width = image.getWidth();
+        int height = image.getHeight();
+
         int targetColor = image.getRGB(startX, startY);
         int alpha = (int) (currentAlpha[0] * 255);
         int fillColor = (alpha << 24) | ((int) (currentColor[0] * 255) << 16) |
@@ -564,36 +579,49 @@ public class PixelArtEditor {
         Queue<Point> queue = new LinkedList<>();
         queue.add(new Point(startX, startY));
 
-        int width = image.getWidth();
-        int height = image.getHeight();
+        NativeImage nativeImage = texture.getImage();
+        if (nativeImage == null) {
+            // fallback: do everything on BufferedImage then call updateTexture()
+            while (!queue.isEmpty()) {
+                Point p = queue.remove();
+                int x = p.x, y = p.y;
+                if (x < 0 || x >= width || y < 0 || y >= height) continue;
+                if (!colorsMatch(image.getRGB(x, y), targetColor, magicWandTolerance.get())) continue;
+                image.setRGB(x, y, fillColor);
+                queue.add(new Point(x + 1, y));
+                queue.add(new Point(x - 1, y));
+                queue.add(new Point(x, y + 1));
+                queue.add(new Point(x, y - 1));
+            }
+            updateTexture();
+            return;
+        }
 
         while (!queue.isEmpty()) {
             Point p = queue.remove();
-            int x = p.x;
-            int y = p.y;
-
+            int x = p.x, y = p.y;
             if (x < 0 || x >= width || y < 0 || y >= height) continue;
-            if (!colorsMatch(image.getRGB(x, y), targetColor, magicWandTolerance.get())) continue; // Allow 10 tolerance
+            if (!colorsMatch(image.getRGB(x, y), targetColor, magicWandTolerance.get())) continue;
 
             image.setRGB(x, y, fillColor);
 
-            // Update texture on GPU
-            ByteBuffer pixelBuffer = BufferUtils.createByteBuffer(4);
-            pixelBuffer.put((byte) ((fillColor >> 16) & 0xFF));
-            pixelBuffer.put((byte) ((fillColor >> 8) & 0xFF));
-            pixelBuffer.put((byte) (fillColor & 0xFF));
-            pixelBuffer.put((byte) ((fillColor >> 24) & 0xFF));
-            pixelBuffer.flip();
-            glBindTexture(GL_TEXTURE_2D, textureId);
-            glTexSubImage2D(GL_TEXTURE_2D, 0, x, y, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, pixelBuffer);
+            int a = (fillColor >> 24) & 0xFF;
+            int r = (fillColor >> 16) & 0xFF;
+            int g2 = (fillColor >> 8) & 0xFF;
+            int b = fillColor & 0xFF;
+            int abgr = (a << 24) | (b << 16) | (g2 << 8) | r;
+            nativeImage.setColor(x, y, abgr);
 
-            // Add neighboring pixels
             queue.add(new Point(x + 1, y));
             queue.add(new Point(x - 1, y));
             queue.add(new Point(x, y + 1));
             queue.add(new Point(x, y - 1));
         }
+
+        // upload only once when done
+        texture.upload();
     }
+
 
     private static boolean colorsMatch(int colorA, int colorB, int tolerance) {
         int rA = (colorA >> 16) & 0xFF;
@@ -609,39 +637,60 @@ public class PixelArtEditor {
                 Math.abs(bA - bB) <= tolerance;
     }
 
+    // When painting (brush) — batch changes locally into image and into the NativeImage, then upload once.
     private void drawBrush(int centerX, int centerY) {
+        if (image == null || texture == null) return;
+        RenderSystem.assertOnRenderThread(); // ensure we are on render thread when touching texture.getImage() and upload()
+
         int halfSize = toolSize.get() / 2;
         int width = image.getWidth();
         int height = image.getHeight();
 
-        int alpha = (int) (currentAlpha[0] * 255);
-
+        int alphaByte = (int) (currentAlpha[0] * 255);
         int drawColor = (currentTool == Tool.ERASER) ? 0x00000000 :
-                (alpha << 24) | ((int) (currentColor[0] * 255) << 16) |
+                (alphaByte << 24) | ((int) (currentColor[0] * 255) << 16) |
                         ((int) (currentColor[1] * 255) << 8) |
                         (int) (currentColor[2] * 255);
 
+        NativeImage nativeImage = texture.getImage();
+        if (nativeImage == null) {
+            // fallback: change BufferedImage and call updateTexture later
+            for (int y = centerY - halfSize; y <= centerY + halfSize; y++) {
+                for (int x = centerX - halfSize; x <= centerX + halfSize; x++) {
+                    if (x >= 0 && x < width && y >= 0 && y < height) {
+                        image.setRGB(x, y, drawColor);
+                    }
+                }
+            }
+            updateTexture();
+            return;
+        }
+
+        // Modify both the BufferedImage model and the native image in memory
         for (int y = centerY - halfSize; y <= centerY + halfSize; y++) {
             for (int x = centerX - halfSize; x <= centerX + halfSize; x++) {
                 if (x >= 0 && x < width && y >= 0 && y < height) {
+                    // set Java model for undo / saving
                     int existingColor = image.getRGB(x, y);
-                    int blendedColor = getBlendedColor(existingColor, drawColor, alpha, currentAlpha);
-
+                    int blendedColor = getBlendedColor(existingColor, drawColor, alphaByte, currentAlpha);
                     image.setRGB(x, y, blendedColor);
 
-                    ByteBuffer pixelBuffer = BufferUtils.createByteBuffer(4);
-                    pixelBuffer.put((byte) ((drawColor >> 16) & 0xFF));
-                    pixelBuffer.put((byte) ((drawColor >> 8) & 0xFF));
-                    pixelBuffer.put((byte) (drawColor & 0xFF));
-                    pixelBuffer.put((byte) ((drawColor >> 24) & 0xFF));
-                    pixelBuffer.flip();
+                    // Compose abgr for native image
+                    int a = (blendedColor >> 24) & 0xFF;
+                    int r = (blendedColor >> 16) & 0xFF;
+                    int g2 = (blendedColor >> 8) & 0xFF;
+                    int b = blendedColor & 0xFF;
+                    int abgr = (a << 24) | (b << 16) | (g2 << 8) | r;
 
-                    glBindTexture(GL_TEXTURE_2D, textureId);
-                    glTexSubImage2D(GL_TEXTURE_2D, 0, x, y, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, pixelBuffer);
+                    nativeImage.setColor(x, y, abgr);
                 }
             }
         }
+
+        // Don't upload per-pixel — upload once after the stroke segment
+        texture.upload();
     }
+
 
     private static int getBlendedColor(int existingColor, int drawColor, int alpha, float[] currentAlpha) {
         int existingAlpha = (existingColor >> 24) & 0xFF;

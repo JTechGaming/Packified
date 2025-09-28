@@ -12,8 +12,13 @@ import me.jtech.packified.client.windows.popups.ConfirmWindow;
 import me.jtech.packified.client.windows.popups.SelectPackWindow;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
+import net.fabricmc.fabric.api.resource.ResourceManagerHelper;
+import net.fabricmc.fabric.api.resource.SimpleSynchronousResourceReloadListener;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.resource.ResourceManager;
+import net.minecraft.resource.ResourceType;
+import org.lwjgl.opengl.GL11;
 
 import java.awt.image.BufferedImage;
 import java.io.IOException;
@@ -32,7 +37,9 @@ public class FileHierarchy {
     private final Map<String, FileHierarchy> children = new HashMap<>();
 
     private static ImString searchQuery = new ImString();
+    private static String lastFrameSearch = searchQuery.get();
     private static String selectedExtension = "none";
+    private static String lastFrameExtension = selectedExtension;
     private static Path selectedFile;
     public static final String[] extensions = {
             "none", ".png", ".json", ".ogg", ".mcmeta", ".txt", ".properties", ".vsh", ".fsh", ".bbmodel", ".bbmodel.json"
@@ -90,7 +97,7 @@ public class FileHierarchy {
             }));
         }
 
-        if (cachedHierarchy == null || watcher.isInvalidated()) {
+        if (cachedHierarchy == null || watcher.isInvalidated() || !lastFrameSearch.equals(searchQuery.get()) || !selectedExtension.equals(lastFrameExtension)) {
             LogWindow.addDebugInfo("PackWatcher: Successfully rebuilt file hierarchy");
             cachedHierarchy = buildFileHierarchy(rootPath);
             if (watcher != null) watcher.resetInvalidated();
@@ -390,6 +397,9 @@ public class FileHierarchy {
         }
 
         ImGui.end();
+
+        lastFrameExtension = selectedExtension;
+        lastFrameSearch = searchQuery.get();
     }
 
     public static Path getPackFolderPath() {

@@ -1,9 +1,8 @@
 package me.jtech.packified.client.util;
 
-import net.minecraft.client.texture.NativeImage;
-import net.minecraft.client.texture.NativeImageBackedTexture;
+import com.mojang.blaze3d.textures.GpuTexture;
+import net.minecraft.client.texture.*;
 import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.texture.TextureManager;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.Pair;
 import org.lwjgl.opengl.GL11;
@@ -11,17 +10,31 @@ import org.lwjgl.opengl.GL11;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
+import java.lang.reflect.Field;
 import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.Map;
 
 import javax.imageio.ImageIO;
 
+import static org.lwjgl.opengl.GL11.GL_CLAMP;
+
 public class SafeTextureLoader {
 
     private static final Map<Path, Pair<NativeImageBackedTexture, Integer>> textureCache = new HashMap<>();
 
+    public static void garbageCollect() {
+        for (Map.Entry<Path, Pair<NativeImageBackedTexture, Integer>> entry : textureCache.entrySet()) {
+            GpuTexture gpu = entry.getValue().getLeft().getGlTexture();
+            if (gpu.isClosed()) {
+                textureCache.remove(entry.getKey());
+            }
+        }
+    }
+
     public static int load(Path path) {
+        if (path == null) return -1;
+
         if (textureCache.containsKey(path)) {
             return textureCache.get(path).getRight(); // Return cached textureId
         }
@@ -53,13 +66,25 @@ public class SafeTextureLoader {
                     }
                 }
 
-                NativeImageBackedTexture tex = new NativeImageBackedTexture(nativeImage);
+                NativeImageBackedTexture tex = new NativeImageBackedTexture(nativeImage::toString, nativeImage);
                 TextureManager manager = MinecraftClient.getInstance().getTextureManager();
                 Identifier id = Identifier.of("imgui", "custom/" + path.getFileName().toString().replace(".", "_"));
 
                 manager.registerTexture(id, tex);
 
-                int glId = tex.getGlId(); // For use with ImGui
+                int glId = ((GlTexture) tex.getGlTexture()).getGlId();
+
+                GL11.glBindTexture(GL11.GL_TEXTURE_2D, glId);
+
+                // Disable linear filtering
+                GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MIN_FILTER, GL11.GL_NEAREST);
+                GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MAG_FILTER, GL11.GL_NEAREST);
+
+                // Prevent tiling if panned/zoomed past edges
+                GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_S, GL_CLAMP);
+                GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_T, GL_CLAMP);
+
+                GL11.glBindTexture(GL11.GL_TEXTURE_2D, 0);
 
                 textureCache.put(path, new Pair<>(tex, glId));
                 return glId;
@@ -74,6 +99,7 @@ public class SafeTextureLoader {
             return -1;
         }
     }
+
 
     public static void clearCache() {
         for (Pair<NativeImageBackedTexture, Integer> pair : textureCache.values()) {

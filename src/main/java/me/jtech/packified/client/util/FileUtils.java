@@ -450,7 +450,7 @@ public class FileUtils {
 
         String content = "{\n" +
                 "  \"pack\": {\n" +
-                "    \"pack_format\": " + SharedConstants.getGameVersion().getResourceVersion(ResourceType.CLIENT_RESOURCES) + ",\n" +
+                "    \"pack_format\": " + SharedConstants.getGameVersion().packVersion(ResourceType.CLIENT_RESOURCES) + ",\n" +
                 "    \"description\": \"" + packProfile.getDescription().getString() + "\"\n" +
                 "  }\n" +
                 "}";

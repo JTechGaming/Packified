@@ -151,7 +151,7 @@ public class EditorWindow {
                         currentFile = openFiles.get(i);
                         // Render the JSON editor for the current file
                         switch (openFiles.get(i).getExtension()) {
-                            case ".json", ".mcmeta", ".fsh", ".vsh", ".properties", ".txt":
+                            case ".mcmeta", ".fsh", ".vsh", ".properties", ".txt":
                                 renderTextFileEditor(openFiles.get(i));
                                 break;
                             case ".png":
@@ -159,6 +159,13 @@ public class EditorWindow {
                                 break;
                             case ".ogg":
                                 renderAudioFileEditor(openFiles.get(i));
+                                break;
+                            case ".json":
+                                renderTextFileEditor(openFiles.get(i));
+                                if (!openFiles.get(i).isOpen()) {
+                                    ModelEditorWindow.loadModel(openFiles.get(i).getPath().toString());
+                                    openFiles.get(i).setOpen(true);
+                                }
                                 break;
                             default:
                                 ImGui.text("The " + openFiles.get(i).getExtension() + " file type can not be edited yet.");
@@ -253,6 +260,7 @@ public class EditorWindow {
                 ConfirmWindow.open("close this file", "Any unsaved changes might be lost.", () -> {
                     modifiedFiles++;
                     openFiles.remove(currentFile);
+                    currentFile.setOpen(false);
                 });
                 return;
             }
@@ -266,6 +274,9 @@ public class EditorWindow {
                     if (file.isModified()) {
                         ConfirmWindow.open("close all files", "Any unsaved changes might be lost.", () -> {
                             modifiedFiles += openFiles.size();
+                            for (PackFile f : openFiles) {
+                                f.setOpen(false);
+                            }
                             openFiles.clear();
                         });
                         return;
