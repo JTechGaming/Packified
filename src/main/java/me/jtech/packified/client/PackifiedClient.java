@@ -71,7 +71,7 @@ public class PackifiedClient implements ClientModInitializer {
                     .withFragmentShader(Identifier.of("packified", "core/blit_screen"))
                     .withSampler("InSampler")
                     .withDepthWrite(false)
-                    .withUniform("DynamicTransforms", UniformType.UNIFORM_BUFFER)
+                    .withUniform("DynamicTransforms", UniformType.MATRIX4X4)
                     .withDepthTestFunction(DepthTestFunction.NO_DEPTH_TEST)
                     .withVertexFormat(VertexFormats.POSITION_TEXTURE, VertexFormat.DrawMode.QUADS)
                     .build()

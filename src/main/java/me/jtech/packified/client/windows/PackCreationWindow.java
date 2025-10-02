@@ -35,6 +35,8 @@ public class PackCreationWindow {
             .max()
             .orElse(resourcePackVersions.size()-1); // Default to the latest version that is less than or equal to the current version
 
+    private static String[] keys = resourcePackVersions.keySet().toArray(new String[0]);
+
     public static void render() {
         if (!isOpen.get()) return;
 
@@ -47,7 +49,8 @@ public class PackCreationWindow {
         ImGui.setNextItemWidth(150);
         ImGui.inputText("Pack Name", packName);
 
-        String[] keys = resourcePackVersions.keySet().toArray(new String[0]);
+        if(packVersionIndex >= keys.length) packVersionIndex = keys.length -1;
+
         String rangeStartKey = keys[packVersionIndex];
 
         // Begin custom combo
@@ -129,7 +132,7 @@ public class PackCreationWindow {
     }
 
     private static String getCurrentVersion() {
-        return SharedConstants.getGameVersion().packVersion(ResourceType.CLIENT_RESOURCES) + "";
+        return SharedConstants.getGameVersion().getResourceVersion(ResourceType.CLIENT_RESOURCES) + "";
     }
 
     private static Map<String, String> assemblePackVersions() {

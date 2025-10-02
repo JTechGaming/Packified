@@ -26,7 +26,9 @@ import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 import java.io.FileReader;
 import java.io.IOException;
+import java.io.Writer;
 import java.nio.FloatBuffer;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -89,10 +91,12 @@ public class ModelEditorWindow {
     private static final List<Cube> cubes = new ArrayList<>();
     private static final Map<String, BufferedImage> loadedTextures = new java.util.HashMap<>();
     private static BlockModel loadedModel;
+    private static Path loadedModelPath;
 
     private static final Matrix4f mvp = new Matrix4f();
 
     public static void loadModel(String path) {
+        loadedModelPath = Path.of(path);
         try (FileReader reader = new FileReader(path)) {
             Gson gson = new GsonBuilder()
                     .registerTypeAdapter(GroupChild.class, new GroupChildDeserializer())
@@ -617,23 +621,133 @@ public class ModelEditorWindow {
         GL30.glDeleteVertexArrays(tmpVao);
         GL20.glUseProgram(0);
         GL20.glDepthFunc(GL11.GL_LESS);
+
+        //drawGizmoCones(center, len);
     }
 
     private enum GizmoMode { NONE, TRANSLATE, ROTATE, SCALE }
     private static final GizmoMode currentGizmoMode = GizmoMode.NONE;
 
-    private static void renderGizmoAttachment(float[] gizmoLines, Matrix4f mvp) {
-        switch (currentGizmoMode) {
-            case TRANSLATE -> {
-                // Render arrows for translation gizmo
-            }
-            case ROTATE -> {
-                // Render rotation gizmo
-            }
-            case SCALE -> {
-                // Render scale gizmo stub
+    private static Float[] generateCircleVertices(Vector3f center, float radius, int segments, char axis) {
+        Float[] vertices = new Float[segments * 3];
+        for (int i = 0; i < segments; i++) {
+            double angle = 2 * Math.PI * i / segments;
+            float x = (float) (center.x + radius * Math.cos(angle));
+            float y = (float) (center.y + radius * Math.sin(angle));
+            float z = center.z;
+            if (axis == 'x') {
+                vertices[i * 3] = center.x;
+                vertices[i * 3 + 1] = x;
+                vertices[i * 3 + 2] = y;
+            } else if (axis == 'y') {
+                vertices[i * 3] = x;
+                vertices[i * 3 + 1] = center.y;
+                vertices[i * 3 + 2] = y;
+            } else { // 'z'
+                vertices[i * 3] = x;
+                vertices[i * 3 + 1] = y;
+                vertices[i * 3 + 2] = center.z;
             }
         }
+        return vertices;
+    }
+
+    private static Float[] generateConeVertices(Vector3f baseCenter, float radius, float height, int segments, char axis) {
+        Float[] vertices = new Float[(segments + 1) * 3];
+        // Base circle
+        for (int i = 0; i < segments; i++) {
+            double angle = 2 * Math.PI * i / segments;
+            float x = (float) (baseCenter.x + radius * Math.cos(angle));
+            float y = (float) (baseCenter.y + radius * Math.sin(angle));
+            float z = baseCenter.z;
+            if (axis == 'x') {
+                vertices[i * 3] = baseCenter.x;
+                vertices[i * 3 + 1] = x;
+                vertices[i * 3 + 2] = y;
+            } else if (axis == 'y') {
+                vertices[i * 3] = x;
+                vertices[i * 3 + 1] = baseCenter.y;
+                vertices[i * 3 + 2] = y;
+            } else { // 'z'
+                vertices[i * 3] = x;
+                vertices[i * 3 + 1] = y;
+                vertices[i * 3 + 2] = baseCenter.z;
+            }
+        }
+        // Apex
+        if (axis == 'x') {
+            vertices[segments * 3] = baseCenter.x + height;
+            vertices[segments * 3 + 1] = baseCenter.y;
+            vertices[segments * 3 + 2] = baseCenter.z;
+        } else if (axis == 'y') {
+            vertices[segments * 3] = baseCenter.x;
+            vertices[segments * 3 + 1] = baseCenter.y + height;
+            vertices[segments * 3 + 2] = baseCenter.z;
+        } else { // 'z'
+            vertices[segments * 3] = baseCenter.x;
+            vertices[segments * 3 + 1] = baseCenter.y;
+            vertices[segments * 3 + 2] = baseCenter.z + height;
+        }
+        return vertices;
+    }
+
+    private static void drawGizmoCones(Vector3f center, float len) {
+        // Draw cones at the end of each axis line
+        float coneHeight = len * 0.1f;
+        float coneRadius = len * 0.03f;
+        int segments = 12;
+
+        // X axis (red)
+        Float[] xCone = generateConeVertices(new Vector3f(center.x + len, center.y, center.z), coneRadius, coneHeight, segments, 'x');
+        drawGizmoShape(xCone, 0xFFFF0000);
+
+        // Y axis (green)
+        Float[] yCone = generateConeVertices(new Vector3f(center.x, center.y + len, center.z), coneRadius, coneHeight, segments, 'y');
+        drawGizmoShape(yCone, 0xFF00FF00);
+
+        // Z axis (blue)
+        Float[] zCone = generateConeVertices(new Vector3f(center.x, center.y, center.z + len), coneRadius, coneHeight, segments, 'z');
+        drawGizmoShape(zCone, 0xFF0000FF);
+    }
+
+    private static void drawGizmoShape(Float[] vertices, int color) {
+        int tmpVao = GL30.glGenVertexArrays();
+        int tmpVbo = GL15.glGenBuffers();
+        GL30.glBindVertexArray(tmpVao);
+        GL15.glBindBuffer(GL15.GL_ARRAY_BUFFER, tmpVbo);
+
+        // Create interleaved vertex-color array
+        float[] interleaved = new float[vertices.length * 2];
+        for (int i = 0; i < vertices.length / 3; i++) {
+            interleaved[i * 6] = vertices[i * 3];
+            interleaved[i * 6 + 1] = vertices[i * 3 + 1];
+            interleaved[i * 6 + 2] = vertices[i * 3 + 2];
+            interleaved[i * 6 + 3] = ((color >> 16) & 0xFF) / 255f;
+            interleaved[i * 6 + 4] = ((color >> 8) & 0xFF) / 255f;
+            interleaved[i * 6 + 5] = (color & 0xFF) / 255f;
+        }
+
+        GL20.glUseProgram(shaderProgram);
+        int mvpLoc = GL20.glGetUniformLocation(shaderProgram, "uMVP");
+        try (MemoryStack stack = MemoryStack.stackPush()) {
+            FloatBuffer fb = stack.mallocFloat(16);
+            ModelEditorWindow.mvp.get(fb);
+            GL20.glUniformMatrix4fv(mvpLoc, false, fb);
+        }
+
+        GL15.glBufferData(GL15.GL_ARRAY_BUFFER, interleaved, GL15.GL_DYNAMIC_DRAW);
+        int stride = 6 * Float.BYTES;
+        GL20.glVertexAttribPointer(0, 3, GL11.GL_FLOAT, false, stride, 0);
+        GL20.glEnableVertexAttribArray(0);
+        GL20.glVertexAttribPointer(1, 3, GL11.GL_FLOAT, false, stride, 3 * Float.BYTES);
+        GL20.glEnableVertexAttribArray(1);
+        GL20.glDepthFunc(GL11.GL_ALWAYS);
+        GL11.glDrawArrays(GL11.GL_TRIANGLE_FAN, 0, vertices.length / 3);
+        GL30.glBindVertexArray(0);
+        GL15.glDeleteBuffers(tmpVbo);
+        GL30.glDeleteVertexArrays(tmpVao);
+        GL20.glUseProgram(0);
+        GL20.glDepthFunc(GL11.GL_LESS);
     }
 
     // Computes the current camera position in world space
@@ -1015,6 +1129,16 @@ public class ModelEditorWindow {
         GL20.glDeleteShader(fragmentShader);
 
         return program;
+    }
+
+    private static void writeBackToJson() {
+        if (loadedModel == null || loadedModelPath == null) return;
+        try (Writer writer = Files.newBufferedWriter(loadedModelPath)) {
+            Gson gson = new GsonBuilder().setPrettyPrinting().create();
+            gson.toJson(loadedModel, writer);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
 
     public static class GroupChildDeserializer implements JsonDeserializer<GroupChild> {
