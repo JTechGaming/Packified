@@ -368,6 +368,8 @@ public class ImGuiImplementation {
         ImPlot.destroyContext(ImPlot.getCurrentContext());
     }
 
+    private static final Map<String, Integer> textureCache = new HashMap<>();
+
     public static int loadTextureFromOwnIdentifier(String identifierPath) {
         // Check if the texture is already cached
         if (textureCache.containsKey(identifierPath)) {
