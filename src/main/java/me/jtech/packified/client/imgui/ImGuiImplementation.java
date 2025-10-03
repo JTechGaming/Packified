@@ -1,15 +1,25 @@
 package me.jtech.packified.client.imgui;
 
-import com.mojang.blaze3d.platform.GlStateManager;
+import com.mojang.blaze3d.buffers.GpuBuffer;
+import com.mojang.blaze3d.buffers.GpuBufferSlice;
+import com.mojang.blaze3d.opengl.GlStateManager;
+import com.mojang.blaze3d.systems.ProjectionType;
+import com.mojang.blaze3d.systems.RenderPass;
+import com.mojang.blaze3d.systems.RenderSystem;
+import com.mojang.blaze3d.textures.GpuTexture;
+import com.mojang.blaze3d.vertex.VertexFormat;
 import imgui.*;
 import imgui.extension.implot.ImPlot;
 import imgui.flag.ImGuiConfigFlags;
 import imgui.flag.ImGuiDockNodeFlags;
 import imgui.flag.ImGuiWindowFlags;
+import imgui.glfw.ImGuiImplGlfw;
 import imgui.internal.ImGuiContext;
 import me.jtech.packified.Packified;
+import me.jtech.packified.client.PackifiedClient;
 import me.jtech.packified.client.helpers.CornerNotificationsHelper;
 import me.jtech.packified.client.helpers.NotificationHelper;
+import me.jtech.packified.client.util.SafeTextureLoader;
 import me.jtech.packified.client.windows.elements.MenuBar;
 import me.jtech.packified.client.util.IniUtil;
 import me.jtech.packified.client.helpers.TutorialHelper;
@@ -20,14 +30,20 @@ import me.jtech.packified.client.windows.popups.SelectPackWindow;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.gl.Framebuffer;
+import net.minecraft.client.gl.SimpleFramebuffer;
 import net.minecraft.client.network.ClientPlayerInteractionManager;
-import net.minecraft.client.util.Window;
+import net.minecraft.client.render.*;
 import net.minecraft.resource.Resource;
 import net.minecraft.util.Identifier;
 import org.jetbrains.annotations.ApiStatus;
+import org.joml.Matrix4f;
+import org.joml.Matrix4fStack;
+import org.joml.Vector4f;
 import org.lwjgl.BufferUtils;
 import org.lwjgl.glfw.GLFW;
 import org.lwjgl.opengl.GL11;
+import org.lwjgl.opengl.GL30;
 
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
@@ -43,7 +59,7 @@ import static org.lwjgl.glfw.GLFW.*;
 @Environment(EnvType.CLIENT)
 @ApiStatus.Internal
 public class ImGuiImplementation {
-    public final static CustomImGuiImplGlfw imGuiImplGlfw = new CustomImGuiImplGlfw();
+    public final static ImGuiImplGlfw imGuiImplGlfw = new ImGuiImplGlfw();
     private final static CustomImGuiImplGl3 imGuiImplGl3 = new CustomImGuiImplGl3();
     public static boolean initialized = false;
 
@@ -54,8 +70,10 @@ public class ImGuiImplementation {
     private static int viewportSizeX = 1;
     private static int viewportSizeY = 1;
 
-    public static int oldFrameWidth = 1;
-    public static int oldFrameHeight = 1;
+    public static float minX;
+    public static float maxX;
+    public static float minY;
+    public static float maxY;
 
     public static boolean shouldRender = false;
 
@@ -71,9 +89,11 @@ public class ImGuiImplementation {
     public static List<String> loadedFontNames = new ArrayList<>();
     public static ImFont currentFont = null;
 
-    public static void create(final long handle) {
+    private static final Map<String, Integer> textureCache = new HashMap<>();
+
+    public static void create() {
         if (initialized) {
-            throw new IllegalStateException("Imlib initialized twice");
+            throw new IllegalStateException("Packified UI initialized twice");
         }
         initialized = true;
         long oldImGuiContext = -1;
@@ -132,7 +152,7 @@ public class ImGuiImplementation {
         data.setConfigFlags(ImGuiConfigFlags.DockingEnable | ImGuiConfigFlags.ViewportsEnable);
         data.setConfigMacOSXBehaviors(MinecraftClient.IS_SYSTEM_MAC);
 
-        imGuiImplGlfw.init(handle, true);
+        imGuiImplGlfw.init(MinecraftClient.getInstance().getWindow().getHandle(), true);
         imGuiImplGl3.init();
 
         ImGuiContext currentContext = ImGui.getCurrentContext();
@@ -197,17 +217,12 @@ public class ImGuiImplementation {
     }
 
     private static void drawInternal() {
-        int oldFrameX = frameX;
-        int oldFrameY = frameY;
-        int oldFrameWidth = frameWidth;
-        int oldFrameHeight = frameHeight;
-
         if (!initialized) {
             throw new IllegalStateException("Tried to use Imgui while it was not initialized");
         }
 
         if (!isActiveInternal()) {
-            transitionActiveState(false);
+            openOrClose(false);
             return;
         }
 
@@ -224,7 +239,7 @@ public class ImGuiImplementation {
         if (!ImGuiImplementation.isActiveInternal()) {
             ImGui.render();
 
-            ImGuiImplementation.transitionActiveState(false);
+            ImGuiImplementation.openOrClose(false);
             return;
         }
 
@@ -237,10 +252,10 @@ public class ImGuiImplementation {
 
         if (ImGui.begin("Main", ImGuiWindowFlags.NoMove | ImGuiWindowFlags.NoNavInputs | ImGuiWindowFlags.NoResize | ImGuiWindowFlags.NoBackground | ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoCollapse |
                 ImGuiWindowFlags.NoSavedSettings)) {
-            float minX = ImGui.getWindowContentRegionMinX();
-            float maxX = ImGui.getWindowContentRegionMaxX();
-            float minY = ImGui.getWindowContentRegionMinY();
-            float maxY = ImGui.getWindowContentRegionMaxY();
+            minX = ImGui.getWindowContentRegionMinX();
+            maxX = ImGui.getWindowContentRegionMaxX();
+            minY = ImGui.getWindowContentRegionMinY();
+            maxY = ImGui.getWindowContentRegionMaxY();
 
             if (ImGui.getIO().hasConfigFlags(ImGuiConfigFlags.ViewportsEnable)) {
                 frameX = (int) (ImGui.getWindowPosX() - ImGui.getWindowViewport().getPosX() + minX);
@@ -304,6 +319,8 @@ public class ImGuiImplementation {
 
         ImGui.end();
 
+        SafeTextureLoader.garbageCollect();
+
         // Window rendering
         LogWindow.render();
         EditorWindow.render();
@@ -319,7 +336,7 @@ public class ImGuiImplementation {
         PreferencesWindow.render();
         PackCreationWindow.render();
         AssetInspectorWindow.render();
-        //ModelEditorWindow.show(new ImBoolean(true));
+        ModelEditorWindow.render();
 
         TutorialHelper.render();
 
@@ -337,7 +354,7 @@ public class ImGuiImplementation {
             GLFW.glfwMakeContextCurrent(pointer);
         }
 
-        transitionActiveState(true);
+        openOrClose(true);
     }
 
     @ApiStatus.Internal
@@ -360,9 +377,14 @@ public class ImGuiImplementation {
         }
 
         try {
+            if (MinecraftClient.getInstance().getResourceManager()
+                    .getResource(Identifier.of(Packified.MOD_ID, identifierPath)).isEmpty()) {
+                throw new IllegalArgumentException("Provided texture could not be found: " + identifierPath);
+            }
             Resource resource = MinecraftClient.getInstance().getResourceManager()
                     .getResource(Identifier.of(Packified.MOD_ID, identifierPath)).get();
             BufferedImage image = ImageIO.read(resource.getInputStream());
+
             int textureId = fromBufferedImage(image);
 
             // Cache the texture ID
@@ -447,25 +469,79 @@ public class ImGuiImplementation {
 
         GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MIN_FILTER, GL11.GL_LINEAR);
         GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MAG_FILTER, GL11.GL_LINEAR);
+        GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_S, GL30.GL_CLAMP_TO_EDGE);
+        GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_T, GL30.GL_CLAMP_TO_EDGE);
 
-        GL11.glTexImage2D(GL11.GL_TEXTURE_2D, 0, GL11.GL_RGBA8, image.getWidth(), image.getHeight(), 0, GL11.GL_RGBA, GL11.GL_UNSIGNED_BYTE, buffer);
+        GL11.glTexImage2D(GL11.GL_TEXTURE_2D, 0, GL11.GL_RGBA16, image.getWidth(), image.getHeight(), 0, GL11.GL_RGBA, GL11.GL_UNSIGNED_BYTE, buffer);
 
         return texture;
     }
 
-    public static void transitionActiveState(boolean active) {
-        if (activeLastFrame == active) return;
-        activeLastFrame = active;
+    private static final ProjectionMatrix2 projectionBuffers = new ProjectionMatrix2("Blit render target", 1000.0f, 3000.0f, true);
+    private static final Framebuffer outputFramebuffer = new SimpleFramebuffer(null, 1, 1, true);
 
-        // Recalculate the size of the gameplay window
-        Window window = MinecraftClient.getInstance().getWindow();
-        if (window.getWidth() > 0 && window.getWidth() <= 32768 && window.getHeight() > 0 && window.getHeight() <= 32768) {
-            MinecraftClient.getInstance().onResolutionChanged();
+    public static void blit(Framebuffer framebuffer, int width, int height, float x1, float y1, float x2, float y2) {
+        GlStateManager._viewport(0, 0, width, height); // Resize the viewport itself
+
+        // Resize the framebuffer if the viewport size has changed
+        if (outputFramebuffer.textureWidth != width || outputFramebuffer.textureHeight != height) {
+            outputFramebuffer.resize(width, height);
         }
-        imGuiImplGlfw.ungrab();
+
+        GpuTexture colorAttachment = outputFramebuffer.getColorAttachment();
+        if (colorAttachment != null && !colorAttachment.isClosed()) { // Clear the color attachment if it exists (so set color to 0)
+            RenderSystem.getDevice().createCommandEncoder().clearColorTexture(colorAttachment, 0);
+        }
+        GpuTexture depthAttachment = outputFramebuffer.getDepthAttachment();
+        if (depthAttachment != null && !depthAttachment.isClosed()) { // Clear the depth attachment if it exists (so set depth to 1)
+            RenderSystem.getDevice().createCommandEncoder().clearDepthTexture(depthAttachment, 1.0f);
+        }
+
+        Matrix4fStack modelViewStack = RenderSystem.getModelViewStack();
+        modelViewStack.pushMatrix();
+        modelViewStack.set(new Matrix4f().translation(0.0f, 0.0f, -1500.0f)); // Ensure the following will be visible within the orthographic projection
+        RenderSystem.setProjectionMatrix(projectionBuffers.set(width, height), ProjectionType.ORTHOGRAPHIC); // Update the projection matrix to the new size
+
+        BufferBuilder builder = Tessellator.getInstance().begin(VertexFormat.DrawMode.QUADS, VertexFormats.POSITION_TEXTURE);
+        // Draw a quad that fills up the area where the viewport needs to be
+        builder.vertex(width*x1, height*y2, 0.0f).texture(0.0f, 0.0f);
+        builder.vertex(width*x2, height*y2, 0.0f).texture(1.0f, 0.0f);
+        builder.vertex(width*x2, height*y1, 0.0f).texture(1.0f, 1.0f);
+        builder.vertex(width*x1, height*y1, 0.0f).texture(0.0f, 1.0f);
+        try (BuiltBuffer meshData = builder.end()) {
+            // -------------------------------------------------------
+            // Derived from the >=1.21.5 FrameBuffer.drawBlit() method
+            RenderSystem.ShapeIndexBuffer shapeIndexBuffer = RenderSystem.getSequentialBuffer(VertexFormat.DrawMode.QUADS);
+            GpuBuffer gpuBuffer = shapeIndexBuffer.getIndexBuffer(6);
+            GpuBuffer vertexBuffer = VertexFormats.POSITION_TEXTURE.uploadImmediateVertexBuffer(meshData.getBuffer());
+
+            GpuBufferSlice gpuBufferSlice = RenderSystem.getDynamicUniforms().write(RenderSystem.getModelViewMatrix(), new Vector4f(1.0F, 1.0F, 1.0F, 1.0F),
+                    RenderSystem.getModelOffset(), RenderSystem.getTextureMatrix(), RenderSystem.getShaderLineWidth());
+
+            try (RenderPass renderPass = RenderSystem.getDevice().createCommandEncoder().createRenderPass(() -> "Blit render target", outputFramebuffer.getColorAttachmentView(), OptionalInt.empty())) {
+                renderPass.setPipeline(PackifiedClient.VIEWPORT_RESIZE_PIPELINE);
+                RenderSystem.bindDefaultUniforms(renderPass);
+                renderPass.setUniform("DynamicTransforms", gpuBufferSlice);
+                renderPass.setVertexBuffer(0, vertexBuffer);
+                renderPass.setIndexBuffer(gpuBuffer, shapeIndexBuffer.getIndexType());
+                renderPass.bindSampler("InSampler", framebuffer.getColorAttachmentView());
+                renderPass.drawIndexed(0, 0, 6, 1);
+            }
+            // -------------------------------------------------------
+        }
+
+        RenderSystem.setProjectionMatrix(RenderSystem.getProjectionMatrixBuffer(), RenderSystem.getProjectionType());
+        modelViewStack.popMatrix();
+
+        outputFramebuffer.blitToScreen(); // Blit the temporary framebuffer to the screen instead of the main framebuffer
+    }
+
+    public static void openOrClose(boolean open) {
+        if (activeLastFrame == open) return;
+        activeLastFrame = open;
 
         if (!activeLastFrame) {
-            // Make sure the vanilla grab state is correct
+            // Fix grab state
             if (MinecraftClient.getInstance().interactionManager != null) {
                 if (MinecraftClient.getInstance().currentScreen == null) {
                     MinecraftClient.getInstance().mouse.unlockCursor();
@@ -477,7 +553,7 @@ public class ImGuiImplementation {
                 MinecraftClient.getInstance().mouse.onResolutionChanged();
             }
         } else {
-            // Forcefully ungrab the cursor
+            // ungrab the cursor
             long handle = ImGui.getMainViewport().getPlatformHandle();
             if (GLFW.glfwGetInputMode(handle, GLFW.GLFW_CURSOR) != GLFW.GLFW_CURSOR_NORMAL) {
                 GLFW.glfwSetInputMode(handle, GLFW.GLFW_CURSOR, GLFW.GLFW_CURSOR_NORMAL);
@@ -551,14 +627,6 @@ public class ImGuiImplementation {
 
     public static void setViewportSizeY(int viewportSizeY) {
         ImGuiImplementation.viewportSizeY = viewportSizeY;
-    }
-
-    public static double getNewMouseX(double x) {
-        return x - frameX;
-    }
-
-    public static double getNewMouseY(double y) {
-        return y - frameY;
     }
 
     public static int getNewGameWidth(float scale) {

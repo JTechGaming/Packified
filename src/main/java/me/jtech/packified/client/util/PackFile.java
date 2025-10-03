@@ -6,6 +6,7 @@ import me.jtech.packified.client.windows.elements.PixelArtEditor;
 
 import java.awt.image.BufferedImage;
 import java.nio.file.Path;
+import java.util.Arrays;
 
 import static me.jtech.packified.client.windows.EditorWindow.*;
 
@@ -14,12 +15,13 @@ public class PackFile {
     private BufferedImage imageContent;
     private String textContent;
     private byte[] soundContent;
-    private String extension;
+    private final String extension;
     private BufferedImage imageEditorContent;
     private byte[] soundEditorContent;
     private Path path;
     private TextEditor textEditor;
     private PixelArtEditor pixelArtEditor;
+    private boolean open = false;
 
     public PackFile(Path path, BufferedImage content) {
         this.path = path;
@@ -110,14 +112,15 @@ public class PackFile {
     }
 
     public BufferedImage getImageEditorContent() {
-        return imageEditorContent;
+        //return imageEditorContent;
+        return pixelArtEditor.getImage();
     }
 
     public boolean isModified() {
         return switch (extension) {
             case ".png" -> pixelArtEditor.wasModified;
             case ".json" -> !textContent.equals(textEditor.getText());
-            case ".ogg" -> !soundContent.equals(soundEditorContent);
+            case ".ogg" -> !Arrays.equals(soundContent, soundEditorContent);
             default -> false;
         };
     }
@@ -148,5 +151,13 @@ public class PackFile {
 
     public PixelArtEditor getPixelArtEditor() {
         return pixelArtEditor;
+    }
+
+    public boolean isOpen() {
+        return open;
+    }
+
+    public void setOpen(boolean open) {
+        this.open = open;
     }
 }

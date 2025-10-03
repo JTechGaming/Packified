@@ -1,6 +1,6 @@
 package me.jtech.packified.mixin;
 
-import me.jtech.packified.client.imgui.CustomImGuiImplGlfw;
+import me.jtech.packified.client.PackifiedClient;
 import me.jtech.packified.client.imgui.ImGuiImplementation;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
@@ -49,6 +49,14 @@ public class MouseMixin {
     @Inject(method = "unlockCursor", at=@At("HEAD"), cancellable = true)
     public void releaseMouse(CallbackInfo ci) {
         if (ImGuiImplementation.isActive() && ImGuiImplementation.grabbed) {
+            ci.cancel();
+        }
+    }
+
+    // Cancel hotbar scrolling if the editor is open and the mouse is not grabbed because i dont want you to scroll in the editor XD
+    @Inject(method = "onMouseScroll", at = @At(value = "INVOKE", target = "Lnet/minecraft/entity/player/PlayerInventory;setSelectedSlot(I)V"), cancellable = true)
+    private void packified$cancelHotbarScroll(long window, double horizontal, double vertical, CallbackInfo ci) {
+        if (PackifiedClient.shouldRender && !ImGuiImplementation.grabbed) {
             ci.cancel();
         }
     }

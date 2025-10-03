@@ -1,7 +1,7 @@
 package me.jtech.packified;
 
-import me.jtech.packified.client.util.SyncPacketData;
 import me.jtech.packified.client.networking.packets.*;
+import me.jtech.packified.client.util.SyncPacketData;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;

@@ -96,7 +96,8 @@ public class LogWindow {
     public enum LogType {
         INFO(Color.WHITE),
         WARNING(new Color(0xffcc00)),
-        ERROR(new Color(0xff0033));
+        ERROR(new Color(0xff0033)),
+        SUCCESS(new Color(0x00ff66));
 
         private final Color color;
 

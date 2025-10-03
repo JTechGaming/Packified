@@ -6,6 +6,7 @@ import imgui.flag.ImGuiWindowFlags;
 import me.jtech.packified.client.windows.LogWindow;
 
 import java.awt.*;
+import java.util.ConcurrentModificationException;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
@@ -79,7 +80,7 @@ public class CornerNotificationsHelper {
                 ImGui.end();
 
                 index++;
-            } catch (NullPointerException exception) {
+            } catch (ConcurrentModificationException | NullPointerException exception) {
                 LogWindow.addWarning("Error rendering notification: " + exception.getMessage());
             }
         }

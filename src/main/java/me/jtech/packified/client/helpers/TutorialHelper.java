@@ -37,15 +37,21 @@ public class TutorialHelper {
 
     public static TutorialStage WELCOME_STAGE = registerStage(new TutorialStage(
             "Start",
-            "Welcome to the Packified mod! (This tutorial is still a work in progress!)"
+            "Welcome to the Packified mod!"
     ));
     public static TutorialStage HIERARCHY_STAGE = registerStage(new TutorialStage(
             "File Hierarchy",
             "Welcome to the Packified mod!"
     ));
-    public static TutorialStage EDITOR_STAGE = registerStage(new TutorialStage(
-            "File Editor",
-            "Welcome to the Packified mod!"
+    public static TutorialStage TEST_STAGE = registerStage(new TutorialStage(
+            "File Hierarchy",
+            "Welcome to the Packified mod!",
+            () -> {
+                ImGui.button("Test Button");
+                ImGui.sameLine();
+                ImGui.textWrapped("This is a test button that does nothing, but it is here to test actions in tutorial stages.");
+            },
+            0, 200 // 0 is default width, 200 is custom height
     ));
     public static TutorialStage END_STAGE = registerStage(new TutorialStage(
             "That's it!",

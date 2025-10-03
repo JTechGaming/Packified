@@ -184,6 +184,9 @@ public class MenuBar {
                 if (ImGui.menuItem("Log", null, LogWindow.isOpen.get())) {
                     LogWindow.isOpen.set(!LogWindow.isOpen.get());
                 }
+                if (ImGui.menuItem("Model Editor (BETA)", null, ModelEditorWindow.shouldRender)) {
+                    ModelEditorWindow.shouldRender = !ModelEditorWindow.shouldRender;
+                }
                 ImGui.endMenu();
             }
 

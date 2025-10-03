@@ -12,8 +12,13 @@ import me.jtech.packified.client.windows.popups.ConfirmWindow;
 import me.jtech.packified.client.windows.popups.SelectPackWindow;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
+import net.fabricmc.fabric.api.resource.ResourceManagerHelper;
+import net.fabricmc.fabric.api.resource.SimpleSynchronousResourceReloadListener;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.resource.ResourceManager;
+import net.minecraft.resource.ResourceType;
+import org.lwjgl.opengl.GL11;
 
 import java.awt.image.BufferedImage;
 import java.io.IOException;
@@ -32,7 +37,9 @@ public class FileHierarchy {
     private final Map<String, FileHierarchy> children = new HashMap<>();
 
     private static ImString searchQuery = new ImString();
+    private static String lastFrameSearch = searchQuery.get();
     private static String selectedExtension = "none";
+    private static String lastFrameExtension = selectedExtension;
     private static Path selectedFile;
     public static final String[] extensions = {
             "none", ".png", ".json", ".ogg", ".mcmeta", ".txt", ".properties", ".vsh", ".fsh", ".bbmodel", ".bbmodel.json"
@@ -52,17 +59,14 @@ public class FileHierarchy {
 
     private static final Map<Path, Integer> textureCache = new HashMap<>();
 
-    private static final int importIcon = ImGuiImplementation.loadTextureFromOwnIdentifier("textures/ui/neu_import.png");
+    private static final int inportIcon = ImGuiImplementation.loadTextureFromOwnIdentifier("textures/ui/neu_import.png");
     private static final int deleteIcon = ImGuiImplementation.loadTextureFromOwnIdentifier("textures/ui/neu_delete.png");
 
     private static int getOrLoadTexture(Path filePath) {
         if (textureCache.size() >= 40 && !textureCache.containsKey(filePath)) { // prevent the cache from growing too large
             textureCache.clear();
         }
-        return textureCache.computeIfAbsent(filePath, path -> {
-            BufferedImage image = ImGuiImplementation.getBufferedImageFromPath(path);
-            return image != null ? ImGuiImplementation.loadTextureFromBufferedImage(image) : -1;
-        });
+        return textureCache.computeIfAbsent(filePath, ImGuiImplementation::loadTextureFromPath);
     }
 
     public static FileHierarchy getCachedHierarchy(Path rootPath) {
@@ -93,7 +97,7 @@ public class FileHierarchy {
             }));
         }
 
-        if (cachedHierarchy == null || watcher.isInvalidated()) {
+        if (cachedHierarchy == null || watcher.isInvalidated() || !lastFrameSearch.equals(searchQuery.get()) || !selectedExtension.equals(lastFrameExtension)) {
             LogWindow.addDebugInfo("PackWatcher: Successfully rebuilt file hierarchy");
             cachedHierarchy = buildFileHierarchy(rootPath);
             if (watcher != null) watcher.resetInvalidated();
@@ -222,9 +226,9 @@ public class FileHierarchy {
 
                 ImGui.setNextWindowSize(200, 200);
                 if (FileUtils.getFileExtension(filePath.getFileName().toString()).equalsIgnoreCase(".png")) {
-                    int texId = getOrLoadTexture(filePath);
-                    if (texId != -1) {
-                        ImGui.image(texId, 100, 100);
+                    int textureId = SafeTextureLoader.load(filePath);
+                    if (textureId != -1) {
+                        ImGui.image(textureId, 100, 100);
                     }
                 }
                 ImGui.text(String.format("Path: %s\nSize: %s" + (isFolder ? "\nType: %s\nFiles: %s" : "\nType: %s%s"),
@@ -323,7 +327,7 @@ public class FileHierarchy {
         }
 
         if (PackifiedClient.currentPack != null) {
-            ImGui.imageButton(importIcon, 14, 14);
+            ImGui.imageButton(inportIcon, 14, 14);
             if (ImGui.isItemClicked()) {
                 // Logic to import a file
                 String defaultFolder = FabricLoader.getInstance().getConfigDir().resolve("packified").toString();
@@ -393,6 +397,9 @@ public class FileHierarchy {
         }
 
         ImGui.end();
+
+        lastFrameExtension = selectedExtension;
+        lastFrameSearch = searchQuery.get();
     }
 
     public static Path getPackFolderPath() {

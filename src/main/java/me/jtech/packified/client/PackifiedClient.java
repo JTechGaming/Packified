@@ -1,5 +1,9 @@
 package me.jtech.packified.client;
 
+import com.mojang.blaze3d.pipeline.BlendFunction;
+import com.mojang.blaze3d.pipeline.RenderPipeline;
+import com.mojang.blaze3d.platform.DepthTestFunction;
+import com.mojang.blaze3d.vertex.VertexFormat;
 import imgui.ImGui;
 import me.jtech.packified.client.config.ModConfig;
 import me.jtech.packified.client.helpers.NotificationHelper;
@@ -21,10 +25,14 @@ import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.gl.RenderPipelines;
+import net.minecraft.client.gl.UniformType;
 import net.minecraft.client.network.ClientPlayerInteractionManager;
 import net.minecraft.client.option.KeyBinding;
+import net.minecraft.client.render.VertexFormats;
 import net.minecraft.client.util.InputUtil;
 import net.minecraft.resource.ResourcePackProfile;
+import net.minecraft.util.Identifier;
 import net.minecraft.util.math.ChunkPos;
 import net.minecraft.util.math.ChunkSectionPos;
 import net.minecraft.world.GameMode;
@@ -56,9 +64,18 @@ public class PackifiedClient implements ClientModInitializer {
     private static final List<SyncPacketData.AssetData> chunkedAssetsBuffer = new ArrayList<>();
     private static boolean isFirstPacket = true;
 
-    //TODO fix known incompatibility: shared resources mod
-    //TODO fix known incompatibility: ImmediatelyFast ???
-    //TODO fix known incompatibility: Essential Mod
+    public static final RenderPipeline VIEWPORT_RESIZE_PIPELINE = RenderPipelines.register(
+            RenderPipeline.builder()
+                    .withLocation(Identifier.of("packified", "pipeline/blit_screen"))
+                    .withVertexShader(Identifier.of("packified", "core/blit_screen"))
+                    .withFragmentShader(Identifier.of("packified", "core/blit_screen"))
+                    .withSampler("InSampler")
+                    .withDepthWrite(false)
+                    .withUniform("DynamicTransforms", UniformType.UNIFORM_BUFFER)
+                    .withDepthTestFunction(DepthTestFunction.NO_DEPTH_TEST)
+                    .withVertexFormat(VertexFormats.POSITION_TEXTURE, VertexFormat.DrawMode.QUADS)
+                    .build()
+    );
 
     @Override
     public void onInitializeClient() {
@@ -189,7 +206,7 @@ public class PackifiedClient implements ClientModInitializer {
                 }
                 int ySections = ChunkSectionPos.getSectionCoord(client.world.getHeight());
                 for (int chunkY = 0; chunkY < ySections; chunkY++) {
-                    client.worldRenderer.scheduleChunkRender(chunkX, chunkY, chunkZ, true);
+                    client.worldRenderer.scheduleChunkRender(chunkX, chunkY, chunkZ);
                 }
             }
         }
@@ -351,20 +368,20 @@ public class PackifiedClient implements ClientModInitializer {
         MinecraftClient client = MinecraftClient.getInstance();
         if (client.player.hasPermissionLevel(2)) {
             if (gameMode.equals(GameMode.CREATIVE)) {
-                client.player.networkHandler.sendCommand("gamemode creative");
+                client.player.networkHandler.sendChatCommand("gamemode creative");
             } else if (gameMode.equals(GameMode.SURVIVAL)) {
-                client.player.networkHandler.sendCommand("gamemode survival");
+                client.player.networkHandler.sendChatCommand("gamemode survival");
             } else if (gameMode.equals(GameMode.SPECTATOR)) {
-                client.player.networkHandler.sendCommand("gamemode spectator");
+                client.player.networkHandler.sendChatCommand("gamemode spectator");
             } else if (gameMode.equals(GameMode.ADVENTURE)) {
-                client.player.networkHandler.sendCommand("gamemode adventure");
+                client.player.networkHandler.sendChatCommand("gamemode adventure");
             } else {
                 LOGGER.error("Unknown game mode: {}", gameMode);
             }
         }
     }
 
-    public static void unlockCursor() {
+    private static void unlockCursor() {
         MinecraftClient client = MinecraftClient.getInstance();
         GLFW.glfwSetInputMode(client.getWindow().getHandle(), GLFW.GLFW_CURSOR, GLFW.GLFW_CURSOR_NORMAL);
         client.mouse.unlockCursor();
