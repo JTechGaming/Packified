@@ -35,7 +35,7 @@ public class FileHierarchy {
     private static String selectedExtension = "none";
     private static Path selectedFile;
     public static final String[] extensions = {
-            "none", ".png", ".json", ".ogg", ".mcmeta", ".txt", ".properties", ".vsh", ".fsh", ".bbmodel", ".bbmodel.json"
+            "none", ".png", ".json", ".ogg", ".mcmeta", ".txt", ".properties", ".vsh", ".fsh", ".glsl", ".bbmodel", ".bbmodel.json"
     };
     private static float itemHoverTime = 0.0f;
     private static String selectedFileName = null;

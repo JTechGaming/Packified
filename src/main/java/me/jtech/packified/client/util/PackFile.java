@@ -50,7 +50,7 @@ public class PackFile {
             case ".json", ".mcmeta":
                 textEditor.setLanguageDefinition(createJsonLanguageDefinition());
                 break;
-            case ".fsh", ".vsh":
+            case ".fsh", ".vsh", ".glsl":
                 textEditor.setLanguageDefinition(TextEditorLanguageDefinition.glsl());
                 break;
             case ".properties", ".txt":
@@ -68,7 +68,7 @@ public class PackFile {
             case ".json", ".mcmeta":
                 textEditor.setLanguageDefinition(createJsonLanguageDefinition());
                 break;
-            case ".fsh", ".vsh":
+            case ".fsh", ".vsh", ".glsl":
                 textEditor.setLanguageDefinition(TextEditorLanguageDefinition.glsl());
                 break;
             case ".properties", ".txt":

@@ -151,7 +151,7 @@ public class EditorWindow {
                         currentFile = openFiles.get(i);
                         // Render the JSON editor for the current file
                         switch (openFiles.get(i).getExtension()) {
-                            case ".json", ".mcmeta", ".fsh", ".vsh", ".properties", ".txt":
+                            case ".json", ".mcmeta", ".fsh", ".vsh", ".glsl", ".properties", ".txt":
                                 renderTextFileEditor(openFiles.get(i));
                                 break;
                             case ".png":

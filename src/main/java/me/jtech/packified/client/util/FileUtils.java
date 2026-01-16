@@ -157,7 +157,7 @@ public class FileUtils {
         try (InputStream inputStream = Files.newInputStream(filePath)) {
             String content = "";
             switch (extension) {
-                case ".json", ".txt", ".mcmeta", ".properties", ".vsh", ".fsh", ".bbmodel", ".bbmodel.json" -> {
+                case ".json", ".txt", ".mcmeta", ".properties", ".vsh", ".fsh", ".glsl", ".bbmodel", ".bbmodel.json" -> {
                     content = new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
                     EditorWindow.openTextFile(filePath, content);
                 }
@@ -535,6 +535,7 @@ public class FileUtils {
             case ".properties" -> "Properties";
             case ".vsh" -> "Vertex Shader";
             case ".fsh" -> "Fragment Shader";
+            case ".glsl" -> "OpenGL Shading Language";
             case ".bbmodel" -> "Blockbench Model";
             case ".bbmodel.json" -> "Blockbench Model JSON";
             default -> "Unknown";
@@ -545,7 +546,7 @@ public class FileUtils {
     public static String getContent(PackFile file) {
         String extension = file.getExtension();
 
-        if (extension.equals(".json") || extension.equals(".txt") || extension.equals(".mcmeta")) {
+        if (extension.equals(".json") || extension.equals(".txt") || extension.equals(".mcmeta") || extension.equals(".glsl")) {
             return file.getTextEditor().getText();
         } else if (extension.equals(".png")) {
             return encodeImageToBase64(file.getImageEditorContent());
