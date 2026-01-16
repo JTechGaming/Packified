@@ -358,7 +358,7 @@ public class EditorWindow {
             // Logic to save the current JSON file
             if (currentFile.isModified()) {
                 switch (currentFile.getExtension()) {
-                    case ".json", ".mcmeta", ".fsh", ".vsh", ".properties", ".txt":
+                    case ".json", ".mcmeta", ".fsh", ".vsh", ".glsl", ".properties", ".txt":
                         FileUtils.saveSingleFile(currentFile.getPath(), FileUtils.getFileExtension(currentFile.getFileName()), currentFile.getTextEditor().getText(), PackifiedClient.currentPack);
                         break;
                     case ".png":
@@ -584,6 +584,12 @@ public class EditorWindow {
         try (JsonParser parser = factory.createParser(content)) {
             while (parser.nextToken() != null) {
                 // If it reaches here, the current line in the JSON is valid
+                String currentLine = parser.getText();
+
+                //todo detect if line contains a color code, if so, render a color box on the left of the current line number
+
+                JsonLocation location = parser.currentLocation();
+                int lineNumber = location.getLineNr() - 1;
             }
         } catch (JsonParseException e) {
             JsonLocation location = e.getLocation();
