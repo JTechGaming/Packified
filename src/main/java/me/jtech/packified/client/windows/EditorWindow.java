@@ -225,7 +225,7 @@ public class EditorWindow {
             // Logic to save the current JSON file
             if (currentFile.isModified()) {
                 switch (currentFile.getExtension()) {
-                    case ".json", ".mcmeta", ".fsh", ".vsh", ".properties", ".txt":
+                    case ".json", ".mcmeta", ".fsh", ".vsh", ".glsl", ".properties", ".txt":
                         FileUtils.saveSingleFile(currentFile.getPath(), FileUtils.getFileExtension(currentFile.getFileName()), currentFile.getTextEditor().getText(), PackifiedClient.currentPack);
                         break;
                     case ".png":
