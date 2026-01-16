@@ -73,9 +73,6 @@ public class Packified implements ModInitializer {
                     return;
                 }
                 LOGGER.info(payload.packetData().lastData() ? "Last data chunk received" : "Receiving full pack from player: {}", player.getUuid());
-                for (SyncPacketData.AssetData asset : payload.packetData().assets()) {
-                    LOGGER.info("Sending file: {}", asset.path());
-                }
                 ServerPlayNetworking.send(player, new S2CSendFullPack(payload.packetData()));
             });
         });

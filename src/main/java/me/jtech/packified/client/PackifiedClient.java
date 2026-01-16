@@ -24,6 +24,8 @@ import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
+import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
+import net.fabricmc.fabric.api.client.rendering.v1.hud.VanillaHudElements;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gl.RenderPipelines;
 import net.minecraft.client.gl.UniformType;
@@ -33,6 +35,7 @@ import net.minecraft.client.render.VertexFormats;
 import net.minecraft.client.util.InputUtil;
 import net.minecraft.resource.ResourcePackProfile;
 import net.minecraft.util.Identifier;
+import net.minecraft.util.Util;
 import net.minecraft.util.math.ChunkPos;
 import net.minecraft.util.math.ChunkSectionPos;
 import net.minecraft.world.GameMode;
@@ -51,7 +54,6 @@ public class PackifiedClient implements ClientModInitializer {
     public static Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
 
     private static final String version = Packified.version;
-    public static boolean reloaded = false;
 
     public static boolean shouldRender = false;
     private static KeyBinding keyBinding;
@@ -63,6 +65,9 @@ public class PackifiedClient implements ClientModInitializer {
 
     private static final List<SyncPacketData.AssetData> chunkedAssetsBuffer = new ArrayList<>();
     private static boolean isFirstPacket = true;
+
+    public static boolean reloaded = false;
+    public static boolean loading = false;
 
     public static final RenderPipeline VIEWPORT_RESIZE_PIPELINE = RenderPipelines.register(
             RenderPipeline.builder()
@@ -93,6 +98,7 @@ public class PackifiedClient implements ClientModInitializer {
 
             if (reloaded) {
                 reloaded = false;
+                loading = false;
                 sendBlockUpdateToLoadedChunks();
             }
         });
@@ -114,6 +120,24 @@ public class PackifiedClient implements ClientModInitializer {
             }
         });
 
+        HudElementRegistry.attachElementBefore(VanillaHudElements.CHAT, Identifier.of(MOD_ID, "before_chat"), (context, tickCounter) -> {
+            if (loading) {
+                int x = 10, y = 10; // Position on screen
+                int width = 24, height = 24; // Size of the icon
+                float angle = ((float) Util.getMeasuringTimeMs() / 8) % 360;
+
+                context.getMatrices().pushMatrix();
+                context.getMatrices().translate(x + (float) width /2, y + (float) height /2); // Move to the center of the icon
+                context.getMatrices().rotate(angle); // Rotate around the center
+                context.getMatrices().translate((float) -width /2, (float) -height /2);
+
+                Identifier texture = Identifier.of(MOD_ID, "textures/ui/reload.png");
+                context.drawTexture(RenderPipelines.GUI_TEXTURED, texture, 0, 0, 0, 0, width, height, width, height);
+
+                context.getMatrices().popMatrix();
+            }
+        });
+
         AtomicReference<NotificationHelper.Notification> notification = new AtomicReference<>();
 
         ClientPlayNetworking.registerGlobalReceiver(S2CSyncPackChanges.ID, (payload, context) -> {
@@ -131,22 +155,23 @@ public class PackifiedClient implements ClientModInitializer {
 
         ClientPlayNetworking.registerGlobalReceiver(S2CSendFullPack.ID, (payload, context) -> {
             // Logic to fully download, add and apply the pack
-            SyncPacketData data = payload.packetData();
-            if (isFirstPacket) {
-                isFirstPacket = false;
-                // Create the pack
-                FileUtils.createPack(data.packName(), List.of(), data.metadata());
+            CompletableFuture.runAsync(() -> {
+                SyncPacketData data = payload.packetData();
+                if (isFirstPacket) {
+                    isFirstPacket = false;
+                    // Create the pack
+                    FileUtils.createPack(data.packName(), List.of(), data.metadata());
 
-                notification.set(NotificationHelper.addNotification("Loading pack: " + data.packName(), "Downloading assets...", 5000, 0, data.packetAmount()));
-            }
-            if (notification.get() != null) {
-                notification.get().setProgress(notification.get().getProgress() + 1);
-            }
+                    notification.set(NotificationHelper.addNotification("Loading pack: " + data.packName(), "Downloading assets...", 5000, 0, data.packetAmount()));
+                }
+                if (notification.get() != null) {
+                    notification.get().setProgress(notification.get().getProgress() + 1);
+                }
 
-            LogWindow.addPackDownloadInfo("Downloading pack from server: " + payload.packetData().packName());
-            LogWindow.addPackDownloadInfo(notification.get().getProgress() + " / " + notification.get().getMaxProgress());
-
-            accumulativeAssetDownload(data, currentPack, notification.get());
+                LogWindow.addPackDownloadInfo("Downloading pack from server: " + payload.packetData().packName());
+                LogWindow.addPackDownloadInfo(notification.get().getProgress() + " / " + notification.get().getMaxProgress());
+                accumulativeAssetDownload(data, currentPack, notification.get());
+            });
         });
 
         ClientPlayNetworking.registerGlobalReceiver(S2CRequestFullPack.ID, (payload, context) -> {
@@ -192,7 +217,7 @@ public class PackifiedClient implements ClientModInitializer {
 
     public static void sendBlockUpdateToLoadedChunks() {
         MinecraftClient client = MinecraftClient.getInstance();
-        if (client.world == null) return;
+        if (client.player != null && client.player.clientWorld == null) return;
 
         int renderDistance = client.options.getViewDistance().getValue() * 2;
         ChunkPos chunkPos = client.player.getChunkPos();
@@ -201,10 +226,7 @@ public class PackifiedClient implements ClientModInitializer {
             for (int j = 0; j < renderDistance; j++) {
                 int chunkX = chunkPos.x + i - renderDistance / 2;
                 int chunkZ = chunkPos.z + j - renderDistance / 2;
-                if (!client.world.isChunkLoaded(chunkX, chunkZ)) {
-                    continue;
-                }
-                int ySections = ChunkSectionPos.getSectionCoord(client.world.getHeight());
+                int ySections = ChunkSectionPos.getSectionCoord(client.player.clientWorld.getHeight());
                 for (int chunkY = 0; chunkY < ySections; chunkY++) {
                     client.worldRenderer.scheduleChunkRender(chunkX, chunkY, chunkZ);
                 }
@@ -232,7 +254,6 @@ public class PackifiedClient implements ClientModInitializer {
             } else {
                 assetData = asset;
             }
-            PackifiedClient.LOGGER.info(assetData.path().toString());
             FileUtils.saveSingleFile(assetData.path(), assetData.extension(), assetData.assetData(), pack);
         }
         if (data.finalChunk()) {
@@ -268,9 +289,10 @@ public class PackifiedClient implements ClientModInitializer {
         return false;
     }
 
-    boolean saveKeyPressed = false;
-    boolean closeKeyPressed = false;
-    boolean reloadKeyPressed = false;
+    private boolean saveKeyPressed = false;
+    private boolean closeKeyPressed = false;
+    private boolean reloadKeyPressed = false;
+    private boolean enterGameKeyPressed = false;
 
     private void handleKeypresses() {
         long windowHandle = MinecraftClient.getInstance().getWindow().getHandle();
@@ -278,6 +300,16 @@ public class PackifiedClient implements ClientModInitializer {
         boolean shiftPressed = InputUtil.isKeyPressed(windowHandle, GLFW.GLFW_KEY_LEFT_SHIFT) || InputUtil.isKeyPressed(windowHandle, GLFW.GLFW_KEY_RIGHT_SHIFT);
 
         if (ctrlPressed) {
+            if (InputUtil.isKeyPressed(windowHandle, GLFW.GLFW_KEY_F6)) {
+                if (enterGameKeyPressed) {
+                    return;
+                }
+                enterGameKeyPressed = true;
+                ImGuiImplementation.enterGameKeyToggled = !ImGuiImplementation.enterGameKeyToggled;
+            } else {
+                enterGameKeyPressed = false;
+            }
+
             if (currentPack == null) {
                 return;
             }
@@ -333,6 +365,8 @@ public class PackifiedClient implements ClientModInitializer {
                         ConfirmWindow.open("close this file", "Any unsaved changes might be lost.", () -> {
                             EditorWindow.modifiedFiles++;
                             EditorWindow.openFiles.remove(EditorWindow.currentFile);
+                            EditorWindow.audioPlayer.stop();
+                            EditorWindow.waveform = new float[0];
                         });
                         return;
                     }

@@ -12,7 +12,9 @@ import me.jtech.packified.client.PackifiedClient;
 import me.jtech.packified.client.imgui.ImGuiImplementation;
 import me.jtech.packified.client.util.PackFile;
 import me.jtech.packified.client.util.PackUtils;
-import me.jtech.packified.client.windows.popups.SelectPackWindow;
+import me.jtech.packified.client.windows.popups.PackBrowserWindow;
+import net.fabricmc.api.EnvType;
+import net.fabricmc.api.Environment;
 import net.minecraft.resource.ResourcePackProfile;
 
 import java.util.ArrayList;
@@ -21,6 +23,7 @@ import java.util.Map;
 
 import static me.jtech.packified.client.windows.EditorWindow.checkForErrors;
 
+@Environment(EnvType.CLIENT)
 public class AssetInspectorWindow {
     public static ImBoolean isOpen = new ImBoolean(false);
 
@@ -102,7 +105,7 @@ public class AssetInspectorWindow {
                         if (PackifiedClient.currentPack != null) {
 
                         } else {
-                            SelectPackWindow.open.set(true);
+                            PackBrowserWindow.open.set(true);
                         }
                     }
                     if (ImGui.isItemHovered()) {

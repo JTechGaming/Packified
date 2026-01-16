@@ -5,27 +5,30 @@ import imgui.ImVec2;
 import imgui.flag.ImGuiCond;
 import imgui.type.ImBoolean;
 import me.jtech.packified.client.PackifiedClient;
+import me.jtech.packified.client.config.ModConfig;
 import me.jtech.packified.client.imgui.ImGuiImplementation;
 import me.jtech.packified.client.util.PackUtils;
-import me.jtech.packified.client.networking.packets.C2SInfoPacket;
 import me.jtech.packified.client.windows.EditorWindow;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
-import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.resource.ResourcePackProfile;
+import net.minecraft.util.Identifier;
 
+import javax.imageio.ImageIO;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
 @Environment(EnvType.CLIENT)
-public class SelectPackWindow {
+public class PackBrowserWindow {
     public static ImBoolean open = new ImBoolean(false);
     private static boolean first = true;
     private static List<ResourcePackProfile> packs = new ArrayList<>();
 
     public static void render() {
         if (!open.get()) {
+            first = true;
             return;
         }
         if (first) {
@@ -40,6 +43,12 @@ public class SelectPackWindow {
 
         if (ImGui.begin("Select Pack", open)) {
             for (ResourcePackProfile pack : packs) {
+
+                MinecraftClient.getInstance().resourceManager.findResources("pack/" + pack.getId(), path -> {
+                    System.out.println(path);
+                    return false;
+                });
+
                 if (ImGui.menuItem(pack.getDisplayName().getString())) {
                     EditorWindow.openFiles.clear();
                     if (PackifiedClient.currentPack != null) {
@@ -48,35 +57,10 @@ public class SelectPackWindow {
                     PackifiedClient.currentPack = pack;
                     PackUtils.loadPack(pack);
                     PackUtils.checkPackType(pack);
+                    ModConfig.savePackStatus(pack);
                     open.set(false);
                     first = true;
                 }
-//                if (ImGui.beginPopupContextItem("Pack Options")) {
-//                    if (ImGui.menuItem("Open")) {
-//                        EditorWindow.openFiles.clear();
-//                        if (PackifiedClient.currentPack != null) {
-//                            PackUtils.unloadPack(PackifiedClient.currentPack);
-//                        }
-//                        PackifiedClient.currentPack = pack;
-//                        PackUtils.loadPack(pack);
-//                        PackUtils.checkPackType(pack);
-//                        open.set(false);
-//                        first = true;
-//                        if (PackifiedClient.currentPack != null) {
-//                            ClientPlayNetworking.send(new C2SInfoPacket(PackifiedClient.currentPack.getDisplayName().getString(), MinecraftClient.getInstance().player.getUuid()));
-//                        }
-//                    }
-//                    if (ImGui.menuItem("Delete")) {
-//                        ConfirmWindow.open("delete this pack", "This cannot be undone!", () -> {
-//                            Path path = Path.of("resourcepacks/").resolve(PackUtils.legalizeName(pack.getDisplayName().getString()));
-//
-//                            PackUtils.refresh();
-//                            PackifiedClient.currentPack = null;
-//                            EditorWindow.openFiles.clear();
-//                        });
-//                    }
-//                    ImGui.endPopup();
-//                }
             }
         }
         ImGui.end();

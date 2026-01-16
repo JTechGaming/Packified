@@ -5,11 +5,14 @@ import imgui.ImVec2;
 import imgui.flag.ImGuiCond;
 import imgui.flag.ImGuiWindowFlags;
 import me.jtech.packified.client.imgui.ImGuiImplementation;
+import net.fabricmc.api.EnvType;
+import net.fabricmc.api.Environment;
 
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 
+@Environment(EnvType.CLIENT)
 public class NotificationHelper {
     private static int NOTIFY_DEFAULT_TOAST_FLAGS = ImGuiWindowFlags.AlwaysAutoResize | ImGuiWindowFlags.NoDecoration | ImGuiWindowFlags.NoNav | ImGuiWindowFlags.NoBringToFrontOnFocus | ImGuiWindowFlags.NoFocusOnAppearing;
     private static List<Notification> notifications = new ArrayList<>();

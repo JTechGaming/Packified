@@ -7,13 +7,6 @@ import org.lwjgl.glfw.GLFW;
 
 @Environment(EnvType.CLIENT)
 public class WindowSizeTracker {
-
-    /**
-     * Some mods (e.g. qdaa) like to manipulate the framebuffer width
-     * This can cause rendering issues since we don't know the real width
-     * This helper will cache and calculate the real framebuffer width to avoid this issue
-     */
-
     private static int lastFramebufferWidth;
     private static int lastFramebufferHeight;
     private static int realFramebufferWidth;
@@ -48,5 +41,4 @@ public class WindowSizeTracker {
         lastFramebufferWidth = window.framebufferWidth;
         lastFramebufferHeight = window.framebufferHeight;
     }
-
 }

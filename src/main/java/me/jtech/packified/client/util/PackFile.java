@@ -15,6 +15,8 @@ public class PackFile {
     private BufferedImage imageContent;
     private String textContent;
     private byte[] soundContent;
+    private int sampleRate;
+    private int channels;
     private final String extension;
     private BufferedImage imageEditorContent;
     private byte[] soundEditorContent;
@@ -117,9 +119,10 @@ public class PackFile {
     }
 
     public boolean isModified() {
+        // normalize and strip common invisible chars
         return switch (extension) {
             case ".png" -> pixelArtEditor.wasModified;
-            case ".json" -> !textContent.equals(textEditor.getText());
+            case ".json" -> !textContent.equals(textEditor.getText().substring(0, textEditor.getText().length()-1));
             case ".ogg" -> !Arrays.equals(soundContent, soundEditorContent);
             default -> false;
         };
@@ -158,6 +161,7 @@ public class PackFile {
     }
 
     public void setOpen(boolean open) {
+        textEditor.setText(textContent); // Prevent unsaved changes when reopening
         this.open = open;
     }
 }

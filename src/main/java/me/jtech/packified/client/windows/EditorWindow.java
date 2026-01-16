@@ -18,17 +18,26 @@ import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.MinecraftClient;
+import org.lwjgl.stb.STBVorbis;
+import org.lwjgl.system.MemoryStack;
+import org.lwjgl.system.MemoryUtil;
 
 import javax.imageio.ImageIO;
+import javax.sound.sampled.AudioFormat;
+import javax.sound.sampled.AudioInputStream;
+import javax.sound.sampled.AudioSystem;
+import javax.sound.sampled.UnsupportedAudioFileException;
 import java.awt.image.BufferedImage;
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.nio.IntBuffer;
+import java.nio.ShortBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 @Environment(EnvType.CLIENT)
 public class EditorWindow {
@@ -39,10 +48,10 @@ public class EditorWindow {
 
     public static List<PackFile> changedAssets = new ArrayList<>();
 
-    private static AtomicBoolean isPlaying = new AtomicBoolean(false);
-
     public static PackFile currentFile;
     public static boolean showGrid;
+
+    public static final AudioPlayer audioPlayer = new AudioPlayer();
 
     public static void render() {
         if (!isOpen.get()) {
@@ -59,7 +68,7 @@ public class EditorWindow {
                 if (ImGui.beginMenu("File")) {
                     if (ImGui.menuItem("Open")) {
                         String defaultFolder = FabricLoader.getInstance().getConfigDir().resolve("packified").toString();
-                        FileDialog.openFileDialog(defaultFolder, "Files", "json", "png", "ogg").thenAccept(pathStr -> {
+                        FileDialog.openFileDialog(defaultFolder, "Files").thenAccept(pathStr -> {
                             if (pathStr != null) {
                                 Path path = Path.of(pathStr);
                                 MinecraftClient.getInstance().submit(() -> {
@@ -135,10 +144,8 @@ public class EditorWindow {
             ImGui.popStyleColor();
 
             if (ImGui.beginTabBar("FileEditorTabs", ImGuiTabBarFlags.Reorderable | ImGuiTabBarFlags.AutoSelectNewTabs | ImGuiTabBarFlags.TabListPopupButton)) {
-                // Example of adding tabs dynamically
-
                 for (int i = 0; i < openFiles.size(); i++) {
-                    if (ImGui.beginTabItem(openFiles.get(i).getFileName() + "##" + i, ImGuiTabItemFlags.None | (openFiles.get(i).isModified() ? ImGuiTabItemFlags.UnsavedDocument : 0))) {
+                    if (ImGui.beginTabItem(openFiles.get(i).getFileName() + "##" + i, (openFiles.get(i).isModified() ? ImGuiTabItemFlags.UnsavedDocument : ImGuiTabItemFlags.None))) {
                         if (openFiles.get(i).isModified()) {
                             for (int j = 0; j < changedAssets.size(); j++) {
                                 if (changedAssets.get(j).getPath().equals(openFiles.get(i).getPath())) {
@@ -149,7 +156,6 @@ public class EditorWindow {
                             changedAssets.add(openFiles.get(i));
                         }
                         currentFile = openFiles.get(i);
-                        // Render the JSON editor for the current file
                         switch (openFiles.get(i).getExtension()) {
                             case ".mcmeta", ".fsh", ".vsh", ".properties", ".txt":
                                 renderTextFileEditor(openFiles.get(i));
@@ -163,7 +169,6 @@ public class EditorWindow {
                             case ".json":
                                 renderTextFileEditor(openFiles.get(i));
                                 if (!openFiles.get(i).isOpen()) {
-                                    ModelEditorWindow.loadModel(openFiles.get(i).getPath().toString());
                                     openFiles.get(i).setOpen(true);
                                 }
                                 break;
@@ -184,44 +189,165 @@ public class EditorWindow {
         ImGui.end();
     }
 
-    private static AudioPlayer audioPlayer = new AudioPlayer();
+    public static float[] waveform = new float[0];
+    private static int waveformSampleRate = 44100;
+    private static int waveformChannels = 1;
+
+    private record DecodedAudio(float[] waveform, int sampleRate, int channels) {}
 
     private static void renderAudioFileEditor(PackFile audioFile) {
-        float[] waveform = convertToWaveform(audioFile.getSoundContent());
+        if (waveform.length == 0) {
+            DecodedAudio decoded = convertToWaveform(audioFile.getSoundEditorContent());
+            if (decoded != null && decoded.waveform().length > 0) {
+                waveform = decoded.waveform();
+                waveformSampleRate = decoded.sampleRate();
+                waveformChannels = decoded.channels();
+            } else {
+                waveform = new float[0];
+                waveformSampleRate = 44100;
+                waveformChannels = 1;
+            }
+        }
+
         if (waveform.length > 0) {
-            ImGui.plotLines("Waveform", waveform, waveform.length); //, 0, null, -1.0f, 1.0f, new ImVec2(400, 100)
+            ImGui.plotLines("Waveform", waveform, waveform.length);
         } else {
             ImGui.text("No waveform data available");
         }
-        int sampleRate = 44100; // Default sample rate for OGG files, can be adjusted based on actual data
-        int channels = 1; // Assuming stereo audio, adjust if mono
-        if (!audioPlayer.loaded) {
+
+        // Draw the playhead as a vertical line
+        float playheadPosition = audioPlayer.getPlayheadPosition();
+        ImGui.getWindowDrawList().addLine(
+                ImGui.getCursorScreenPosX() + playheadPosition * ImGui.getContentRegionAvailX(),
+                ImGui.getCursorScreenPosY()-40,
+                ImGui.getCursorScreenPosX() + playheadPosition * ImGui.getContentRegionAvailX(),
+                ImGui.getCursorScreenPosY(),
+                ImGui.getColorU32(0.5f, 0.5f, 0.5f, 1.0f),
+                2.0f
+        );
+
+        // Prefer the decoded metadata we stored above.
+        int sampleRate = waveformSampleRate;
+        int channels = waveformChannels;
+
+        // Sanity clamp channels
+        if (channels < 1) channels = 1;
+        if (channels > 2) channels = 2;
+
+        // If there's already a loaded buffer, cleanup it so we can reload with correct format
+        if (audioPlayer.loaded) {
+            audioPlayer.cleanup();
+        }
+
+        // Only load into the audio player if we actually have waveform data
+        if (waveform.length > 0) {
             audioPlayer.load(waveform, sampleRate, channels);
         }
-        if (ImGui.button("Play")) {
+
+        if (ImGui.button("Play/Pause")) {
             if (!audioPlayer.isPlaying()) {
                 audioPlayer.play();
+            } else {
+                audioPlayer.pause();
             }
-        }
-        if (!audioPlayer.isPlaying()) {
-            // idk clean up or smth
         }
     }
 
-    private static float[] convertToWaveform(byte[] audioData) {
-        int sampleSize = 2; // 16-bit PCM audio
-        int numSamples = audioData.length / sampleSize;
-        float[] waveform = new float[numSamples];
-
-        ByteBuffer buffer = ByteBuffer.wrap(audioData);
-        buffer.order(ByteOrder.LITTLE_ENDIAN); // OGG uses little-endian format
-
-        for (int i = 0; i < numSamples; i++) {
-            short sample = buffer.getShort(); // Read 16-bit sample
-            waveform[i] = sample / 32768f; // Normalize to [-1,1]
+    // Modified convertToWaveform signature and body: returns DecodedAudio (waveform + sampleRate + channels)
+    private static DecodedAudio convertToWaveform(byte[] audioData) {
+        if (audioData == null || audioData.length == 0) {
+            LogWindow.addError("Audio data is null or empty.");
+            return new DecodedAudio(new float[0], 44100, 1);
         }
 
-        return waveform;
+        LogWindow.addDebugInfo("convertToWaveform: input bytes = " + audioData.length);
+
+        // Try Java Sound first (will succeed for WAV/PCM or if an OGG SPI is present)
+        try (ByteArrayInputStream bais = new ByteArrayInputStream(audioData);
+             AudioInputStream sourceAis = AudioSystem.getAudioInputStream(bais)) {
+
+            AudioFormat baseFormat = sourceAis.getFormat();
+            AudioFormat decodedFormat = new AudioFormat(
+                    AudioFormat.Encoding.PCM_SIGNED,
+                    baseFormat.getSampleRate(),
+                    16,
+                    baseFormat.getChannels(),
+                    baseFormat.getChannels() * 2,
+                    baseFormat.getSampleRate(),
+                    false
+            );
+
+            try (AudioInputStream ais = AudioSystem.getAudioInputStream(decodedFormat, sourceAis)) {
+                byte[] buffer = ais.readAllBytes();
+                if (buffer == null || buffer.length == 0) {
+                    LogWindow.addError("Decoded PCM buffer is empty.");
+                    return new DecodedAudio(new float[0], 44100, 1);
+                }
+                int sampleSize = decodedFormat.getSampleSizeInBits() / 8; // should be 2
+                int numSamples = buffer.length / sampleSize;
+                float[] waveformLocal = new float[numSamples];
+
+                ByteBuffer bb = ByteBuffer.wrap(buffer);
+                bb.order(decodedFormat.isBigEndian() ? ByteOrder.BIG_ENDIAN : ByteOrder.LITTLE_ENDIAN);
+
+                for (int i = 0; i < numSamples; i++) {
+                    short sample = bb.getShort();
+                    waveformLocal[i] = sample / 32768f;
+                }
+
+                int channels = decodedFormat.getChannels();
+                int sampleRate = (int) decodedFormat.getSampleRate();
+
+                LogWindow.addDebugInfo("convertToWaveform: decoded with AudioSystem, samples=" + waveformLocal.length + ", channels=" + channels + ", rate=" + sampleRate);
+                return new DecodedAudio(waveformLocal, sampleRate, channels);
+            }
+        } catch (UnsupportedAudioFileException e) {
+            // Likely no OGG SPI in JavaSound — fall through to STBVorbis fallback
+            LogWindow.addDebugInfo("AudioSystem can't decode input (UnsupportedAudioFile): " + e.getMessage());
+        } catch (IOException e) {
+            LogWindow.addError("Failed to decode audio with AudioSystem: " + e.getMessage());
+            return new DecodedAudio(new float[0], 44100, 1);
+        } catch (Throwable t) {
+            LogWindow.addError("Unexpected error decoding with AudioSystem: " + t.getMessage());
+        }
+
+        // Fallback: decode OGG via LWJGL STBVorbis (if LWJGL is available)
+        try {
+            try (MemoryStack stack = MemoryStack.stackPush()) {
+                ByteBuffer nativeBuf = MemoryUtil.memAlloc(audioData.length);
+                try {
+                    nativeBuf.put(audioData).flip();
+
+                    IntBuffer channelsBuf = stack.mallocInt(1);
+                    IntBuffer sampleRateBuf = stack.mallocInt(1);
+
+                    ShortBuffer pcm = STBVorbis.stb_vorbis_decode_memory(nativeBuf, channelsBuf, sampleRateBuf);
+
+                    if (pcm == null) {
+                        LogWindow.addError("STBVorbis failed to decode audio.");
+                        return new DecodedAudio(new float[0], 44100, 1);
+                    }
+
+                    int samples = pcm.limit(); // interleaved samples
+                    float[] waveformLocal = new float[samples];
+                    for (int i = 0; i < samples; i++) {
+                        waveformLocal[i] = pcm.get(i) / 32768f;
+                    }
+
+                    int channels = channelsBuf.get(0);
+                    int sampleRate = sampleRateBuf.get(0);
+
+                    LogWindow.addDebugInfo("convertToWaveform: decoded with STBVorbis, samples=" + waveformLocal.length + ", channels=" + channels + ", rate=" + sampleRate);
+                    return new DecodedAudio(waveformLocal, sampleRate, channels);
+                } finally {
+                    // free only the input buffer we allocated
+                    MemoryUtil.memFree(nativeBuf);
+                }
+            }
+        } catch (Throwable t) {
+            LogWindow.addError("STBVorbis fallback failed: " + t.getMessage());
+            return new DecodedAudio(new float[0], 44100, 1);
+        }
     }
 
     private static void renderTabPopup() {
@@ -349,6 +475,10 @@ public class EditorWindow {
     }
 
     public static void openAudioFile(Path filePath, byte[] audioData) {
+        // First stop any currently playing audio and clear waveform
+        EditorWindow.audioPlayer.stop();
+        EditorWindow.waveform = new float[0];
+
         if (openFiles.stream().anyMatch(file -> file.getPath().equals(filePath))) {
             System.out.println("file already open");
             return; // Prevent opening the same file multiple times

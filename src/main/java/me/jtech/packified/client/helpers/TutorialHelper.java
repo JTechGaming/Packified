@@ -10,6 +10,8 @@ import imgui.flag.ImGuiWindowFlags;
 import imgui.type.ImBoolean;
 import me.jtech.packified.client.imgui.ImGuiImplementation;
 import me.jtech.packified.client.windows.LogWindow;
+import net.fabricmc.api.EnvType;
+import net.fabricmc.api.Environment;
 
 import java.io.File;
 import java.nio.file.Files;
@@ -20,11 +22,12 @@ import java.util.List;
 
 /**
  *
- * This is a very modular and easy to use tutorial helper that i wrote specifically for this project, but
- * i think it has a lot of use cases outside this project too so feel free to use this in your projects if you want to
+ * This is a very modular and easy to use tutorial helper that I wrote specifically for this project, but
+ * I think it has a lot of use cases outside this project too so feel free to use this in your projects if you want to
  *
  */
 
+@Environment(EnvType.CLIENT)
 public class TutorialHelper {
     public static TutorialStage currentStage;
     public static ImBoolean isOpen = new ImBoolean(true);

@@ -6,9 +6,12 @@ import imgui.flag.ImGuiCol;
 import imgui.flag.ImGuiCond;
 import imgui.flag.ImGuiWindowFlags;
 import imgui.type.ImBoolean;
+import imgui.type.ImInt;
 import imgui.type.ImString;
 import me.jtech.packified.client.imgui.ImGuiImplementation;
 import me.jtech.packified.client.util.PackUtils;
+import net.fabricmc.api.EnvType;
+import net.fabricmc.api.Environment;
 import net.minecraft.SharedConstants;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.resource.ResourceType;
@@ -17,23 +20,17 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
+@Environment(EnvType.CLIENT)
 public class PackCreationWindow {
     public static ImBoolean isOpen = new ImBoolean(false);
     private static ImString packName = new ImString(64);
+    private static ImInt packType = new ImInt(0); // 0 for Resource Pack, 1 for Data Pack, 2 for Iris shader pack
     private static ImString packDescription = new ImString(256);
 
     public static final Map<String, String> resourcePackVersions = assemblePackVersions();
 
-    private static int packVersionIndex = resourcePackVersions.keySet().stream()
-            .mapToInt(Integer::parseInt)
-            .filter(i -> i <= Integer.parseInt(getCurrentVersion()))
-            .max()
-            .orElse(0); // Default to the first version that is less than or equal to the current version
-    private static int packVersionEndIndex = resourcePackVersions.keySet().stream()
-            .mapToInt(Integer::parseInt)
-            .filter(i -> i <= Integer.parseInt(getCurrentVersion()))
-            .max()
-            .orElse(resourcePackVersions.size()-1); // Default to the latest version that is less than or equal to the current version
+    private static int packVersionIndex = computePackVersionStartIndex();
+    private static int packVersionEndIndex = computePackVersionEndIndex();
 
     public static void render() {
         if (!isOpen.get()) return;
@@ -42,20 +39,23 @@ public class PackCreationWindow {
         ImVec2 centerPos = ImGuiImplementation.getCenterViewportPos();
         ImGui.setNextWindowPos(centerPos.x, centerPos.y, ImGuiCond.Always, 0.5f, 0.5f);
         ImGui.setNextWindowViewport(ImGui.getMainViewport().getID());
-        ImGui.begin("Pack Creation Wizard");
+        ImGui.begin("Pack Creation Wizard", isOpen);
 
         ImGui.setNextItemWidth(150);
         ImGui.inputText("Pack Name", packName);
+
+        ImGui.combo("Pack Type", packType, new String[]{"Resource Pack", "Data Pack", "Iris Shader Pack"}, 3);
 
         String[] keys = resourcePackVersions.keySet().toArray(new String[0]);
         String rangeStartKey = keys[packVersionIndex];
 
         // Begin custom combo
         ImGui.setNextItemWidth(150);
+        double currentVersion = parseDoubleSafe(getCurrentVersion());
         if (ImGui.beginCombo("Pack Version Range", rangeStartKey)) {
             for (int i = 0; i < keys.length; i++) {
                 boolean isSelected = (packVersionIndex == i);
-                boolean isCurrent = keys[i].equalsIgnoreCase(getCurrentVersion());
+                boolean isCurrent = Math.abs(parseDoubleSafe(keys[i]) - currentVersion) < 1e-6;
                 if (isCurrent) {
                     ImGui.pushStyleColor(ImGuiCol.Text, 0.0f, 1.0f, 0.0f, 1.0f); // Highlight current version in green
                 }
@@ -89,7 +89,7 @@ public class PackCreationWindow {
         if (ImGui.beginCombo("##", rangeEndKey)) {
             for (int i = 0; i < keys.length; i++) {
                 boolean isSelected = (packVersionEndIndex == i);
-                boolean isCurrent = keys[i].equalsIgnoreCase(getCurrentVersion());
+                boolean isCurrent = Math.abs(parseDoubleSafe(keys[i]) - currentVersion) < 1e-6;
                 if (isCurrent) {
                     ImGui.pushStyleColor(ImGuiCol.Text, 0.0f, 1.0f, 0.0f, 1.0f); // Highlight current version in green
                 }
@@ -128,6 +128,45 @@ public class PackCreationWindow {
         ImGui.end();
     }
 
+    private static double parseDoubleSafe(String s) {
+        if (s == null) return Double.NEGATIVE_INFINITY;
+        try {
+            return Double.parseDouble(s.trim());
+        } catch (NumberFormatException e) {
+            return Double.NEGATIVE_INFINITY;
+        }
+    }
+
+    private static int computePackVersionStartIndex() {
+        String[] keys = resourcePackVersions.keySet().toArray(new String[0]);
+        double current = parseDoubleSafe(getCurrentVersion());
+        int bestIndex = -1;
+        double bestVal = Double.NEGATIVE_INFINITY;
+        for (int i = 0; i < keys.length; i++) {
+            double val = parseDoubleSafe(keys[i]);
+            if (val <= current && val > bestVal) {
+                bestVal = val;
+                bestIndex = i;
+            }
+        }
+        return bestIndex == -1 ? 0 : bestIndex;
+    }
+
+    private static int computePackVersionEndIndex() {
+        String[] keys = resourcePackVersions.keySet().toArray(new String[0]);
+        double current = parseDoubleSafe(getCurrentVersion());
+        int bestIndex = -1;
+        double bestVal = Double.NEGATIVE_INFINITY;
+        for (int i = 0; i < keys.length; i++) {
+            double val = parseDoubleSafe(keys[i]);
+            if (val <= current && val > bestVal) {
+                bestVal = val;
+                bestIndex = i;
+            }
+        }
+        return bestIndex == -1 ? Math.max(0, keys.length - 1) : bestIndex;
+    }
+
     private static String getCurrentVersion() {
         return SharedConstants.getGameVersion().packVersion(ResourceType.CLIENT_RESOURCES) + "";
     }
@@ -135,27 +174,27 @@ public class PackCreationWindow {
     private static Map<String, String> assemblePackVersions() {
         Map<String, String> resourcePackVersions = new LinkedHashMap<>();
 
-        resourcePackVersions.put("1", "1.6.1–1.8.9");
-        resourcePackVersions.put("2", "1.9–1.10.2");
-        resourcePackVersions.put("3", "1.11–1.12.2");
-        resourcePackVersions.put("4", "1.13–1.14.4");
-        resourcePackVersions.put("5", "1.15–1.16.1");
-        resourcePackVersions.put("6", "1.16.2–1.16.5");
-        resourcePackVersions.put("7", "1.17–1.17.1");
-        resourcePackVersions.put("8", "1.18–1.18.2");
-        resourcePackVersions.put("9", "1.19–1.19.2");
-        resourcePackVersions.put("11", "22w42a–22w44a");
+        resourcePackVersions.put("1", "1.6.1-1.8.9");
+        resourcePackVersions.put("2", "1.9-1.10.2");
+        resourcePackVersions.put("3", "1.11-1.12.2");
+        resourcePackVersions.put("4", "1.13-1.14.4");
+        resourcePackVersions.put("5", "1.15-1.16.1");
+        resourcePackVersions.put("6", "1.16.2-1.16.5");
+        resourcePackVersions.put("7", "1.17-1.17.1");
+        resourcePackVersions.put("8", "1.18-1.18.2");
+        resourcePackVersions.put("9", "1.19-1.19.2");
+        resourcePackVersions.put("11", "22w42a-22w44a");
         resourcePackVersions.put("12", "1.19.3");
         resourcePackVersions.put("13", "1.19.4");
-        resourcePackVersions.put("14", "23w14a–23w16a");
-        resourcePackVersions.put("15", "1.20–1.20.1");
+        resourcePackVersions.put("14", "23w14a-23w16a");
+        resourcePackVersions.put("15", "1.20-1.20.1");
         resourcePackVersions.put("16", "23w31a");
-        resourcePackVersions.put("17", "23w32a–1.20.2-pre1");
+        resourcePackVersions.put("17", "23w32a-1.20.2-pre1");
         resourcePackVersions.put("18", "1.20.2");
         resourcePackVersions.put("19", "23w42a");
         resourcePackVersions.put("20", "23w43a-23w44a");
         resourcePackVersions.put("21", "23w45a-23w46a");
-        resourcePackVersions.put("22", "1.20.3–1.20.4");
+        resourcePackVersions.put("22", "1.20.3-1.20.4");
         resourcePackVersions.put("24", "24w03a-24w04a");
         resourcePackVersions.put("25", "24w05a-24w05b");
         resourcePackVersions.put("26", "24w06a-24w07");
@@ -194,7 +233,16 @@ public class PackCreationWindow {
         resourcePackVersions.put("60", "25w19a");
         resourcePackVersions.put("61", "25w20a");
         resourcePackVersions.put("62", "25w21a");
-        resourcePackVersions.put("63", "1.21.6-pre1 - 1.21.6");
+        resourcePackVersions.put("63", "1.21.6-pre1 - 1.21.7-rc1");
+        resourcePackVersions.put("64", "1.21.7-rc2 - 1.21.8");
+        resourcePackVersions.put("65.0", "25w31a");
+        resourcePackVersions.put("65.1", "25w32a");
+        resourcePackVersions.put("65.2", "25w33a");
+        resourcePackVersions.put("66.0", "25w34a - 25w34b");
+        resourcePackVersions.put("67.0", "25w35a");
+        resourcePackVersions.put("68.0", "25w36a - 25w36b");
+        resourcePackVersions.put("69.0", "25w37a - 1.21.10");
+        resourcePackVersions.put("70.0", "25w41a");
 
         return resourcePackVersions;
     }

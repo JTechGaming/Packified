@@ -3,6 +3,7 @@ package me.jtech.packified.client.windows.elements;
 import imgui.ImGui;
 import me.jtech.packified.Packified;
 import me.jtech.packified.client.PackifiedClient;
+import me.jtech.packified.client.config.ModConfig;
 import me.jtech.packified.client.util.FileDialog;
 import me.jtech.packified.client.util.FileUtils;
 import me.jtech.packified.client.util.PackUtils;
@@ -38,6 +39,7 @@ public class MenuBar {
                     if (ImGui.menuItem("Pack")) {
                         EditorWindow.openFiles.clear();
                         PackifiedClient.currentPack = null;
+                        ModConfig.savePackStatus(null);
                         PackCreationWindow.isOpen.set(!PackCreationWindow.isOpen.get());
                     }
                     ImGui.endMenu();
@@ -94,6 +96,7 @@ public class MenuBar {
                         if (ImGui.menuItem(pack.getDisplayName().getString())) {
                             EditorWindow.openFiles.clear();
                             PackifiedClient.currentPack = pack;
+                            ModConfig.savePackStatus(pack);
                             PackUtils.checkPackType(pack);
                             ResourcePackManager resourcePackManager = MinecraftClient.getInstance().getResourcePackManager();
 
@@ -122,6 +125,7 @@ public class MenuBar {
                                 EditorWindow.openFiles.clear();
                                 PackUtils.refresh();
                                 PackifiedClient.currentPack = PackUtils.getPack(PackUtils.legalizeName(pack.getDisplayName().getString()));
+                                ModConfig.savePackStatus(PackifiedClient.currentPack);
                                 ResourcePackManager resourcePackManager = MinecraftClient.getInstance().getResourcePackManager();
 
                                 if (PackifiedClient.currentPack != null) {
@@ -175,8 +179,8 @@ public class MenuBar {
                 if (ImGui.menuItem("Multiplayer", null, MultiplayerWindow.isOpen.get())) {
                     MultiplayerWindow.isOpen.set(!MultiplayerWindow.isOpen.get());
                 }
-                if (ImGui.menuItem("File Hierarchy", null, FileHierarchy.isOpen.get())) {
-                    FileHierarchy.isOpen.set(!FileHierarchy.isOpen.get());
+                if (ImGui.menuItem("File Hierarchy", null, FileHierarchyWindow.isOpen.get())) {
+                    FileHierarchyWindow.isOpen.set(!FileHierarchyWindow.isOpen.get());
                 }
                 if (ImGui.menuItem("File Editor", null, EditorWindow.isOpen.get())) {
                     EditorWindow.isOpen.set(!EditorWindow.isOpen.get());
@@ -184,8 +188,21 @@ public class MenuBar {
                 if (ImGui.menuItem("Log", null, LogWindow.isOpen.get())) {
                     LogWindow.isOpen.set(!LogWindow.isOpen.get());
                 }
-                if (ImGui.menuItem("Model Editor (BETA)", null, ModelEditorWindow.shouldRender)) {
-                    ModelEditorWindow.shouldRender = !ModelEditorWindow.shouldRender;
+                if (ImGui.menuItem("Model Editor (BETA)", null, ModelEditorWindow.isOpen.get())) {
+                    ModelEditorWindow.isOpen.set(!ModelEditorWindow.isOpen.get());
+                }
+                if (ImGui.beginMenu("File Browsers")) {
+                    if (ImGui.menuItem("New File Explorer")) {
+                        FileExplorerWindow.createNewExplorer(null);
+                    }
+                    ImGui.separator();
+                    for (int i = 0; i < FileExplorerWindow.explorers.size(); i++) {
+                        FileExplorerWindow explorer = FileExplorerWindow.explorers.get(i);
+                        if (ImGui.menuItem("File Explorer " + (i + 1), null, explorer.isOpen.get())) {
+                            explorer.isOpen.set(!explorer.isOpen.get());
+                        }
+                    }
+                    ImGui.endMenu();
                 }
                 ImGui.endMenu();
             }

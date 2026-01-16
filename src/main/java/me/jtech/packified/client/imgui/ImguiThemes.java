@@ -3,8 +3,11 @@ package me.jtech.packified.client.imgui;
 import imgui.ImGui;
 import imgui.ImGuiStyle;
 import imgui.flag.ImGuiCol;
+import imgui.type.ImBoolean;
 import imgui.type.ImInt;
 import me.jtech.packified.client.config.ModConfig;
+import net.fabricmc.api.EnvType;
+import net.fabricmc.api.Environment;
 
 import java.util.Map;
 
@@ -18,9 +21,11 @@ import java.util.Map;
  * Thanks to Shivang for making these themes, they are really nice!
  */
 
+@Environment(EnvType.CLIENT)
 public class ImguiThemes {
     private static int oldTheme = 0;
     private static ImInt currentTheme = new ImInt(ModConfig.getInt("theme", 0)); // Default to Modern Dark
+    public static ImBoolean flatStyle = new ImBoolean(ModConfig.getBoolean("flat_style", false));
 
     public static void setModernDarkColors() {
         ImGuiStyle style = ImGui.getStyle();
@@ -86,9 +91,15 @@ public class ImguiThemes {
         style.setColors(colors);
 
         // Style adjustments
-        style.setWindowRounding(5.3f);
-        style.setFrameRounding(2.3f);
-        style.setScrollbarRounding(0);
+        if (flatStyle.get()) {
+            style.setWindowRounding(0.0f);
+            style.setFrameRounding(0.0f);
+            style.setScrollbarRounding(0);
+        } else {
+            style.setWindowRounding(5.3f);
+            style.setFrameRounding(2.3f);
+            style.setScrollbarRounding(0);
+        }
 
         style.setWindowTitleAlign(0.50f, 0.50f);
         style.setWindowPadding(8.0f, 8.0f);
@@ -161,7 +172,16 @@ public class ImguiThemes {
 
         style.setColors(colors);
 
-        // Additional styles
+        // Style adjustments
+        if (flatStyle.get()) {
+            style.setWindowRounding(0.0f);
+            style.setFrameRounding(0.0f);
+            style.setScrollbarRounding(0);
+        } else {
+            style.setWindowRounding(5.3f);
+            style.setFrameRounding(2.3f);
+            style.setScrollbarRounding(0);
+        }
         style.setFramePadding(8.0f, 4.0f);
         style.setItemSpacing(8.0f, 4.0f);
         style.setIndentSpacing(20.0f);
@@ -230,6 +250,17 @@ public class ImguiThemes {
         colors[ImGuiCol.DockingEmptyBg] = new float[]{0.90f, 0.90f, 0.90f, 1.00f};
 
         style.setColors(colors);
+
+        // Style adjustments
+        if (flatStyle.get()) {
+            style.setWindowRounding(0.0f);
+            style.setFrameRounding(0.0f);
+            style.setScrollbarRounding(0);
+        } else {
+            style.setWindowRounding(5.3f);
+            style.setFrameRounding(2.3f);
+            style.setScrollbarRounding(0);
+        }
 
         // Additional styles
         style.setFramePadding(8.0f, 4.0f);
@@ -302,13 +333,22 @@ public class ImguiThemes {
 
         style.setColors(colors);
 
-        // Style tweaks
-        style.setWindowRounding(5.0f);
-        style.setFrameRounding(5.0f);
-        style.setGrabRounding(5.0f);
-        style.setTabRounding(5.0f);
-        style.setPopupRounding(5.0f);
-        style.setScrollbarRounding(5.0f);
+        // Style adjustments
+        if (flatStyle.get()) {
+            style.setWindowRounding(0.0f);
+            style.setFrameRounding(0.0f);
+            style.setScrollbarRounding(0);
+            style.setGrabRounding(0.0f);
+            style.setTabRounding(0.0f);
+            style.setPopupRounding(0.0f);
+        } else {
+            style.setWindowRounding(5.0f);
+            style.setFrameRounding(5.0f);
+            style.setScrollbarRounding(5.0f);
+            style.setGrabRounding(5.0f);
+            style.setTabRounding(5.0f);
+            style.setPopupRounding(5.0f);
+        }
         style.setWindowPadding(10, 10);
         style.setFramePadding(6, 4);
         style.setItemSpacing(8, 6);
@@ -379,13 +419,22 @@ public class ImguiThemes {
 
         style.setColors(colors);
 
-        // Style tweaks
-        style.setWindowRounding(5.0f);
-        style.setFrameRounding(5.0f);
-        style.setGrabRounding(5.0f);
-        style.setTabRounding(5.0f);
-        style.setPopupRounding(5.0f);
-        style.setScrollbarRounding(5.0f);
+        // Style adjustments
+        if (flatStyle.get()) {
+            style.setWindowRounding(0.0f);
+            style.setFrameRounding(0.0f);
+            style.setScrollbarRounding(0);
+            style.setGrabRounding(0.0f);
+            style.setTabRounding(0.0f);
+            style.setPopupRounding(0.0f);
+        } else {
+            style.setWindowRounding(5.0f);
+            style.setFrameRounding(5.0f);
+            style.setScrollbarRounding(5.0f);
+            style.setGrabRounding(5.0f);
+            style.setTabRounding(5.0f);
+            style.setPopupRounding(5.0f);
+        }
         style.setWindowPadding(10, 10);
         style.setFramePadding(6, 4);
         style.setItemSpacing(8, 6);
@@ -406,8 +455,8 @@ public class ImguiThemes {
         };
     }
 
-    public static void setTheme(ImInt currentTheme) {
-        if (currentTheme.get() != oldTheme) {
+    public static void setTheme(ImInt currentTheme, boolean flatModeChanged) {
+        if (currentTheme.get() != oldTheme || flatModeChanged) {
             oldTheme = currentTheme.get();
             switch (currentTheme.get()) {
                 case 0:
@@ -431,5 +480,9 @@ public class ImguiThemes {
 
             ModConfig.updateSettings(Map.of("theme", currentTheme.get()));
         }
+    }
+
+    public static void applyStyle() {
+        setTheme(currentTheme, true);
     }
 }

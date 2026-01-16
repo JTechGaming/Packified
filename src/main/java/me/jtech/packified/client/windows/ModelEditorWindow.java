@@ -5,12 +5,15 @@ import imgui.ImDrawList;
 import imgui.ImGui;
 import imgui.ImVec2;
 import imgui.flag.*;
+import imgui.type.ImBoolean;
 import me.jtech.packified.client.PackifiedClient;
 import me.jtech.packified.client.helpers.CornerNotificationsHelper;
 import me.jtech.packified.client.imgui.ImGuiImplementation;
 import me.jtech.packified.client.util.FileUtils;
 import me.jtech.packified.client.util.SafeTextureLoader;
 import me.jtech.packified.client.windows.popups.ConfirmWindow;
+import net.fabricmc.api.EnvType;
+import net.fabricmc.api.Environment;
 import net.minecraft.client.MinecraftClient;
 import org.jetbrains.annotations.NotNull;
 import org.joml.Matrix4f;
@@ -32,6 +35,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
+@Environment(EnvType.CLIENT)
 public class ModelEditorWindow {
     // Data classes for minecraft model JSON
     public record Rotation(float angle, String axis, List<Float> origin) { }
@@ -73,7 +77,7 @@ public class ModelEditorWindow {
 
     private static Path selectedTexturePath;
 
-    public static boolean shouldRender = false;
+    public static ImBoolean isOpen = new ImBoolean(false);
 
     // model data
     private static class Cube {
@@ -164,105 +168,81 @@ public class ModelEditorWindow {
     }
 
     public static void render() {
-        if (!shouldRender) return;
+        if (!isOpen.get()) return;
 
-        int targetW = (int) Math.max(1, ImGuiImplementation.maxX - ImGuiImplementation.minX + ImGui.getStyle().getWindowPaddingX() + 25); //31
-        int targetH = (int) Math.max(1, ImGuiImplementation.maxY - ImGuiImplementation.minY + ImGui.getStyle().getWindowPaddingY() + 21);
+        if (ImGui.begin("Model Editor", isOpen,ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse)) {
+            int targetW = (int) Math.max(1, ImGui.getWindowContentRegionMaxX() - ImGui.getWindowContentRegionMinX() + ImGui.getStyle().getWindowPaddingX() + 25);
+            int targetH = (int) Math.max(1, ImGui.getWindowContentRegionMaxY() - ImGui.getWindowContentRegionMinY() + ImGui.getStyle().getWindowPaddingY() + 21);
 
-        ImGuiImplementation.pushWindowCenterPos();
+            ensureFramebuffer(targetW, targetH);
 
-        // Set position to center of viewport
-        ImVec2 centerPos = ImGuiImplementation.getLastWindowCenterPos();
-        ImGui.setNextWindowPos(centerPos.x - 2, centerPos.y - 4, ImGuiCond.Always, 0.5f, 0.5f);
-        ImGui.setNextWindowViewport(ImGui.getMainViewport().getID());
+            float aspect = (fbHeight == 0) ? 1.0f : (float) fbWidth / (float) fbHeight;
+            Matrix4f projection = new Matrix4f().perspective((float) Math.toRadians(70.0f), aspect, 0.1f, 100f);
+            Matrix4f view = getViewMatrix();
+            Matrix4f model = new Matrix4f().identity(); // you can scale/rotate model here if needed
 
-        ImGui.setNextWindowSize(targetW, targetH);
+            projection.mul(view, mvp).mul(model);
 
-        ImGui.begin("Model Editor", ImGuiWindowFlags.NoMove | ImGuiWindowFlags.NoDecoration | ImGuiWindowFlags.NoBackground | ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse);
+            // Render scene to framebuffer
+            GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, fbo);
+            GL11.glViewport(0, 0, fbWidth, fbHeight);
+            GL11.glEnable(GL11.GL_DEPTH_TEST);
+            GL11.glClearColor(0.1f, 0.1f, 0.1f, 1f);
+            GL11.glClear(GL11.GL_COLOR_BUFFER_BIT | GL11.GL_DEPTH_BUFFER_BIT | GL11.GL_STENCIL_BUFFER_BIT);
 
-//        if (ImGui.beginTabBar("MainTabBar", ImGuiTabBarFlags.NoCloseWithMiddleMouseButton | ImGuiTabBarFlags.NoTooltip)) {
-//            if (ImGui.beginTabItem("Viewport")) {
-//                showModelEditor = false;
-//                ImGui.endTabItem();
-//            }
-//            if (ImGui.beginTabItem("Model Editor")) {
-//                showModelEditor = true;
-//                ImGui.endTabItem();
-//            }
-//            ImGui.endTabBar();
-//        }
-//
-//        if (!showModelEditor) {
-//            ImGui.end();
-//            return;
-//        }
+            if (fbWidth > 0 && fbHeight > 0) {
+                renderScene();
+            }
 
-        ensureFramebuffer(targetW, targetH);
+            GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, 0);
 
-        float aspect = (fbHeight == 0) ? 1.0f : (float) fbWidth / (float) fbHeight;
-        Matrix4f projection = new Matrix4f().perspective((float) Math.toRadians(70.0f), aspect, 0.1f, 100f);
-        Matrix4f view = getViewMatrix();
-        Matrix4f model = new Matrix4f().identity(); // you can scale/rotate model here if needed
+            // Draw framebuffer into ImGui as an image. This creates the ImGui item.
+            ImGui.setCursorPos(ImGui.getCursorPosX() - ImGui.getStyle().getWindowPaddingX(),
+                    ImGui.getCursorPosY() - ImGui.getStyle().getWindowPaddingY());
+            ImGui.image(colorTex,
+                    targetW,
+                    targetH,
+                    0, 1, 1, 0);
 
-        projection.mul(view, mvp).mul(model);
+            if (ImGui.isItemHovered() && ImGui.isMouseClicked(0)) {
+                // mouse pos relative to ImGui item
+                float mx = ImGui.getIO().getMousePosX() - ImGui.getItemRectMinX();
+                float my = ImGui.getIO().getMousePosY() - ImGui.getItemRectMinY();
 
-        // Render scene to framebuffer
-        GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, fbo);
-        GL11.glViewport(0, 0, fbWidth, fbHeight);
-        GL11.glEnable(GL11.GL_DEPTH_TEST);
-        GL11.glClearColor(0.1f, 0.1f, 0.1f, 1f);
-        GL11.glClear(GL11.GL_COLOR_BUFFER_BIT | GL11.GL_DEPTH_BUFFER_BIT | GL11.GL_STENCIL_BUFFER_BIT);
+                if (loadedModel != null) {
+                    Vector3f rayOrigin = new Vector3f(getCameraPosition());
+                    Vector3f rayDir = getRayFromMouse(mx, my, fbWidth, fbHeight, projection, view);
 
-        if (fbWidth > 0 && fbHeight > 0) {
-            renderScene();
-        }
-
-        GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, 0);
-
-        // Draw framebuffer into ImGui as an image. This creates the ImGui item.
-        ImGui.image(colorTex,
-                targetW,
-                targetH,
-                0, 1, 1, 0);
-
-        if (ImGui.isItemHovered() && ImGui.isMouseClicked(0)) {
-            // mouse pos relative to ImGui item
-            float mx = ImGui.getIO().getMousePosX() - ImGui.getItemRectMinX();
-            float my = ImGui.getIO().getMousePosY() - ImGui.getItemRectMinY();
-
-            if (loadedModel != null) {
-                Vector3f rayOrigin = new Vector3f(getCameraPosition());
-                Vector3f rayDir = getRayFromMouse(mx, my, fbWidth, fbHeight, projection, view);
-
-                int bestIndex = -1;
-                float bestDist = Float.MAX_VALUE;
-                for (int i = 0; i < loadedModel.elements().size(); i++) {
-                    ModelElement e = loadedModel.elements().get(i);
-                    Vector3f min = new Vector3f(e.from().get(0) / 16f - 0.5f, e.from().get(1) / 16f - 0.5f, e.from().get(2) / 16f - 0.5f);
-                    Vector3f max = new Vector3f(e.to().get(0) / 16f - 0.5f, e.to().get(1) / 16f - 0.5f, e.to().get(2) / 16f - 0.5f);
-                    boolean intersects = rayIntersectsAABB(rayOrigin, rayDir, min, max);
-                    if (intersects) {
-                        float dist = new Vector3f(min).add(max).mul(0.5f).distance(rayOrigin);
-                        if (dist < bestDist) {
-                            bestDist = dist;
-                            bestIndex = i;
+                    int bestIndex = -1;
+                    float bestDist = Float.MAX_VALUE;
+                    for (int i = 0; i < loadedModel.elements().size(); i++) {
+                        ModelElement e = loadedModel.elements().get(i);
+                        Vector3f min = new Vector3f(e.from().get(0) / 16f - 0.5f, e.from().get(1) / 16f - 0.5f, e.from().get(2) / 16f - 0.5f);
+                        Vector3f max = new Vector3f(e.to().get(0) / 16f - 0.5f, e.to().get(1) / 16f - 0.5f, e.to().get(2) / 16f - 0.5f);
+                        boolean intersects = rayIntersectsAABB(rayOrigin, rayDir, min, max);
+                        if (intersects) {
+                            float dist = new Vector3f(min).add(max).mul(0.5f).distance(rayOrigin);
+                            if (dist < bestDist) {
+                                bestDist = dist;
+                                bestIndex = i;
+                            }
                         }
                     }
-                }
-                if (bestIndex >= 0) {
-                    previouslySelectedElementIndex = selectedElementIndex;
-                    selectedElementIndex = bestIndex;
-                    //System.out.println("Picked element=" + selectedElementIndex);
+                    if (bestIndex >= 0) {
+                        previouslySelectedElementIndex = selectedElementIndex;
+                        selectedElementIndex = bestIndex;
+                        //System.out.println("Picked element=" + selectedElementIndex);
+                    }
                 }
             }
+
+            // Now process camera input — only when the image item is hovered (prevents dragging the window)
+            updateCameraAfterImage();
+
+            renderSideBars();
         }
 
-        // Now process camera input — only when the image item is hovered (prevents dragging the window)
-        updateCameraAfterImage();
-
         ImGui.end();
-
-        renderSideBars();
     }
 
     private static int j = 0;
@@ -869,6 +849,7 @@ public class ModelEditorWindow {
 
     private static void uploadBlockModel(BlockModel model) {
         cubes.clear();
+        if (model == null || model.elements() == null || model.elements().isEmpty()) return;
         for (ModelElement e : model.elements()) {
             Vector3f from = new Vector3f(e.from().get(0), e.from().get(1), e.from().get(2));
             Vector3f to = new Vector3f(e.to().get(0), e.to().get(1), e.to().get(2));

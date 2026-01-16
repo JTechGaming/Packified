@@ -26,6 +26,8 @@ import java.nio.file.Path;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
 import java.util.stream.Stream;
 
 public class PackUtils {
@@ -39,12 +41,16 @@ public class PackUtils {
         return resourcePacks.size() > 1;
     }
 
+    private static final Executor workerExecutor = Executors.newSingleThreadExecutor();
+
     public static void reloadPack() {
+        PackifiedClient.loading = true;
         MinecraftClient client = MinecraftClient.getInstance();
+        PackifiedClient.LOGGER.info("Reloading pack");
         client.getResourcePackManager().scanPacks();
         List<ResourcePack> list = client.resourcePackManager.createResourcePacks();
         client.resourceReloadLogger.reload(ResourceReloadLogger.ReloadReason.UNKNOWN, list);
-        client.resourceManager.reload(Util.getMainWorkerExecutor(), client, MinecraftClient.COMPLETED_UNIT_FUTURE, list).whenComplete().thenRun(() -> PackifiedClient.reloaded = true);
+        client.resourceManager.reload(workerExecutor, client, MinecraftClient.COMPLETED_UNIT_FUTURE, list).whenComplete().thenRun(() -> PackifiedClient.reloaded = true);
         client.resourceReloadLogger.finish();
         client.serverResourcePackLoader.onReloadSuccess();
     }
@@ -52,7 +58,6 @@ public class PackUtils {
     public static Path getPackFolder(ResourcePack pack) {
         for (ResourcePackProfile resourcePack : resourcePacks) {
             if (resourcePack.getId().equals(pack.getId())) {
-                System.out.println(resourcePack.getId());
                 return FabricLoader.getInstance().getGameDir().resolve("resourcepacks").resolve(resourcePack.getDisplayName().getString());
             }
         }
@@ -65,10 +70,20 @@ public class PackUtils {
         Path resourcePacksPath = FabricLoader.getInstance().getGameDir().resolve("resourcepacks");
 
         resourcePacks = resourcePackManager.getProfiles().stream()
-                .filter(pack -> resourcePacksPath.resolve(legalizeName(pack.getDisplayName().getString())).toFile().exists())
+                .filter(pack -> {
+                    String legalizedName = legalizeName(pack.getDisplayName().getString());
+                    try (Stream<Path> paths = Files.walk(resourcePacksPath)) {
+                        return paths.anyMatch(path -> path.getFileName().toString().equals(legalizedName));
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                        return true;
+                    }
+                })
                 .toList();
+
         return resourcePacks;
     }
+
 
     public static List<ResourcePackProfile> refreshInternalPacks() {
         ResourcePackManager resourcePackManager = MinecraftClient.getInstance().getResourcePackManager();
@@ -179,9 +194,9 @@ public class PackUtils {
                         }
                         content = FileUtils.encodeImageToBase64(image);
                     } else if (extension.equals(".ogg")) {
-                        content = new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
+                        content = new String(inputStream.readAllBytes());
                     } else {
-                        content = new String(inputStream.readAllBytes(), StandardCharsets.UTF_16);
+                        content = new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
                     }
 
                     Path relativePath = packPath.relativize(path); // Get relative path from root (root being the pack folder)

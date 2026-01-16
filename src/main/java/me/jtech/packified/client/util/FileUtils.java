@@ -1,7 +1,9 @@
 package me.jtech.packified.client.util;
 
+import imgui.ImGui;
 import me.jtech.packified.Packified;
 import me.jtech.packified.client.PackifiedClient;
+import me.jtech.packified.client.helpers.CornerNotificationsHelper;
 import me.jtech.packified.client.imgui.ImGuiImplementation;
 import me.jtech.packified.client.windows.*;
 import me.jtech.packified.client.windows.popups.SelectFolderWindow;
@@ -13,6 +15,7 @@ import net.minecraft.util.Identifier;
 import net.minecraft.util.InvalidIdentifierException;
 
 import javax.imageio.ImageIO;
+import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.io.*;
 import java.net.URI;
@@ -47,7 +50,7 @@ public class FileUtils {
     }
 
     public static String getFileExtensionName(String fileName) {
-        return getFileExtensionName(fileName, FileHierarchy.extensions);
+        return getFileExtensionName(fileName, FileHierarchyWindow.extensions);
     }
 
     public static boolean isSupportedFileExtension(String fileName, String[] supportedExtensions) {
@@ -61,7 +64,7 @@ public class FileUtils {
     }
 
     public static boolean isSupportedFileExtension(String fileName) {
-        return isSupportedFileExtension(fileName, FileHierarchy.extensions);
+        return isSupportedFileExtension(fileName, FileHierarchyWindow.extensions);
     }
 
     public static void deleteFile(Path path) {
@@ -83,7 +86,7 @@ public class FileUtils {
                 try {
                     Files.delete(file.toPath());
                 } catch (IOException e) {
-                    e.printStackTrace();
+                    LogWindow.addError("Failed to delete file: " + e.getMessage());
                 }
             }
         }
@@ -106,56 +109,68 @@ public class FileUtils {
                 String fileName = file.getName();
                 String extension = getFileExtensionName(fileName);
                 if (extension == null) {
-                    System.err.println("Unsupported file extension: " + fileName);
+                    CornerNotificationsHelper.addNotification("Unsupported Filetype: " + fileName, "failed to import file", Color.RED, 3);
+                    LogWindow.addError("Unsupported Filetype: " + fileName);
                     return;
                 }
                 String content = null;
                 BufferedImage image;
                 if (extension.equals(".png")) {
-                    System.out.println("Importing image: " + fileName);
+                    LogWindow.addInfo("Importing image file: " + fileName);
                     try {
                         image = ImageIO.read(file);
                         if (image != null) {
                             SelectFolderWindow.open(fileName, extension, encodeImageToBase64(image));
                         } else {
-                            System.err.println("Failed to load image: " + fileName);
+                            CornerNotificationsHelper.addNotification("Failed to load image: " + fileName, "failed to import file", Color.RED, 3);
+                            LogWindow.addError("Failed to load image: " + fileName);
                         }
                     } catch (IOException e) {
-                        e.printStackTrace();
+                        LogWindow.addError("Failed to read image file: " + fileName + " - " + e.getMessage());
+                    }
+                } else if(extension.equals(".ogg")) {
+                    LogWindow.addInfo("Importing sound file: " + fileName);
+                    try {
+                        byte[] audioData = Files.readAllBytes(file.toPath());
+                        SelectFolderWindow.open(fileName, extension, encodeSoundToString(audioData));
+                    } catch (IOException e) {
+                        LogWindow.addError("Failed to read sound file: " + fileName + " - " + e.getMessage());
                     }
                 } else {
                     try {
                         content = Files.readString(file.toPath());
                     } catch (IOException e) {
-                        e.printStackTrace();
+                        LogWindow.addError("Failed to read file: " + fileName + " - " + e.getMessage());
                     }
                     if (content == null) {
-                        System.err.println("Failed to read file: " + file.getAbsolutePath());
+                        CornerNotificationsHelper.addNotification("Failed to read file: " + fileName, "failed to import file", Color.RED, 3);
+                        LogWindow.addError("Failed to read file: " + fileName);
                         return;
                     }
                     SelectFolderWindow.open(fileName, extension, content);
                 }
             }
         } else {
-            System.err.println("File not found: " + file.getAbsolutePath());
+            CornerNotificationsHelper.addNotification("File not found: " + path, "failed to import file", Color.RED, 3);
+            LogWindow.addError("File not found: " + path);
         }
     }
 
     public static void openFile(Path filePath) {
         if (filePath == null || !Files.exists(filePath)) {
-            System.err.println("File not found: " + filePath);
+            LogWindow.addError("File not found: " + filePath);
             return;
         }
 
         String extension = getFileExtension(filePath.getFileName().toString());
 
-        if (extension == null) {
-            System.err.println("Unsupported Filetype: " + filePath);
+        if (extension.isBlank()) {
+            LogWindow.addError("Unsupported file type: " + filePath);
             return;
         }
 
         try (InputStream inputStream = Files.newInputStream(filePath)) {
-            String content = "";
+            String content;
             switch (extension) {
                 case ".json", ".txt", ".mcmeta", ".properties", ".vsh", ".fsh", ".bbmodel", ".bbmodel.json" -> {
                     content = new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
@@ -166,34 +181,36 @@ public class FileUtils {
                     if (image != null) {
                         EditorWindow.openImageFile(filePath, image);
                     } else {
-                        System.err.println("Failed to load image: " + filePath);
+                        LogWindow.addError("Failed to open image file: " + filePath);
                     }
                 }
                 case ".ogg" -> {
                     byte[] audioData = Files.readAllBytes(filePath);
                     EditorWindow.openAudioFile(filePath, audioData);
                 }
-                default -> System.err.println("Unsupported file type: " + extension);
+                default -> LogWindow.addError("Unsupported file type: " + filePath);
             }
         } catch (IOException e) {
-            e.printStackTrace();
+            LogWindow.addError("Failed to open file: " + filePath + " - " + e.getMessage());
+            return;
         }
+
+        ImGui.setWindowFocus("File Editor");
     }
 
     public static void saveAllFiles() {
         if (PackifiedClient.currentPack == null) {
-            System.err.println("No pack selected");
+            LogWindow.addError("No resource pack is currently loaded.");
             return;
         }
         File resourcePackFolder = new File("resourcepacks/" + PackifiedClient.currentPack.getDisplayName().getString());
         makePackBackup(resourcePackFolder);
         for (PackFile file : EditorWindow.openFiles) {
-            System.out.println(file.getFileName());
             saveFile(file.getPath(), file.getExtension(), getContent(file));
         }
     }
 
-    public static void saveSingleFile(Path path, String fileType, String content, ResourcePackProfile pack) {
+    public static boolean saveSingleFile(Path path, String fileType, String content, ResourcePackProfile pack) {
         // Before saving, make a backup of the file
         File resourcePackFolder = new File("resourcepacks/" + pack.getDisplayName().getString());
         if (!resourcePackFolder.exists()) {
@@ -201,10 +218,12 @@ public class FileUtils {
                 Files.createDirectories(resourcePackFolder.toPath());
             } catch (IOException e) {
                 LogWindow.addError("Failed to create resource pack folder: " + e.getMessage());
+                return false;
             }
         }
         makePackBackup(resourcePackFolder);
         saveFile(path, fileType, content);
+        return true;
     }
 
     private static void saveFile(Path path, String fileType, String content) {
@@ -213,7 +232,7 @@ public class FileUtils {
             Path resourcePackFolder = getPackFolderPath();
 
             if (resourcePackFolder == null || !Files.exists(resourcePackFolder)) {
-                System.err.println("Resource pack folder not found: " + resourcePackFolder);
+                LogWindow.addError("Resource pack folder does not exist.");
                 return;
             }
 
@@ -234,13 +253,16 @@ public class FileUtils {
 
             // Handle different file types
             if (fileType.equals(".json")) {
-                Files.write(targetFile, content.getBytes(StandardCharsets.UTF_8));
+                Files.write(targetFile, content.getBytes());
+            } else if (fileType.equals(".ogg")) {
+                byte[] audioData = Base64.getDecoder().decode(content);
+                Files.write(targetFile, audioData);
             } else if (fileType.equals(".png")) {
                 BufferedImage image = FileUtils.decodeBase64ToImage(content);
                 if (image != null) {
                     ImageIO.write(image, "png", targetFile.toFile());
                 } else {
-                    System.err.println("No image found for: " + path);
+                    LogWindow.addError("Failed to decode image for saving: " + path);
                 }
             }
 
@@ -252,7 +274,7 @@ public class FileUtils {
                 }
             }
         } catch (IOException e) {
-            e.printStackTrace();
+            LogWindow.addError("Failed to save file: " + e.getMessage());
         }
     }
 
@@ -329,7 +351,7 @@ public class FileUtils {
                 try {
                     Files.delete(zipFile.toPath());
                 } catch (IOException e) {
-                    e.printStackTrace();
+                    LogWindow.addError("Failed to delete zip file: " + e.getMessage());
                 }
             } else {
                 zipFile.deleteOnExit();
@@ -427,13 +449,35 @@ public class FileUtils {
 
     public static void loadIdentifierPackAssets(ResourcePackProfile resourcePackProfile) {
         ResourcePack resourcePack = resourcePackProfile.createResourcePack();
+        Path base = FabricLoader.getInstance().getGameDir()
+                .resolve("resourcepacks")
+                .resolve(PackUtils.legalizeName(resourcePackProfile.getDisplayName().getString()));
+
         for (String namespace : resourcePack.getNamespaces(ResourceType.CLIENT_RESOURCES)) {
-            FabricLoader.getInstance().getGameDir().resolve("resourcepacks")
-                    .resolve(PackUtils.legalizeName(resourcePackProfile.getDisplayName().getString()))
-                    .resolve(namespace).toFile().mkdirs();
-            resourcePack.findResources(ResourceType.CLIENT_RESOURCES, namespace, "", (identifier, resourceSupplier) ->
-                    createFileFromIdentifier(resourcePackProfile, namespace, "", identifier)
-            );
+            System.out.println(namespace);
+            try {
+                Files.createDirectories(base.resolve(namespace));
+            } catch (IOException e) {
+                e.printStackTrace();
+                continue;
+            }
+
+            resourcePack.findResources(ResourceType.CLIENT_RESOURCES, namespace, "", ((identifier, inputStreamInputSupplier) -> {
+                System.out.println(identifier);
+            }));
+
+            resourcePack.findResources(ResourceType.CLIENT_RESOURCES, namespace, "", (identifier, resourceSupplier) -> {
+                // identifier.getPath() is the path inside the namespace (e.g. "textures/block/stone.png")
+                Path out = base.resolve(namespace).resolve(identifier.getPath());
+                try {
+                    Files.createDirectories(out.getParent());
+                    try (InputStream is = resourceSupplier.get()) {
+                        Files.copy(is, out, StandardCopyOption.REPLACE_EXISTING);
+                    }
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            });
         }
 
         constructPackMetaData(resourcePackProfile);
@@ -499,7 +543,7 @@ public class FileUtils {
                 Files.delete(entry);
             }
         } catch (IOException e) {
-            e.printStackTrace();
+            LogWindow.addError("Failed to clear backups: " + e.getMessage());
         }
     }
 
@@ -552,7 +596,7 @@ public class FileUtils {
         } else if (extension.equals(".ogg")) {
             return ""; // TODO: Handle sound content if needed
         } else {
-            Packified.LOGGER.error("Unsupported file type: {}", extension);
+            LogWindow.addError("Unsupported file extension: " + extension);
             return "";
         }
     }
@@ -562,7 +606,7 @@ public class FileUtils {
             ImageIO.write(image, "png", outputStream);
             return Base64.getEncoder().encodeToString(outputStream.toByteArray());
         } catch (IOException e) {
-            e.printStackTrace();
+            LogWindow.addError("Failed to encode image to Base64: " + e.getMessage());
             return null;
         }
     }
@@ -573,14 +617,14 @@ public class FileUtils {
             ByteArrayInputStream inputStream = new ByteArrayInputStream(imageBytes);
             return ImageIO.read(inputStream);
         } catch (IOException e) {
-            e.printStackTrace();
+            LogWindow.addError("Failed to decode Base64 to image: " + e.getMessage());
             return null;
         }
     }
 
     public static String encodeSoundToString(byte[] audio) {
         if (audio == null || audio.length == 0) {
-            System.err.println("Error: Audio data is empty or null.");
+            LogWindow.addError("Audio data is null or empty.");
             return "";
         }
         return Base64.getEncoder().encodeToString(audio);
@@ -604,7 +648,7 @@ public class FileUtils {
             Files.write(targetFile.toPath(), content.getBytes(StandardCharsets.UTF_8));
             CompletableFuture.runAsync(PackUtils::reloadPack);
         } catch (IOException e) {
-            e.printStackTrace();
+            LogWindow.addError("Failed to write pack.mcmeta file: " + e.getMessage());
         }
     }
 
@@ -633,7 +677,7 @@ public class FileUtils {
         try {
             Files.write(mcmetaFile.toPath(), metadata.getBytes(StandardCharsets.UTF_8));
         } catch (IOException e) {
-            e.printStackTrace();
+            LogWindow.addError("Failed to write pack.mcmeta file: " + e.getMessage());
         }
 
         // Create the assets
@@ -697,7 +741,7 @@ public class FileUtils {
             ProcessBuilder processBuilder = new ProcessBuilder("explorer.exe", "/select,", file.getAbsolutePath());
             processBuilder.start();
         } catch (IOException e) {
-            e.printStackTrace();
+            LogWindow.addError("Failed to open file in explorer: " + e.getMessage());
         }
     }
 
@@ -736,7 +780,7 @@ public class FileUtils {
                 openFile(newFilePath);
             }
         } catch (IOException e) {
-            System.err.println("Failed to move file: " + e.getMessage());
+            LogWindow.addError("Failed to move file: " + e.getMessage());
             e.printStackTrace();
         }
     }
@@ -776,7 +820,7 @@ public class FileUtils {
                 openFile(newFilePath);
             }
         } catch (IOException e) {
-            System.err.println("Failed to rename file: " + e.getMessage());
+            LogWindow.addError("Failed to rename file: " + e.getMessage());
             e.printStackTrace();
         }
     }
@@ -849,7 +893,7 @@ public class FileUtils {
         try {
             return Files.readString(path, StandardCharsets.UTF_8);
         } catch (IOException e) {
-            e.printStackTrace();
+            LogWindow.addError("Failed to read file: " + e.getMessage());
             return "";
         }
     }

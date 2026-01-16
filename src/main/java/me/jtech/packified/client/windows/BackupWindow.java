@@ -11,7 +11,7 @@ import me.jtech.packified.client.imgui.ImGuiImplementation;
 import me.jtech.packified.client.util.FileUtils;
 import me.jtech.packified.client.util.PackUtils;
 import me.jtech.packified.client.windows.popups.ConfirmWindow;
-import me.jtech.packified.client.windows.popups.SelectPackWindow;
+import me.jtech.packified.client.windows.popups.PackBrowserWindow;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.fabricmc.loader.api.FabricLoader;
@@ -52,7 +52,7 @@ public class BackupWindow {
                 // Centered button to load a pack
                 ImGui.setCursorPos((ImGui.getWindowWidth() - ImGui.calcTextSize("Load Pack").x) / 2, (ImGui.getWindowHeight() - ImGui.getTextLineHeightWithSpacing()) / 2 + ImGui.getTextLineHeightWithSpacing());
                 if (ImGui.button("Load Pack")) {
-                    SelectPackWindow.open.set(true);
+                    PackBrowserWindow.open.set(true);
                 }
                 ImGui.end();
                 return;

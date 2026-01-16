@@ -5,12 +5,16 @@ import imgui.flag.ImGuiWindowFlags;
 import imgui.type.ImBoolean;
 import me.jtech.packified.Packified;
 import me.jtech.packified.client.config.ModConfig;
+import net.fabricmc.api.EnvType;
+import net.fabricmc.api.Environment;
 
 import java.awt.*;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.LinkedList;
+import java.util.Map;
 
+@Environment(EnvType.CLIENT)
 public class LogWindow {
     public static ImBoolean isOpen = new ImBoolean(true);
     private static final LinkedList<LogEntry> logEntries = new LinkedList<>();
@@ -28,6 +32,9 @@ public class LogWindow {
                     if (ImGui.menuItem("Clear Logs")) {
                         logEntries.clear(); // Clear the log entries
                     }
+                    if (ImGui.menuItem("Auto Scroll", "", ModConfig.getBoolean("autoscrolllogs", true))) {
+                        ModConfig.updateSettings(Map.of("autoscrolllogs", !ModConfig.getBoolean("autoscrolllogs", true)));
+                    }
                     ImGui.endMenu();
                 }
                 ImGui.endMenuBar();
@@ -44,6 +51,11 @@ public class LogWindow {
                     float alpha = 1.0f;
                     ImGui.textColored(r, g, b, alpha, "[" + timestampToString(entry.getTimestamp()) + "] " + entry.getMessage());
                 }
+            }
+
+            // Auto-scroll to bottom if enabled
+            if (ModConfig.getBoolean("autoscrolllogs", true) && ImGui.getScrollY() >= ImGui.getScrollMaxY()) {
+                ImGui.setScrollHereY(1.0f);
             }
         }
         ImGui.end();

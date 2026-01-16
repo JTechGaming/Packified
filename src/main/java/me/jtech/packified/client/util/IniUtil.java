@@ -2,11 +2,14 @@ package me.jtech.packified.client.util;
 
 import me.jtech.packified.Packified;
 import me.jtech.packified.client.windows.LogWindow;
+import net.fabricmc.api.EnvType;
+import net.fabricmc.api.Environment;
 
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 
+@Environment(EnvType.CLIENT)
 public class IniUtil {
     private static String defaultIni = "[Window][DockSpaceViewport_11111111]\n" +
             "Pos=0,21\n" +

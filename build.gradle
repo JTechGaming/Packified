@@ -34,6 +34,8 @@ repositories {
         content {
             includeGroup("me.djtheredstoner")
         }
+        mavenCentral()
+        maven { url 'https://jitpack.io' }
     }
 }
 
@@ -92,6 +94,9 @@ dependencies {
     include(implementation("com.moulberry:mixinconstraints:1.0.5"))
     modRuntimeOnly("me.djtheredstoner:DevAuth-fabric:1.1.2")
     shadow(implementation('com.fasterxml.jackson.core:jackson-core:2.17.0'))
+
+    //modCompileOnly(implementation 'com.github.sakura-ryoko:malilib:1.21.7-0.25.2')
+    //modCompileOnly(implementation(rootProject.files("dependencies/Axiom-4.3.3-for-MC1.21.jar")))
 }
 
 loom {
