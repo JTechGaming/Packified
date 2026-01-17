@@ -233,15 +233,15 @@ public class FileUtils {
             }
 
             // Handle different file types
-            if (fileType.equals(".json")) {
-                Files.write(targetFile, content.getBytes(StandardCharsets.UTF_8));
-            } else if (fileType.equals(".png")) {
+            if (fileType.equals(".png")) {
                 BufferedImage image = FileUtils.decodeBase64ToImage(content);
                 if (image != null) {
                     ImageIO.write(image, "png", targetFile.toFile());
                 } else {
                     System.err.println("No image found for: " + path);
                 }
+            } else {
+                Files.write(targetFile, content.getBytes(StandardCharsets.UTF_8));
             }
 
             // Update the file in the editor if it's open
