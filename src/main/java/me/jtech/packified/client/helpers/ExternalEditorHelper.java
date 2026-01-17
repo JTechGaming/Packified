@@ -18,6 +18,48 @@ import java.util.Optional;
 
 @Environment(EnvType.CLIENT)
 public class ExternalEditorHelper {
+    private static Optional<Path> blockbenchEditor = Optional.empty();
+
+    public static Optional<Path> findBlockBenchEditor() {
+        if (blockbenchEditor.isPresent()) {
+            return blockbenchEditor;
+        }
+
+        String[] editors = {
+                "blockbench", // Blockbench
+        };
+
+        if (isWindows()) {
+            String localAppData = System.getenv("LOCALAPPDATA") == null ? "" : System.getenv("LOCALAPPDATA");
+            List<String> possible = List.of(
+                    // Blockbench, look in LocalAppData\Programs\blockbench
+                    localAppData.isEmpty() ? "" : localAppData + "\\Programs\\Blockbench\\Blockbench.exe"
+            );
+            for (String p : possible) {
+                if (p != null && !p.isEmpty()) {
+                    Path path = Paths.get(p);
+                    if (Files.exists(path)) {
+                        System.out.println("Found BlockBench editor: " + path);
+                        blockbenchEditor = Optional.of(path);
+                        return Optional.of(path);
+                    }
+                }
+            }
+        }
+
+        for (String editor : editors) {
+            Optional<Path> found = findExecutableOnPath(editor);
+            if (found.isPresent()) {
+                System.out.println("Found BlockBench editor: " + found.get());
+                blockbenchEditor = found;
+                return found;
+            }
+        }
+
+        System.out.println("No BlockBench editor found.");
+        return Optional.empty();
+    }
+
     private static Optional<Path> jsonEditor = Optional.empty();
 
     public static Optional<Path> findJSONEditor() {
@@ -39,7 +81,7 @@ public class ExternalEditorHelper {
         if (isWindows()) {
             String localAppData = System.getenv("LOCALAPPDATA") == null ? "" : System.getenv("LOCALAPPDATA");
             List<String> possible = Arrays.asList(
-                    // Blockbench often installed to LocalAppData\Programs\blockbench
+                    // Blockbench, look in LocalAppData\Programs\blockbench
                     localAppData.isEmpty() ? "" : localAppData + "\\Programs\\Blockbench\\Blockbench.exe",
                     // VS Code typical installers
                     System.getenv("ProgramFiles") == null ? "" : System.getenv("ProgramFiles") + "\\Microsoft VS Code\\Code.exe",

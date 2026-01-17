@@ -35,36 +35,8 @@ public class FileUtils {
         return fileName.substring(lastIndexOf);
     }
 
-    public static String getFileExtensionName(String fileName, String[] supportedExtensions) {
-        String extension = getFileExtension(fileName);
-        for (String supportedExtension : supportedExtensions) {
-            if (extension.equals(supportedExtension)) {
-                return supportedExtension;
-            }
-        }
-        return null;
-    }
-
-    public static String getExtension(Path path) {
+    public static String getExtensionFromPath(Path path) {
         return getFileExtension(path.getFileName().toString());
-    }
-
-    public static String getFileExtensionName(String fileName) {
-        return getFileExtensionName(fileName, FileHierarchyWindow.extensions);
-    }
-
-    public static boolean isSupportedFileExtension(String fileName, String[] supportedExtensions) {
-        String extension = getFileExtension(fileName);
-        for (String supportedExtension : supportedExtensions) {
-            if (extension.equals(supportedExtension)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    public static boolean isSupportedFileExtension(String fileName) {
-        return isSupportedFileExtension(fileName, FileHierarchyWindow.extensions);
     }
 
     public static void deleteFile(Path path) {
@@ -107,12 +79,7 @@ public class FileUtils {
             } else {
                 // Import file
                 String fileName = file.getName();
-                String extension = getFileExtensionName(fileName);
-                if (extension == null) {
-                    CornerNotificationsHelper.addNotification("Unsupported Filetype: " + fileName, "failed to import file", Color.RED, 3);
-                    LogWindow.addError("Unsupported Filetype: " + fileName);
-                    return;
-                }
+                String extension = getFileExtension(fileName);
                 String content = null;
                 BufferedImage image;
                 if (extension.equals(".png")) {
@@ -136,7 +103,7 @@ public class FileUtils {
                     } catch (IOException e) {
                         LogWindow.addError("Failed to read sound file: " + fileName + " - " + e.getMessage());
                     }
-                } else {
+                } else {  // json, txt, etc. basically just all text files
                     try {
                         content = Files.readString(file.toPath());
                     } catch (IOException e) {
@@ -165,17 +132,13 @@ public class FileUtils {
         String extension = getFileExtension(filePath.getFileName().toString());
 
         if (extension.isBlank()) {
-            LogWindow.addError("Unsupported file type: " + filePath);
+            LogWindow.addError("Invalid file type: [BLANK EXTENSION ERROR] at -> " + filePath);
             return;
         }
 
         try (InputStream inputStream = Files.newInputStream(filePath)) {
             String content;
             switch (extension) {
-                case ".json", ".txt", ".mcmeta", ".properties", ".vsh", ".fsh", ".bbmodel", ".bbmodel.json" -> {
-                    content = new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
-                    EditorWindow.openTextFile(filePath, content);
-                }
                 case ".png" -> {
                     BufferedImage image = ImageIO.read(inputStream);
                     if (image != null) {
@@ -188,7 +151,10 @@ public class FileUtils {
                     byte[] audioData = Files.readAllBytes(filePath);
                     EditorWindow.openAudioFile(filePath, audioData);
                 }
-                default -> LogWindow.addError("Unsupported file type: " + filePath);
+                default -> {  // json, txt, etc. basically just all text files
+                    content = new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
+                    EditorWindow.openTextFile(filePath, content);
+                }
             }
         } catch (IOException e) {
             LogWindow.addError("Failed to open file: " + filePath + " - " + e.getMessage());
@@ -207,6 +173,10 @@ public class FileUtils {
         makePackBackup(resourcePackFolder);
         for (PackFile file : EditorWindow.openFiles) {
             saveFile(file.getPath(), file.getExtension(), getContent(file));
+        }
+
+        if (ModelEditorWindow.isModelWindowOpen()) {
+            ModelEditorWindow.saveCurrentModel();
         }
     }
 
@@ -252,9 +222,7 @@ public class FileUtils {
             }
 
             // Handle different file types
-            if (fileType.equals(".json")) {
-                Files.write(targetFile, content.getBytes());
-            } else if (fileType.equals(".ogg")) {
+            if (fileType.equals(".ogg")) {
                 byte[] audioData = Base64.getDecoder().decode(content);
                 Files.write(targetFile, audioData);
             } else if (fileType.equals(".png")) {
@@ -264,6 +232,8 @@ public class FileUtils {
                 } else {
                     LogWindow.addError("Failed to decode image for saving: " + path);
                 }
+            } else {  // json, txt, etc. basically just all text files
+                Files.write(targetFile, content.getBytes());
             }
 
             // Update the file in the editor if it's open
@@ -345,6 +315,7 @@ public class FileUtils {
         }
     }
 
+    @Deprecated
     public static void removeZipFileFromOptions(File zipFile) {
         if (zipFile.exists()) {
             if (zipFile.canWrite()) {
@@ -520,6 +491,7 @@ public class FileUtils {
         }
     }
 
+    @Deprecated
     private static void createFileFromIdentifier(ResourcePackProfile packProfile, String namespace, String prefix, Identifier identifier) {
         ResourcePack resourcePack = packProfile.createResourcePack();
         try {
@@ -579,6 +551,8 @@ public class FileUtils {
             case ".properties" -> "Properties";
             case ".vsh" -> "Vertex Shader";
             case ".fsh" -> "Fragment Shader";
+            case ".glsl" -> "OpenGL Shading Language";
+            case ".lang" -> "Language File";
             case ".bbmodel" -> "Blockbench Model";
             case ".bbmodel.json" -> "Blockbench Model JSON";
             default -> "Unknown";
@@ -589,15 +563,12 @@ public class FileUtils {
     public static String getContent(PackFile file) {
         String extension = file.getExtension();
 
-        if (extension.equals(".json") || extension.equals(".txt") || extension.equals(".mcmeta")) {
-            return file.getTextEditor().getText();
-        } else if (extension.equals(".png")) {
+        if (extension.equals(".png")) {
             return encodeImageToBase64(file.getImageEditorContent());
         } else if (extension.equals(".ogg")) {
             return ""; // TODO: Handle sound content if needed
-        } else {
-            LogWindow.addError("Unsupported file extension: " + extension);
-            return "";
+        } else {  // json, txt, etc. basically just all text files
+            return file.getTextEditor().getText();
         }
     }
 
@@ -750,13 +721,13 @@ public class FileUtils {
         boolean wasOpen = EditorWindow.openFiles.stream().anyMatch(file -> file.getPath().equals(originalPath));
         EditorWindow.openFiles.removeIf(file -> file.getPath().equals(originalPath));
         if (newRelativePath.isEmpty()) {
-            System.out.println("New path is empty");
+            LogWindow.addError("New path is empty");
             return;
         }
 
         Path packFolderPath = getPackFolderPath();
         if (packFolderPath == null) {
-            System.err.println("Resource pack folder is not set.");
+            LogWindow.addError("Resource pack folder is not set.");
             return;
         }
 
@@ -789,13 +760,13 @@ public class FileUtils {
         boolean wasOpen = EditorWindow.openFiles.stream().anyMatch(file -> file.getPath().equals(originalPath));
         EditorWindow.openFiles.removeIf(file -> file.getPath().equals(originalPath));
         if (newRelativePath.isEmpty()) {
-            System.out.println("New name is empty");
+            LogWindow.addError("New name is empty");
             return;
         }
 
         Path packFolderPath = getPackFolderPath();
         if (packFolderPath == null) {
-            System.err.println("Resource pack folder is not set.");
+            LogWindow.addError("Resource pack folder is not set.");
             return;
         }
 
@@ -805,7 +776,7 @@ public class FileUtils {
         try {
             // Ensure new file does not already exist
             if (Files.exists(newFilePath)) {
-                System.err.println("Cannot rename: File with new name already exists -> " + newFilePath);
+                LogWindow.addError("Cannot rename: File with new name already exists -> " + newFilePath);
                 return;
             }
 
@@ -829,7 +800,7 @@ public class FileUtils {
         Path packFolderPath = getPackFolderPath();
 
         if (packFolderPath == null) {
-            System.err.println("Resource pack folder is not set.");
+            LogWindow.addError("Resource pack folder is not set.");
             return filePath.toString();
         }
 
@@ -887,7 +858,7 @@ public class FileUtils {
     public static String readFile(Path path) {
         // Read file content
         if (path == null || !Files.exists(path)) {
-            System.err.println("File not found: " + path);
+            LogWindow.addError("File not found: " + path);
             return "";
         }
         try {
@@ -942,7 +913,7 @@ public class FileUtils {
         // Generate folder structure based on the provided string
         Path currentPath = getPackFolderPath();
         currentPath = currentPath.resolve("assets/minecraft/").resolve(s);
-        System.out.println(currentPath);
+        LogWindow.addInfo("Generating folder: " + currentPath);
 
         currentPath.toFile().mkdirs();
     }

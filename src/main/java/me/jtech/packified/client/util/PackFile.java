@@ -57,7 +57,7 @@ public class PackFile {
             case ".fsh", ".vsh":
                 textEditor.setLanguageDefinition(TextEditorLanguageDefinition.glsl());
                 break;
-            case ".properties", ".txt":
+            default:
                 textEditor.setLanguageDefinition(createTxtLanguageDefinition());
                 break;
         }
@@ -75,7 +75,7 @@ public class PackFile {
             case ".fsh", ".vsh":
                 textEditor.setLanguageDefinition(TextEditorLanguageDefinition.glsl());
                 break;
-            case ".properties", ".txt":
+            default:
                 textEditor.setLanguageDefinition(createTxtLanguageDefinition());
                 break;
         }
@@ -122,9 +122,8 @@ public class PackFile {
         // normalize and strip common invisible chars
         return switch (extension) {
             case ".png" -> pixelArtEditor.wasModified;
-            case ".json" -> !textContent.equals(textEditor.getText().substring(0, textEditor.getText().length()-1));
             case ".ogg" -> !Arrays.equals(soundContent, soundEditorContent);
-            default -> false;
+            default -> !textContent.equals(textEditor.getText().substring(0, textEditor.getText().length()-1));
         };
     }
 
@@ -139,8 +138,8 @@ public class PackFile {
     public void saveFile() {
         switch (extension) {
             case ".png" -> pixelArtEditor.wasModified = false;
-            case ".json" -> textContent = textEditor.getText();
             case ".ogg" -> soundContent = soundEditorContent;
+            default -> textContent = textEditor.getText();
         }
     }
 

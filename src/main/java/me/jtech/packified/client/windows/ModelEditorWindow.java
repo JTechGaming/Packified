@@ -27,9 +27,9 @@ import org.lwjgl.system.MemoryStack;
 
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
-import java.io.FileReader;
-import java.io.IOException;
+import java.io.*;
 import java.nio.FloatBuffer;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -79,6 +79,9 @@ public class ModelEditorWindow {
 
     public static ImBoolean isOpen = new ImBoolean(false);
 
+    private static boolean renderedLastFrame = false;
+    private static boolean closeNextFrame = false;
+
     // model data
     private static class Cube {
         float[] vertices; // pos(3) + color(3)
@@ -93,6 +96,8 @@ public class ModelEditorWindow {
     private static final List<Cube> cubes = new ArrayList<>();
     private static final Map<String, BufferedImage> loadedTextures = new java.util.HashMap<>();
     private static BlockModel loadedModel;
+    private static Path loadedModelPath;
+    private static boolean unsavedChanges = false;
 
     private static final Matrix4f mvp = new Matrix4f();
 
@@ -102,8 +107,13 @@ public class ModelEditorWindow {
                     .registerTypeAdapter(GroupChild.class, new GroupChildDeserializer())
                     .create();
             loadedModel = gson.fromJson(reader, BlockModel.class);
+            loadedModelPath = Path.of(path);
             loadTextures();
             CornerNotificationsHelper.addNotification("Model loaded successfully" , "Loaded model with " + loadedModel.elements().size() + " elements.", LogWindow.LogType.SUCCESS.getColor(), 4f);
+            for (GroupElement groupElement : loadedModel.groups()) {
+                System.out.println(groupElement.name);
+                System.out.println(groupElement.children);
+            }
         } catch (Exception e) {
             PackifiedClient.LOGGER.error(e.getMessage());
         }
@@ -170,7 +180,18 @@ public class ModelEditorWindow {
     public static void render() {
         if (!isOpen.get()) return;
 
-        if (ImGui.begin("Model Editor", isOpen,ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse)) {
+        if (closeNextFrame) {
+            loadedModel = null;
+            loadedModelPath = null;
+            loadedTextures.clear();
+            closeNextFrame = false;
+        }
+
+        renderedLastFrame = false;
+
+        if (ImGui.begin("Model Editor", isOpen,ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse | (unsavedChanges ? ImGuiWindowFlags.UnsavedDocument : ImGuiWindowFlags.None))) {
+            renderedLastFrame = true;
+
             int targetW = (int) Math.max(1, ImGui.getWindowContentRegionMaxX() - ImGui.getWindowContentRegionMinX() + ImGui.getStyle().getWindowPaddingX() + 25);
             int targetH = (int) Math.max(1, ImGui.getWindowContentRegionMaxY() - ImGui.getWindowContentRegionMinY() + ImGui.getStyle().getWindowPaddingY() + 21);
 
@@ -179,7 +200,7 @@ public class ModelEditorWindow {
             float aspect = (fbHeight == 0) ? 1.0f : (float) fbWidth / (float) fbHeight;
             Matrix4f projection = new Matrix4f().perspective((float) Math.toRadians(70.0f), aspect, 0.1f, 100f);
             Matrix4f view = getViewMatrix();
-            Matrix4f model = new Matrix4f().identity(); // you can scale/rotate model here if needed
+            Matrix4f model = new Matrix4f().identity(); // scale and rotation
 
             projection.mul(view, mvp).mul(model);
 
@@ -236,7 +257,7 @@ public class ModelEditorWindow {
                 }
             }
 
-            // Now process camera input — only when the image item is hovered (prevents dragging the window)
+            // prevents dragging the window
             updateCameraAfterImage();
 
             renderSideBars();
@@ -289,7 +310,7 @@ public class ModelEditorWindow {
                     e.rotation() != null ? e.rotation().angle() * (e.rotation().axis().equals("y") ? 1 : 0) : 0f,
                     e.rotation() != null ? e.rotation().angle() * (e.rotation().axis().equals("z") ? 1 : 0) : 0f };
 
-            if (ImGui.inputFloat3("Position", position)) {
+            if (ImGui.sliderFloat3("Position", position, -32.0f, 32.0f)) {
                 e.from().set(0, position[0]);
                 e.from().set(1, position[1]);
                 e.from().set(2, position[2]);
@@ -297,12 +318,12 @@ public class ModelEditorWindow {
                 e.to().set(1, position[1] + size[1]);
                 e.to().set(2, position[2] + size[2]);
             }
-            if (ImGui.inputFloat3("Size", size)) {
+            if (ImGui.sliderFloat3("Size", size, -32.0f, 32.0f)) {
                 e.to().set(0, position[0] + size[0]);
                 e.to().set(1, position[1] + size[1]);
                 e.to().set(2, position[2] + size[2]);
             }
-            if (ImGui.inputFloat3("Origin", pivot)) {
+            if (ImGui.sliderFloat3("Origin", pivot, -32.0f, 32.0f)) {
                 if (e.rotation() == null) {
                     e = new ModelElement(e.name(), e.from(), e.to(), e.faces(), new Rotation(0, "y", List.of(pivot[0], pivot[1], pivot[2])));
                     List<ModelElement> elements = new ArrayList<>(loadedModel.elements());
@@ -316,7 +337,7 @@ public class ModelEditorWindow {
                    }
                 }
             }
-            if (ImGui.inputFloat3("Rotation", rotation)) {
+            if (ImGui.sliderFloat3("Rotation", rotation, 0.0f, 360.0f)) {
                 if (e.rotation() == null) {
                     e = new ModelElement(e.name(), e.from(), e.to(), e.faces(), new Rotation(0, "y", List.of(pivot[0], pivot[1], pivot[2])));
                     List<ModelElement> elems = new ArrayList<>(loadedModel.elements());
@@ -341,6 +362,9 @@ public class ModelEditorWindow {
 
             // Update the elements in the model
             List<ModelElement> elements = new ArrayList<>(loadedModel.elements());
+            if (elements.get(selectedElementIndex) != e) { // detect if changed
+                unsavedChanges = true;
+            }
             elements.set(selectedElementIndex, e);
             loadedModel = new BlockModel(loadedModel.format_version(), loadedModel.texture_size(), loadedModel.textures(), elements, loadedModel.display(), loadedModel.groups());
             modelUploaded = false; // force re-upload of model to GPU next frame
@@ -350,20 +374,22 @@ public class ModelEditorWindow {
         ImGui.end();
 
         ImGui.begin("Textures");
-        if (!loadedTextures.isEmpty()) {
+        if (loadedModel != null && !loadedTextures.isEmpty()) {
             List<String> names = new ArrayList<>();
             for (Map.Entry<String, BufferedImage> entry : loadedTextures.entrySet()) {
                 String key = entry.getKey();
-                String textureName = loadedModel.textures().get(key);
-                if (names.contains(textureName)) {
-                    continue;
-                }
-                names.add(textureName);
-                boolean selected = ImGui.selectable("Texture: " + textureName);
-                Path texturePath = FileUtils.getPackFolderPath().resolve("assets/minecraft/textures/" + textureName + ".png");
-                renderHoverTooltip(key, texturePath);
-                if (selected) {
-                    selectedTexturePath = texturePath;
+                if (loadedModel.textures() != null) {
+                    String textureName = loadedModel.textures().get(key);
+                    if (names.contains(textureName)) {
+                        continue;
+                    }
+                    names.add(textureName);
+                    boolean selected = ImGui.selectable("Texture: " + textureName);
+                    Path texturePath = FileUtils.getPackFolderPath().resolve("assets/minecraft/textures/" + textureName + ".png");
+                    renderHoverTooltip(key, texturePath);
+                    if (selected) {
+                        selectedTexturePath = texturePath;
+                    }
                 }
             }
         } else {
@@ -657,72 +683,113 @@ public class ModelEditorWindow {
     }
 
     private static void setupGrid() {
-        // Number of lines: (2N+1) along X and Z
-        int totalLines = (2 * 10 + 1) * 2 * 2; // 2 vertices per line, 2 axes
-        float[] verts = new float[totalLines * 6]; // 3 pos + 3 color per vertex
+        final int TILE_SIZE = 16; // each tile is 16x16 units, which is used to make sure the size is uniform so that the center tile can have a 16x16 grid
+        final int GRID_TILES = 3; // 3x3
+
+        final float HALF_WORLD = (GRID_TILES * TILE_SIZE) / 2.0f; // 24
+        final float HALF_TILE = TILE_SIZE / 2.0f;                 // 8
+
+        // Line counts
+        int outerLinesPerAxis = GRID_TILES + 1; // 4
+        int innerLinesPerAxis = TILE_SIZE + 1;  // 17
+
+        int totalLines =
+                (outerLinesPerAxis * 2) +   // outer grid
+                        (innerLinesPerAxis * 2);    // inner grid
+
+        float[] verts = new float[totalLines * 2 * 6];
         int idx = 0;
 
-        for (int i = -10; i <= 10; i++) {
-            // color: center line vs regular
-            float[] color = (i == 0) ? new float[]{1f, 1f, 1f} : new float[]{0.5f, 0.5f, 0.5f};
+        // 3x3 grid
+        for (int i = 0; i <= GRID_TILES; i++) {
+            float pos = -HALF_WORLD + i * TILE_SIZE;
 
-            // Line parallel to Z (constant X)
-            verts[idx++] = i * (float) 1.0;
-            verts[idx++] = 0;
-            verts[idx++] = -10 * (float) 1.0;
-            verts[idx++] = color[0];
-            verts[idx++] = color[1];
-            verts[idx++] = color[2];
-            verts[idx++] = i * (float) 1.0;
-            verts[idx++] = 0;
-            verts[idx++] = 10 * (float) 1.0;
-            verts[idx++] = color[0];
-            verts[idx++] = color[1];
-            verts[idx++] = color[2];
+            float[] color = new float[]{0.4f, 0.4f, 0.4f};
 
-            // Line parallel to X (constant Z)
-            verts[idx++] = -10 * (float) 1.0;
-            verts[idx++] = 0;
-            verts[idx++] = i * (float) 1.0;
-            verts[idx++] = color[0];
-            verts[idx++] = color[1];
-            verts[idx++] = color[2];
-            verts[idx++] = 10 * (float) 1.0;
-            verts[idx++] = 0;
-            verts[idx++] = i * (float) 1.0;
-            verts[idx++] = color[0];
-            verts[idx++] = color[1];
-            verts[idx++] = color[2];
+            // Lines parallel to Z
+            idx = putLine(verts, idx,
+                    pos, 0, -HALF_WORLD,
+                    pos, 0,  HALF_WORLD,
+                    color);
+
+            // Lines parallel to X
+            idx = putLine(verts, idx,
+                    -HALF_WORLD, 0, pos,
+                    HALF_WORLD, 0, pos,
+                    color);
         }
 
-        gridVertexCount = totalLines;
+        // Center tile, contains a 16x16 grid
+        for (int i = 0; i <= TILE_SIZE; i++) {
+            float pos = -HALF_TILE + i;
 
-        // Create VAO/VBO
+            float[] color = (i == HALF_TILE)
+                    ? new float[]{1f, 1f, 1f}   // axes
+                    : new float[]{0.7f, 0.7f, 0.7f};
+
+            // Lines parallel to Z
+            idx = putLine(verts, idx,
+                    pos, 0, -HALF_TILE,
+                    pos, 0,  HALF_TILE,
+                    color);
+
+            // Lines parallel to X
+            idx = putLine(verts, idx,
+                    -HALF_TILE, 0, pos,
+                    HALF_TILE, 0, pos,
+                    color);
+        }
+
+        gridVertexCount = totalLines * 2;
+
+        // VAO and VBO setup
         gridVao = GL30.glGenVertexArrays();
         int gridVbo = GL15.glGenBuffers();
+
         GL30.glBindVertexArray(gridVao);
         GL15.glBindBuffer(GL15.GL_ARRAY_BUFFER, gridVbo);
         GL15.glBufferData(GL15.GL_ARRAY_BUFFER, verts, GL15.GL_STATIC_DRAW);
 
         int stride = 6 * Float.BYTES;
 
-        // Position
         GL20.glVertexAttribPointer(0, 3, GL11.GL_FLOAT, false, stride, 0);
         GL20.glEnableVertexAttribArray(0);
-        // Color
+
         GL20.glVertexAttribPointer(1, 3, GL11.GL_FLOAT, false, stride, 3 * Float.BYTES);
         GL20.glEnableVertexAttribArray(1);
 
         GL30.glBindVertexArray(0);
 
-        // Shader
-        gridShader = createShader(); // can reuse your previous shader
+        gridShader = createShader();
         gridInitialized = true;
+    }
+
+    private static int putLine(
+            float[] verts, int idx,
+            float x1, float y1, float z1,
+            float x2, float y2, float z2,
+            float[] color) {
+
+        verts[idx++] = x1;
+        verts[idx++] = y1;
+        verts[idx++] = z1;
+        verts[idx++] = color[0];
+        verts[idx++] = color[1];
+        verts[idx++] = color[2];
+
+        verts[idx++] = x2;
+        verts[idx++] = y2;
+        verts[idx++] = z2;
+        verts[idx++] = color[0];
+        verts[idx++] = color[1];
+        verts[idx++] = color[2];
+
+        return idx;
     }
 
     private static void renderGrid() {
         if (!gridInitialized) {
-            setupGrid(); // 10 lines each side, spacing 1.0
+            setupGrid();
         }
         GL20.glUseProgram(gridShader);
 
@@ -1014,5 +1081,63 @@ public class ModelEditorWindow {
     public sealed interface GroupChild permits GroupChild.Id, GroupChild.Group {
         record Id(int id) implements GroupChild {}
         record Group(GroupElement group) implements GroupChild {}
+    }
+
+    public static void saveCurrentModel() {
+        if (loadedModel == null) return;
+
+        if (!Files.exists(loadedModelPath)) {
+            loadedModelPath.getParent().toFile().mkdirs();
+            try {
+                Files.createFile(loadedModelPath);
+            } catch (IOException e) {
+                LogWindow.addError("Failed to create save file for model: " + loadedModelPath.getFileName() + " -> " + e.getMessage());
+            }
+        }
+
+        try (Writer writer = Files.newBufferedWriter(loadedModelPath)) {
+            Gson gson = new GsonBuilder()
+                    .registerTypeAdapter(GroupChild.class, new GroupChildDeserializer())
+                    .create();
+            gson.toJson(loadedModel, writer);
+
+            unsavedChanges = false;
+        } catch (Exception e) {
+            LogWindow.addError("Failed to write save data for model: " + loadedModelPath.getFileName() + " -> " + e.getMessage());
+        }
+
+        for (GroupElement groupElement : loadedModel.groups()) {
+            System.out.println(groupElement.name);
+            System.out.println(groupElement.children);
+        }
+
+        LogWindow.addLog("Successfully saved model!", LogWindow.LogType.SUCCESS.getColor());
+    }
+
+    public static void closeCurrentModel() {
+        if (unsavedChanges) {
+            ConfirmWindow.open("Do you want to save this file first", "Otherwise, changes might be lost.", () -> {
+                saveCurrentModel();
+
+                closeNextFrame = true;
+                unsavedChanges = false;
+            }, () -> {
+                ConfirmWindow.open("Are you sure you want to close this file", "Any unsaved changes might be lost.", () -> {
+                    closeNextFrame = true;
+                    unsavedChanges = false;
+                });
+            });
+        } else {
+            loadedModel = null;
+            loadedModelPath = null;
+        }
+    }
+
+    public static boolean isModelWindowOpen() {
+        return isOpen.get();
+    }
+
+    public static boolean isModelWindowFocused() {
+        return isOpen.get() && renderedLastFrame;
     }
 }

@@ -7,7 +7,6 @@ import imgui.type.ImBoolean;
 import me.jtech.packified.Packified;
 import me.jtech.packified.client.PackifiedClient;
 import me.jtech.packified.client.helpers.DisplayScaleHelper;
-import me.jtech.packified.client.imgui.ImGuiImplementation;
 import me.jtech.packified.client.util.PackUtils;
 import me.jtech.packified.client.networking.packets.C2SRequestFullPack;
 import me.jtech.packified.client.util.SafeTextureLoader;
@@ -17,7 +16,6 @@ import net.fabricmc.api.Environment;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.item.ItemStack;
-import net.minecraft.item.Items;
 import net.minecraft.resource.ResourcePackProfile;
 
 import java.util.UUID;
@@ -27,9 +25,8 @@ public class MultiplayerWindow {
     public static ImBoolean isOpen = new ImBoolean(true);
 
     public static void render() {
-        if (!isOpen.get()) {
-            return; // If the window is not open, do not render
-        }
+        if (!isOpen.get() || ModelEditorWindow.isModelWindowFocused()) return;
+
         // Render the multiplayer window
         ImGui.setNextWindowViewport(ImGui.getMainViewport().getID());
         if (ImGui.begin("Multiplayer", isOpen)) {

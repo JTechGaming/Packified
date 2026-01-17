@@ -128,7 +128,7 @@ public class AssetInspectorWindow {
         // Set syntax highlighting
 
         // Set error markers
-        Map<Integer, String> errorMarkers = checkForErrors(file.getTextEditor().getText());
+        Map<Integer, String> errorMarkers = checkForErrors(file);
         textEditor.setErrorMarkers(errorMarkers);
 
         int[] customPalette = textEditor.getDarkPalette();

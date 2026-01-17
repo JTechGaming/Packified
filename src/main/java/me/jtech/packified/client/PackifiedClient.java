@@ -1,6 +1,5 @@
 package me.jtech.packified.client;
 
-import com.mojang.blaze3d.pipeline.BlendFunction;
 import com.mojang.blaze3d.pipeline.RenderPipeline;
 import com.mojang.blaze3d.platform.DepthTestFunction;
 import com.mojang.blaze3d.vertex.VertexFormat;
@@ -13,6 +12,7 @@ import me.jtech.packified.Packified;
 import me.jtech.packified.client.util.SyncPacketData;
 import me.jtech.packified.client.imgui.ImGuiImplementation;
 import me.jtech.packified.client.util.*;
+import me.jtech.packified.client.windows.ModelEditorWindow;
 import me.jtech.packified.client.windows.popups.ConfirmWindow;
 import me.jtech.packified.client.windows.EditorWindow;
 import me.jtech.packified.client.windows.LogWindow;
@@ -219,7 +219,7 @@ public class PackifiedClient implements ClientModInitializer {
         MinecraftClient client = MinecraftClient.getInstance();
         if (client.player != null && client.player.clientWorld == null) return;
 
-        int renderDistance = client.options.getViewDistance().getValue() * 2;
+        int renderDistance = client.options.getViewDistance().getValue() * 2 + 2;
         ChunkPos chunkPos = client.player.getChunkPos();
 
         for (int i = 0; i < renderDistance; i++) {
@@ -324,9 +324,6 @@ public class PackifiedClient implements ClientModInitializer {
                 reloadKeyPressed = false;
             }
 
-            if (EditorWindow.openFiles.isEmpty() || EditorWindow.currentFile == null) {
-                return;
-            }
             if (InputUtil.isKeyPressed(windowHandle, GLFW.GLFW_KEY_S)) {
                 if (saveKeyPressed) {
                     return;
@@ -337,7 +334,14 @@ public class PackifiedClient implements ClientModInitializer {
                     FileUtils.saveAllFiles();
                 } else {
                     // Handle Ctrl+S
-                    FileUtils.saveSingleFile(EditorWindow.currentFile.getPath(), EditorWindow.currentFile.getExtension(), FileUtils.getContent(EditorWindow.currentFile), currentPack);
+                    if (ModelEditorWindow.isModelWindowFocused()) {
+                        ModelEditorWindow.saveCurrentModel();
+                    } else {
+                        if (EditorWindow.openFiles.isEmpty() || EditorWindow.currentFile == null) {
+                            return;
+                        }
+                        FileUtils.saveSingleFile(EditorWindow.currentFile.getPath(), EditorWindow.currentFile.getExtension(), FileUtils.getContent(EditorWindow.currentFile), currentPack);
+                    }
                 }
             } else {
                 saveKeyPressed = false;
@@ -349,9 +353,15 @@ public class PackifiedClient implements ClientModInitializer {
                 closeKeyPressed = true;
                 // Handle Ctrl+W
                 if (shiftPressed) {
-                    for (PackFile file : EditorWindow.openFiles) { // Maybe move these into methods in EditorWindow
+                    if (ModelEditorWindow.isModelWindowOpen()) {
+                        ModelEditorWindow.closeCurrentModel();
+                    }
+                    if (EditorWindow.openFiles.isEmpty() || EditorWindow.currentFile == null) {
+                        return;
+                    }
+                    for (PackFile file : EditorWindow.openFiles) {
                         if (file.isModified()) {
-                            ConfirmWindow.open("close all files", "Any unsaved changes might be lost.", () -> {
+                            ConfirmWindow.open("Are you sure you want to close all files", "Any unsaved changes might be lost.", () -> {
                                 EditorWindow.modifiedFiles += EditorWindow.openFiles.size();
                                 EditorWindow.openFiles.clear();
                             });
@@ -361,8 +371,15 @@ public class PackifiedClient implements ClientModInitializer {
                     EditorWindow.modifiedFiles += EditorWindow.openFiles.size();
                     EditorWindow.openFiles.clear();
                 } else {
+                    if (ModelEditorWindow.isModelWindowFocused()) {
+                        ModelEditorWindow.closeCurrentModel();
+                        return;
+                    }
+                    if (EditorWindow.openFiles.isEmpty() || EditorWindow.currentFile == null) {
+                        return;
+                    }
                     if (EditorWindow.currentFile.isModified()) {
-                        ConfirmWindow.open("close this file", "Any unsaved changes might be lost.", () -> {
+                        ConfirmWindow.open("Are you sure you want to close this file", "Any unsaved changes might be lost.", () -> {
                             EditorWindow.modifiedFiles++;
                             EditorWindow.openFiles.remove(EditorWindow.currentFile);
                             EditorWindow.audioPlayer.stop();

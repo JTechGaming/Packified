@@ -21,7 +21,6 @@ import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.minecraft.client.MinecraftClient;
 
-import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -265,9 +264,12 @@ public class FileExplorerWindow {
                 if (ImGui.menuItem("Open")) {
                     FileUtils.openFile(path);
                 }
-                if (FileUtils.getExtension(path).equals(".json")) {
+                if (FileUtils.getExtensionFromPath(path).equals(".json")) {
                     if (ImGui.menuItem("Open in model editor")) {
                         ModelEditorWindow.loadModel(path.toString());
+                        if (!ModelEditorWindow.isModelWindowOpen()) {
+                            ModelEditorWindow.isOpen.set(true);
+                        }
                     }
                 }
             }
@@ -411,21 +413,28 @@ public class FileExplorerWindow {
                     // Open file
                     FileUtils.openFile(path);
                 }
-                if (FileUtils.getExtension(path).equals(".json")) {
+                if (FileUtils.getExtensionFromPath(path).equals(".bbmodel")) {
+                    if (ExternalEditorHelper.findBlockBenchEditor().isPresent()) {
+                        if (ImGui.menuItem("Open in external editor: " + ExternalEditorHelper.findBlockBenchEditor().get().getFileName().toString().replace(".exe", ""))) {
+                            ExternalEditorHelper.openFileWithEditor(ExternalEditorHelper.findBlockBenchEditor().get(), path);
+                        }
+                    }
+                }
+                if (FileUtils.getExtensionFromPath(path).equals(".json")) {
                     if (ExternalEditorHelper.findJSONEditor().isPresent()) {
                         if (ImGui.menuItem("Open in external editor: " + ExternalEditorHelper.findJSONEditor().get().getFileName().toString().replace(".exe", ""))) {
                             ExternalEditorHelper.openFileWithEditor(ExternalEditorHelper.findJSONEditor().get(), path);
                         }
                     }
                 }
-                if (FileUtils.getExtension(path).equals(".png")) {
+                if (FileUtils.getExtensionFromPath(path).equals(".png")) {
                     if (ExternalEditorHelper.findImageEditor().isPresent()) {
                         if (ImGui.menuItem("Open in external editor: " + ExternalEditorHelper.findImageEditor().get().getFileName().toString().replace(".exe", ""))) {
                             ExternalEditorHelper.openFileWithEditor(ExternalEditorHelper.findJSONEditor().get(), path);
                         }
                     }
                 }
-                if (FileUtils.getExtension(path).equals(".ogg")) {
+                if (FileUtils.getExtensionFromPath(path).equals(".ogg")) {
                     if (ExternalEditorHelper.findAudioEditor().isPresent()) {
                         if (ImGui.menuItem("Open in external editor: " + ExternalEditorHelper.findAudioEditor().get().getFileName().toString().replace(".exe", ""))) {
                             ExternalEditorHelper.openFileWithEditor(ExternalEditorHelper.findJSONEditor().get(), path);
@@ -484,7 +493,7 @@ public class FileExplorerWindow {
             ImGui.separator();
             if (ImGui.menuItem("Delete")) {
                 // Delete file
-                ConfirmWindow.open("delete this file", "The file will be lost forever.", () -> {
+                ConfirmWindow.open("Are you sure you want to delete this file", "The file will be lost forever.", () -> {
                     FileUtils.deleteFile(path);
                 });
             }

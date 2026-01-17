@@ -20,9 +20,7 @@ public class LogWindow {
     private static final LinkedList<LogEntry> logEntries = new LinkedList<>();
 
     public static void render() {
-        if (!isOpen.get()) {
-            return; // If the window is not open, do not render
-        }
+        if (!isOpen.get()) return;
 
         ImGui.setNextWindowViewport(ImGui.getMainViewport().getID());
         if (ImGui.begin("Logs", isOpen, ImGuiWindowFlags.MenuBar)) {

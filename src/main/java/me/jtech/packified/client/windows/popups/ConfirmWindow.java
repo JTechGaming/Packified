@@ -13,13 +13,22 @@ public class ConfirmWindow {
     public static ImBoolean open = new ImBoolean(false);
     private static String actionText;
     private static String additionalText;
-    private static ConfirmAction action;
+    private static ConfirmAction confirmAction;
+    private static CancelAction cancelAction;
 
-    public static void open(String actionText, String additionalText, ConfirmAction action) {
+    public static void open(String actionText, String additionalText, ConfirmAction confirmAction) {
         open.set(true);
         ConfirmWindow.actionText = actionText;
         ConfirmWindow.additionalText = additionalText;
-        ConfirmWindow.action = action;
+        ConfirmWindow.confirmAction = confirmAction;
+    }
+
+    public static void open(String actionText, String additionalText, ConfirmAction confirmAction, CancelAction cancelAction) {
+        open.set(true);
+        ConfirmWindow.actionText = actionText;
+        ConfirmWindow.additionalText = additionalText;
+        ConfirmWindow.confirmAction = confirmAction;
+        ConfirmWindow.cancelAction = cancelAction;
     }
 
     public static void render() {
@@ -33,7 +42,7 @@ public class ConfirmWindow {
         ImGui.setNextWindowViewport(ImGui.getMainViewport().getID());
 
         if (ImGui.begin("ConfirmPopup", open)) {
-            ImGuiImplementation.centeredText("Are you sure you want to " + actionText + "?");
+            ImGuiImplementation.centeredText(actionText + "?");
             ImGui.spacing();
             ImGui.spacing();
             ImGuiImplementation.centeredText(additionalText);
@@ -42,12 +51,16 @@ public class ConfirmWindow {
             ImGui.spacing();
             if (ImGui.button("Cancel")) {
                 open.set(false);
+                if (cancelAction != null) {
+                    cancelAction.execute();
+                    cancelAction = null;
+                }
             }
             ImGui.sameLine();
             ImGui.setCursorPosX(ImGui.getCursorPosX() + ImGui.getContentRegionAvailX() - ImGui.calcTextSize("Confirm  ").x);
             if (ImGui.button("Confirm")) {
                 open.set(false);
-                action.execute();
+                confirmAction.execute();
             }
             ImGui.end();
         }
@@ -55,6 +68,11 @@ public class ConfirmWindow {
 
     @FunctionalInterface
     public interface ConfirmAction {
+        void execute();
+    }
+
+    @FunctionalInterface
+    public interface CancelAction {
         void execute();
     }
 }

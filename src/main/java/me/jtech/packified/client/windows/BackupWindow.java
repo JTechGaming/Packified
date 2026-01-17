@@ -40,7 +40,7 @@ public class BackupWindow {
             if (ImGui.beginMenuBar()) {
                 if (ImGui.menuItem("Clear Backups")) {
                     // Delete file
-                    ConfirmWindow.open("delete all backups", "They will be lost forever", FileUtils::clearBackups);
+                    ConfirmWindow.open("Are you sure you want to delete all backups", "They will be lost forever", FileUtils::clearBackups);
                 }
                 ImGui.endMenuBar();
             }
@@ -101,7 +101,7 @@ public class BackupWindow {
                                 ImGui.separator();
                                 if (ImGui.menuItem("Delete All")) {
                                     // Delete file
-                                    ConfirmWindow.open("delete all backups", "They will be lost forever", FileUtils::clearBackups);
+                                    ConfirmWindow.open("Are you sure you want to delete all backups", "They will be lost forever", FileUtils::clearBackups);
                                 }
                                 ImGui.endPopup();
                             }

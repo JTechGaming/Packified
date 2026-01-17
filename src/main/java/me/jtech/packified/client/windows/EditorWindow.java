@@ -54,9 +54,7 @@ public class EditorWindow {
     public static final AudioPlayer audioPlayer = new AudioPlayer();
 
     public static void render() {
-        if (!isOpen.get()) {
-            return; // If the window is not open, do not render
-        }
+        if (!isOpen.get() || ModelEditorWindow.isModelWindowFocused()) return;
 
         // Editor window code
         ImGui.setNextWindowViewport(ImGui.getMainViewport().getID());
@@ -77,14 +75,14 @@ public class EditorWindow {
                                         if (extension.equals(".png")) {
                                             BufferedImage image = ImageIO.read(path.toFile());
                                             openFiles.add(new PackFile(path.getFileName().toString(), image));
-                                        } else if (extension.equals(".json")) {
-                                            String content = Files.readString(path);
-                                            TextEditor editor = new TextEditor();
-                                            editor.setText(content);
-                                            openFiles.add(new PackFile(path.getFileName().toString(), content, ".json", editor));
                                         } else if (extension.equals(".ogg")) {
                                             byte[] bytes = Files.readAllBytes(path);
                                             openFiles.add(new PackFile(path.getFileName().toString(), bytes));
+                                        } else {
+                                            String content = Files.readString(path);
+                                            TextEditor editor = new TextEditor();
+                                            editor.setText(content);
+                                            openFiles.add(new PackFile(path.getFileName().toString(), content, extension, editor));
                                         }
                                     } catch (IOException e) {
                                         LogWindow.addError("Failed to open file: " + path + e);
@@ -157,23 +155,17 @@ public class EditorWindow {
                         }
                         currentFile = openFiles.get(i);
                         switch (openFiles.get(i).getExtension()) {
-                            case ".mcmeta", ".fsh", ".vsh", ".properties", ".txt":
-                                renderTextFileEditor(openFiles.get(i));
-                                break;
                             case ".png":
                                 renderImageFileEditor(openFiles.get(i));
                                 break;
                             case ".ogg":
                                 renderAudioFileEditor(openFiles.get(i));
                                 break;
-                            case ".json":
+                            default:
                                 renderTextFileEditor(openFiles.get(i));
                                 if (!openFiles.get(i).isOpen()) {
                                     openFiles.get(i).setOpen(true);
                                 }
-                                break;
-                            default:
-                                ImGui.text("The " + openFiles.get(i).getExtension() + " file type can not be edited yet.");
                                 break;
                         }
                         ImGui.endTabItem();
@@ -358,14 +350,14 @@ public class EditorWindow {
             // Logic to save the current JSON file
             if (currentFile.isModified()) {
                 switch (currentFile.getExtension()) {
-                    case ".json", ".mcmeta", ".fsh", ".vsh", ".glsl", ".properties", ".txt":
-                        FileUtils.saveSingleFile(currentFile.getPath(), FileUtils.getFileExtension(currentFile.getFileName()), currentFile.getTextEditor().getText(), PackifiedClient.currentPack);
-                        break;
                     case ".png":
                         FileUtils.saveSingleFile(currentFile.getPath(), FileUtils.getFileExtension(currentFile.getFileName()), FileUtils.encodeImageToBase64(currentFile.getImageEditorContent()), PackifiedClient.currentPack);
                         break;
                     case ".ogg":
                         FileUtils.saveSingleFile(currentFile.getPath(), FileUtils.getFileExtension(currentFile.getFileName()), FileUtils.encodeSoundToString(currentFile.getSoundEditorContent()), PackifiedClient.currentPack);
+                        break;
+                    default: // json, txt, etc. basically just all text files
+                        FileUtils.saveSingleFile(currentFile.getPath(), FileUtils.getFileExtension(currentFile.getFileName()), currentFile.getTextEditor().getText(), PackifiedClient.currentPack);
                         break;
                 }
             }
@@ -383,10 +375,28 @@ public class EditorWindow {
         if (ImGui.menuItem("Close", "Ctrl+W")) {
             // Logic to close the current tab
             if (currentFile.isModified()) {
-                ConfirmWindow.open("close this file", "Any unsaved changes might be lost.", () -> {
+                ConfirmWindow.open("Do you want to save this file first", "Otherwise, changes might be lost.", () -> {
+                    switch (currentFile.getExtension()) {
+                        case ".png":
+                            FileUtils.saveSingleFile(currentFile.getPath(), FileUtils.getFileExtension(currentFile.getFileName()), FileUtils.encodeImageToBase64(currentFile.getImageEditorContent()), PackifiedClient.currentPack);
+                            break;
+                        case ".ogg":
+                            FileUtils.saveSingleFile(currentFile.getPath(), FileUtils.getFileExtension(currentFile.getFileName()), FileUtils.encodeSoundToString(currentFile.getSoundEditorContent()), PackifiedClient.currentPack);
+                            break;
+                        default: // json, txt, etc. basically just all text files
+                            FileUtils.saveSingleFile(currentFile.getPath(), FileUtils.getFileExtension(currentFile.getFileName()), currentFile.getTextEditor().getText(), PackifiedClient.currentPack);
+                            break;
+                    }
+
                     modifiedFiles++;
                     openFiles.remove(currentFile);
                     currentFile.setOpen(false);
+                }, () -> {
+                    ConfirmWindow.open("Are you sure you want to close this file", "Any unsaved changes might be lost.", () -> {
+                        modifiedFiles++;
+                        openFiles.remove(currentFile);
+                        currentFile.setOpen(false);
+                    });
                 });
                 return;
             }
@@ -398,7 +408,7 @@ public class EditorWindow {
                 // Logic to close all tabs
                 for (PackFile file : openFiles) {
                     if (file.isModified()) {
-                        ConfirmWindow.open("close all files", "Any unsaved changes might be lost.", () -> {
+                        ConfirmWindow.open("Are you sure you want to close all files", "Any unsaved changes might be lost.", () -> {
                             modifiedFiles += openFiles.size();
                             for (PackFile f : openFiles) {
                                 f.setOpen(false);
@@ -414,7 +424,7 @@ public class EditorWindow {
         }
         if (ImGui.menuItem("Delete")) {
             // Logic to delete the current file
-            ConfirmWindow.open("delete this file", "The file will be lost forever.", () -> {
+            ConfirmWindow.open("Are you sure you want to delete this file", "The file will be lost forever.", () -> {
                 openFiles.remove(currentFile);
                 FileUtils.deleteFile(currentFile.getPath());
             });
@@ -427,7 +437,7 @@ public class EditorWindow {
         // Set syntax highlighting
 
         // Set error markers
-        Map<Integer, String> errorMarkers = checkForErrors(file.getTextEditor().getText());
+        Map<Integer, String> errorMarkers = checkForErrors(file);
         textEditor.setErrorMarkers(errorMarkers);
 
         int[] customPalette = textEditor.getDarkPalette();
@@ -578,20 +588,41 @@ public class EditorWindow {
         return lang;
     }
 
-    protected static Map<Integer, String> checkForErrors(String content) {
+    protected static Map<Integer, String> checkForErrors(PackFile file) {
         Map<Integer, String> errorMarkers = new HashMap<>();
         JsonFactory factory = new JsonFactory();
-        try (JsonParser parser = factory.createParser(content)) {
+        try (JsonParser parser = factory.createParser(file.getTextEditor().getText())) {
             while (parser.nextToken() != null) {
                 // If it reaches here, the current line in the JSON is valid
-                String currentLine = parser.getText();
-
-                //todo detect if line contains a color code, if so, render a color box on the left of the current line number
-
-                JsonLocation location = parser.currentLocation();
-                int lineNumber = location.getLineNr() - 1;
+//                String currentLine = parser.getText();
+//                if (currentLine.contains("vec3") || currentLine.contains("vec4")) {
+//                    System.out.println("Found vec3/vec4 line: " + currentLine);
+//                    // Is probably a color code line
+//                    int lineNumber = parser.currentLocation().getLineNr() - 1;
+//                    int rgbStart = currentLine.indexOf('(');
+//                    int rgbEnd = currentLine.indexOf(')');
+//                    if (rgbStart != -1 && rgbEnd != -1 && rgbEnd > rgbStart) {
+//                        String rgbValues = currentLine.substring(rgbStart + 1, rgbEnd);
+//                        String[] rgbParts = rgbValues.split(",");
+//                        if (rgbParts.length >= 3) {
+//                            try {
+//                                float r = Float.parseFloat(rgbParts[0].trim());
+//                                float g = Float.parseFloat(rgbParts[1].trim());
+//                                float b = Float.parseFloat(rgbParts[2].trim());
+//                                if (r < 0.0 || r > 1.0 || g < 0.0 || g > 1.0 || b < 0.0 || b > 1.0) {
+//                                    errorMarkers.put(lineNumber, "RGB values must be between 0.0 and 1.0");
+//                                }
+//
+//                                drawColorSquare(10, 20 + (lineNumber * 16), 12, r, g, b);
+//                            } catch (NumberFormatException e) {
+//                                errorMarkers.put(lineNumber, "Invalid RGB values");
+//                            }
+//                        }
+//                    }
+//                }
             }
         } catch (JsonParseException e) {
+            if (!file.getExtension().equals(".json")) return new HashMap<>();
             JsonLocation location = e.getLocation();
             int lineNumber = location.getLineNr() - 1;
             String errorMessage = e.getOriginalMessage();
@@ -600,5 +631,10 @@ public class EditorWindow {
             errorMarkers.put(0, "Unknown error reading content");
         }
         return errorMarkers;
+    }
+
+    private static void drawColorSquare(int x, int y, int size, float r, float g, float b) {
+        ImGui.getWindowDrawList().addRectFilled(x, y, x + size, y + size, ImGui.getColorU32(r, g, b, 1.0f));
+        System.out.println("Drawing color square at (" + x + ", " + y + ") with size " + size + " and color RGB(" + r + ", " + g + ", " + b + ")");
     }
 }
