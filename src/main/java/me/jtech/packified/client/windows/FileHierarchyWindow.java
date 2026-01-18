@@ -8,6 +8,7 @@ import me.jtech.packified.client.PackifiedClient;
 import me.jtech.packified.client.config.ModConfig;
 import me.jtech.packified.client.helpers.DisplayScaleHelper;
 import me.jtech.packified.client.helpers.ExternalEditorHelper;
+import me.jtech.packified.client.helpers.PackHelper;
 import me.jtech.packified.client.helpers.TutorialHelper;
 import me.jtech.packified.client.imgui.ImGuiImplementation;
 import me.jtech.packified.client.util.*;
@@ -203,7 +204,7 @@ public class FileHierarchyWindow {
                         selectedFileForCreation = null;
                         System.out.println(filePath);
                         Path newPath = filePath.resolve(fileNameInput.get());
-                        FileUtils.saveSingleFile(newPath, FileUtils.getFileExtension(newPath.toString()), "", PackifiedClient.currentPack);
+                        FileUtils.saveSingleFile(newPath, FileUtils.getFileExtension(newPath.toString()), "", PackHelper.getCurrentPack());
                     }
                 }
 
@@ -343,7 +344,7 @@ public class FileHierarchyWindow {
 
         int buttonSize = DisplayScaleHelper.getUIButtonSize();
 
-        if (PackifiedClient.currentPack != null) {
+        if (PackHelper.isValid()) {
             ImGui.imageButton(inportIcon, buttonSize, buttonSize);
             if (ImGui.isItemClicked()) {
                 // Logic to import a file
@@ -416,10 +417,10 @@ public class FileHierarchyWindow {
     }
 
     public static Path getPackFolderPath() {
-        if (PackifiedClient.currentPack == null) return null;
+        if (PackHelper.isInvalid()) return null;
         return FabricLoader.getInstance().getGameDir()
                 .resolve("resourcepacks")
-                .resolve(PackifiedClient.currentPack.getDisplayName().getString());
+                .resolve(PackHelper.getCurrentPack().getDisplayName().getString());
     }
 
     public static FileHierarchyWindow buildFileHierarchy(Path rootPath) {
@@ -572,7 +573,7 @@ public class FileHierarchyWindow {
                 }
                 if (ImGui.menuItem("Close")) {
                     selectedFile = null;
-                    PackifiedClient.currentPack = null; // Close the current pack
+                    PackHelper.closePack();
                     ModConfig.savePackStatus(null);
                 }
                 if (ImGui.menuItem("Reload")) {
@@ -657,7 +658,7 @@ public class FileHierarchyWindow {
                         String fileName = fileIdentifier.substring(fileIdentifier.lastIndexOf('/') + 1);
                         Path newPath = path.getParent().resolve(fileName);
                         String content = FileUtils.readFile(path);
-                        FileUtils.saveSingleFile(newPath, FileUtils.getFileExtension(fileName), content, PackifiedClient.currentPack);
+                        FileUtils.saveSingleFile(newPath, FileUtils.getFileExtension(fileName), content, PackHelper.getCurrentPack());
                     });
                 }
             }

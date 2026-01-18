@@ -441,6 +441,109 @@ public class ImguiThemes {
         style.setPopupBorderSize(0.f);
     }
 
+    //
+    // Colors derived from intellij idea islands ultra dark (red) theme plugin
+    // https://plugins.jetbrains.com/plugin/29107-island-ultra-dark-red-
+    //
+    public static void setIslandsUltraDarkTheme() {
+        ImGuiStyle style = ImGui.getStyle();
+        float[][] colors = style.getColors();
+
+        // Core surfaces
+        colors[ImGuiCol.WindowBg]   = hex("#0D0D0D");
+        colors[ImGuiCol.ChildBg]    = hex("#0D0D0D");
+        colors[ImGuiCol.PopupBg]    = hex("#121212");
+        colors[ImGuiCol.MenuBarBg]  = hex("#0D0D0D");
+
+        // Borders & separators
+        colors[ImGuiCol.Border]         = hex("#1F1F1F");
+        colors[ImGuiCol.Separator]      = hex("#1F1F1F");
+        colors[ImGuiCol.SeparatorHovered] = hex("#2A2A2A");
+        colors[ImGuiCol.SeparatorActive]  = hex("#5F1A22");
+
+        // Text
+        colors[ImGuiCol.Text]         = hex("#E0E0E0");
+        colors[ImGuiCol.TextDisabled] = hex("#666666");
+
+        // Frames
+        colors[ImGuiCol.FrameBg]        = hex("#141414");
+        colors[ImGuiCol.FrameBgHovered] = hex("#1A1A1A");
+        colors[ImGuiCol.FrameBgActive]  = hex("#1F1F1F");
+
+        // Headers (tree nodes, table headers)
+        colors[ImGuiCol.Header]         = hex("#141414");
+        colors[ImGuiCol.HeaderHovered]  = hex("#1F1F1F");
+        colors[ImGuiCol.HeaderActive]   = hex("#5F1A22");
+
+        // Buttons
+        colors[ImGuiCol.Button]         = hex("#141414");
+        colors[ImGuiCol.ButtonHovered]  = hex("#1F1F1F");
+        colors[ImGuiCol.ButtonActive]   = hex("#5F1A22");
+
+        // Tabs
+        colors[ImGuiCol.Tab]                = hex("#141414");
+        colors[ImGuiCol.TabHovered]         = hex("#1F1F1F");
+        colors[ImGuiCol.TabActive]          = hex("#5F1A22");
+        colors[ImGuiCol.TabUnfocused]       = hex("#0D0D0D");
+        colors[ImGuiCol.TabUnfocusedActive] = hex("#1A1A1A");
+
+        // Title bars
+        colors[ImGuiCol.TitleBg]          = hex("#0D0D0D");
+        colors[ImGuiCol.TitleBgActive]    = hex("#141414");
+        colors[ImGuiCol.TitleBgCollapsed] = hex("#0D0D0D");
+
+        // Scrollbars
+        colors[ImGuiCol.ScrollbarBg]          = hex("#0D0D0D");
+        colors[ImGuiCol.ScrollbarGrab]        = hex("#262626");
+        colors[ImGuiCol.ScrollbarGrabHovered] = hex("#3A3A3A");
+        colors[ImGuiCol.ScrollbarGrabActive]  = hex("#5F1A22");
+
+        // Accent / selection
+        colors[ImGuiCol.CheckMark]         = hex("#8B1E2C");
+        colors[ImGuiCol.SliderGrab]        = hex("#8B1E2C");
+        colors[ImGuiCol.SliderGrabActive]  = hex("#A62F3D");
+        colors[ImGuiCol.ResizeGrip]        = hex("#8B1E2C");
+        colors[ImGuiCol.ResizeGripHovered] = hex("#A62F3D");
+        colors[ImGuiCol.ResizeGripActive]  = hex("#FF5C57");
+
+        // Tables
+        colors[ImGuiCol.TableHeaderBg] = hex("#141414");
+
+        style.setColors(colors);
+
+        // Sharp corners
+        if (flatStyle.get()) {
+            style.setWindowRounding(0f);
+            style.setFrameRounding(0f);
+            style.setGrabRounding(0f);
+            style.setTabRounding(0f);
+        } else {
+            style.setWindowRounding(4f);
+            style.setFrameRounding(4f);
+            style.setGrabRounding(4f);
+            style.setTabRounding(4f);
+        }
+
+        style.setWindowPadding(10, 10);
+        style.setFramePadding(6, 4);
+        style.setItemSpacing(8, 6);
+        style.setScrollbarSize(14f);
+        style.setPopupBorderSize(0f);
+    }
+
+    /** Convert hex color codes to the format imgui expects
+        Only used for newer themes, because the old themes were copied
+        from existing imgui codebases with the imgui color format**/
+    private static float[] hex(String hex) {
+        int c = Integer.parseInt(hex.replace("#", ""), 16);
+        return new float[] {
+                ((c >> 16) & 0xFF) / 255f,
+                ((c >> 8) & 0xFF) / 255f,
+                (c & 0xFF) / 255f,
+                1.0f
+        };
+    }
+
     public static ImInt getCurrentTheme() {
         return currentTheme;
     }
@@ -449,6 +552,7 @@ public class ImguiThemes {
         return new String[]{
                 "Deep Dark",
                 "Deep Dark - Blue Accent",
+                "Islands Ultra Dark (Red)",
                 "Fluent UI",
                 "Modern Dark",
                 "Fluent UI - Light"
@@ -466,12 +570,15 @@ public class ImguiThemes {
                     setDeepDarkBlueAccentTheme();
                     break;
                 case 2:
-                    setFluentUIColors();
+                    setIslandsUltraDarkTheme();
                     break;
                 case 3:
-                    setModernDarkColors();
+                    setFluentUIColors();
                     break;
                 case 4:
+                    setModernDarkColors();
+                    break;
+                case 5:
                     setFluentUILightTheme();
                     break;
                 default:

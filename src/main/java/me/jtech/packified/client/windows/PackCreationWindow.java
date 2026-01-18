@@ -4,11 +4,13 @@ import imgui.ImGui;
 import imgui.ImVec2;
 import imgui.flag.ImGuiCol;
 import imgui.flag.ImGuiCond;
+import imgui.flag.ImGuiTreeNodeFlags;
 import imgui.flag.ImGuiWindowFlags;
 import imgui.type.ImBoolean;
 import imgui.type.ImInt;
 import imgui.type.ImString;
 import me.jtech.packified.client.imgui.ImGuiImplementation;
+import me.jtech.packified.client.util.FileUtils;
 import me.jtech.packified.client.util.PackUtils;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
@@ -16,9 +18,7 @@ import net.minecraft.SharedConstants;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.resource.ResourceType;
 
-import java.util.HashMap;
-import java.util.LinkedHashMap;
-import java.util.Map;
+import java.util.*;
 
 @Environment(EnvType.CLIENT)
 public class PackCreationWindow {
@@ -116,9 +116,12 @@ public class PackCreationWindow {
             ImGui.endCombo();
         }
 
+        renderGenerateFolders();
+
         if (ImGui.button("Create Pack")) {
             if (!packName.get().isEmpty()) {
                 PackUtils.createPack(packName.get(), packDescription.get(), packVersionIndex, packVersionEndIndex);
+                generateSelected(root, "");
                 isOpen.set(false); // Close the window after creation
             } else {
                 System.out.println("Pack name cannot be empty."); //todo replace with popup notification
@@ -126,6 +129,132 @@ public class PackCreationWindow {
         }
 
         ImGui.end();
+    }
+
+    static class FolderNode {
+        String name;
+        ImBoolean generate = new ImBoolean(false);
+        List<FolderNode> children = new ArrayList<>();
+
+        FolderNode(String name) {
+            this.name = name;
+        }
+    }
+
+    static FolderNode root = new FolderNode("All");
+
+    static void buildTree() {
+        String[] paths = {
+                "textures/",
+                "textures/item/",
+                "textures/block/",
+                "textures/models/",
+                "textures/entity/",
+                "textures/colormap/",
+                "textures/misc/",
+                "textures/effect/",
+                "textures/entity/entity_type",
+                "textures/environment/",
+                "textures/gui/",
+                "textures/gui/texture/",
+                "textures/map/",
+                "textures/mob_effect/",
+                "textures/particle/",
+                "textures/painting/",
+                "textures/trims/",
+                "textures/trims/color_palettes/",
+                "textures/trims/entity/",
+                "textures/trims/entity/humanoid/",
+                "textures/trims/entity/humanoid_leggings/",
+                "textures/trims/items/",
+                "models/",
+                "models/item/",
+                "models/block/",
+                "sounds/",
+                "sounds/block",
+                "sounds/records",
+                "lang/",
+                "shaders/",
+                "shaders/programs/",
+                "shaders/core/",
+                "font/",
+                "font/include",
+                "atlases/",
+                "texts/",
+                "items/"
+        };
+
+        for (String path : paths) {
+            insertPath(root, path);
+        }
+    }
+
+    static {
+        buildTree();
+    }
+
+    static void insertPath(FolderNode root, String path) {
+        String[] parts = path.split("/");
+        FolderNode current = root;
+
+        for (String part : parts) {
+            if (part.isEmpty()) continue;
+
+            FolderNode finalCurrent = current;
+            FolderNode child = current.children.stream()
+                    .filter(n -> n.name.equals(part))
+                    .findFirst()
+                    .orElseGet(() -> {
+                        FolderNode n = new FolderNode(part);
+                        finalCurrent.children.add(n);
+                        return n;
+                    });
+
+            current = child;
+        }
+    }
+
+    static void setRecursive(FolderNode node, boolean value) {
+        node.generate.set(value);
+        for (FolderNode child : node.children) {
+            setRecursive(child, value);
+        }
+    }
+
+    static void renderFolderNode(FolderNode node) {
+        ImGui.pushID(node.name);
+
+        boolean changed = ImGui.checkbox("", node.generate);
+        if (changed) {
+            setRecursive(node, node.generate.get());
+        }
+        ImGui.sameLine();
+
+        int flags = node.children.isEmpty() ? ImGuiTreeNodeFlags.Leaf : ImGuiTreeNodeFlags.OpenOnArrow;
+
+        boolean open = ImGui.treeNodeEx(node.name, flags);
+
+        if (open) {
+            for (FolderNode child : node.children) {
+                renderFolderNode(child);
+            }
+            ImGui.treePop();
+        }
+
+        ImGui.popID();
+    }
+
+    static void renderGenerateFolders() {
+        renderFolderNode(root);
+    }
+
+    static void generateSelected(FolderNode node, String path) {
+        if (node.generate.get()) {
+            FileUtils.generateFolderStructure(path);
+        }
+        for (FolderNode child : node.children) {
+            generateSelected(child, path + child.name + "/");
+        }
     }
 
     private static double parseDoubleSafe(String s) {

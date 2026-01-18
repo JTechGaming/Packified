@@ -7,6 +7,7 @@ import imgui.type.ImBoolean;
 import me.jtech.packified.Packified;
 import me.jtech.packified.client.PackifiedClient;
 import me.jtech.packified.client.helpers.DisplayScaleHelper;
+import me.jtech.packified.client.helpers.PackHelper;
 import me.jtech.packified.client.util.PackUtils;
 import me.jtech.packified.client.networking.packets.C2SRequestFullPack;
 import me.jtech.packified.client.util.SafeTextureLoader;
@@ -33,7 +34,7 @@ public class MultiplayerWindow {
             ImGui.imageButton(SafeTextureLoader.loadFromIdentifier(Packified.identifier("textures/ui/neu_sync.png")), DisplayScaleHelper.getUIButtonSize(), DisplayScaleHelper.getUIButtonSize());
             if (ImGui.isItemClicked()) {
                 // Sync the pack to all the server players
-                ResourcePackProfile pack = PackifiedClient.currentPack;
+                ResourcePackProfile pack = PackHelper.getCurrentPack();
                 PackUtils.sendPackChangesToPlayers(pack);
             }
             if (ImGui.isItemHovered()) {
@@ -43,7 +44,7 @@ public class MultiplayerWindow {
             ImGui.imageButton(SafeTextureLoader.loadFromIdentifier(Packified.identifier("textures/ui/neu_upload.png")), DisplayScaleHelper.getUIButtonSize(), DisplayScaleHelper.getUIButtonSize());
             if (ImGui.isItemClicked()) {
                 // Upload the pack to the server
-                ResourcePackProfile pack = PackifiedClient.currentPack;
+                ResourcePackProfile pack = PackHelper.getCurrentPack();
                 PackUtils.sendPackAsServerPack(pack);
             }
             if (ImGui.isItemHovered()) {
@@ -86,10 +87,10 @@ public class MultiplayerWindow {
 
                         ImGui.tableSetColumnIndex(1);
                         if (uuid.equals(MinecraftClient.getInstance().player.getUuid())) {
-                            if (PackifiedClient.currentPack == null) {
+                            if (PackHelper.isInvalid()) {
                                 ImGui.text("Vanilla");
                             } else {
-                                ImGui.text(PackifiedClient.currentPack.getDisplayName().getString());
+                                ImGui.text(PackHelper.getCurrentPack().getDisplayName().getString());
                             }
                         } else {
                             ImGui.text(PackifiedClient.playerPacks.getOrDefault(uuid, "Vanilla"));

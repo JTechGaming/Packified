@@ -4,6 +4,7 @@ import imgui.ImGui;
 import me.jtech.packified.Packified;
 import me.jtech.packified.client.PackifiedClient;
 import me.jtech.packified.client.config.ModConfig;
+import me.jtech.packified.client.helpers.PackHelper;
 import me.jtech.packified.client.util.FileDialog;
 import me.jtech.packified.client.util.FileUtils;
 import me.jtech.packified.client.util.PackUtils;
@@ -38,7 +39,7 @@ public class MenuBar {
                 if (ImGui.beginMenu("New")) {
                     if (ImGui.menuItem("Pack")) {
                         EditorWindow.openFiles.clear();
-                        PackifiedClient.currentPack = null;
+                        PackHelper.closePack();
                         ModConfig.savePackStatus(null);
                         PackCreationWindow.isOpen.set(!PackCreationWindow.isOpen.get());
                     }
@@ -62,7 +63,7 @@ public class MenuBar {
                             }
                         });
                     }
-                    if (PackifiedClient.currentPack != null) {
+                    if (PackHelper.isValid()) {
                         if (ImGui.menuItem("File")) {
                             String defaultFolder = FabricLoader.getInstance().getConfigDir().resolve("packified").toString();
                             FileDialog.openFileDialog(defaultFolder, "Files", "json", "png").thenAccept(pathStr -> {
@@ -77,7 +78,7 @@ public class MenuBar {
                     }
                     ImGui.endMenu();
                 }
-                if (PackifiedClient.currentPack != null) {
+                if (PackHelper.isValid()) {
                     if (ImGui.menuItem("Export")) {
                         PackUtils.exportPack();
                     }
@@ -94,16 +95,7 @@ public class MenuBar {
                     }
                     for (ResourcePackProfile pack : packs) {
                         if (ImGui.menuItem(pack.getDisplayName().getString())) {
-                            EditorWindow.openFiles.clear();
-                            PackifiedClient.currentPack = pack;
-                            ModConfig.savePackStatus(pack);
-                            PackUtils.checkPackType(pack);
-                            ResourcePackManager resourcePackManager = MinecraftClient.getInstance().getResourcePackManager();
-
-                            if (PackifiedClient.currentPack != null) {
-                                resourcePackManager.enable(PackifiedClient.currentPack.getDisplayName().getString());
-                                ClientPlayNetworking.send(new C2SInfoPacket(PackifiedClient.currentPack.getDisplayName().getString(), MinecraftClient.getInstance().player.getUuid()));
-                            }
+                            PackHelper.updateCurrentPack(pack);
                         }
                     }
                     ImGui.endMenu();
@@ -122,16 +114,7 @@ public class MenuBar {
                         if (ImGui.menuItem(pack.getDisplayName().getString())) {
                             ConfirmWindow.open("do that?", "You are about to load a pack from another mod. Before you do this, make sure that '" + pack.getDisplayName().getString() + "' has a license that allows you to look at/modify it's resources. Continue at your own risk.", () -> {
                                 FileUtils.loadIdentifierPackAssets(pack);
-                                EditorWindow.openFiles.clear();
-                                PackUtils.refresh();
-                                PackifiedClient.currentPack = PackUtils.getPack(PackUtils.legalizeName(pack.getDisplayName().getString()));
-                                ModConfig.savePackStatus(PackifiedClient.currentPack);
-                                ResourcePackManager resourcePackManager = MinecraftClient.getInstance().getResourcePackManager();
-
-                                if (PackifiedClient.currentPack != null) {
-                                    resourcePackManager.enable(PackifiedClient.currentPack.getDisplayName().getString());
-                                    ClientPlayNetworking.send(new C2SInfoPacket(PackifiedClient.currentPack.getDisplayName().getString(), MinecraftClient.getInstance().player.getUuid()));
-                                }
+                                PackHelper.updateCurrentPack(PackUtils.getPack(PackUtils.legalizeName(pack.getDisplayName().getString())));
                             });
                         }
                     }
@@ -209,8 +192,8 @@ public class MenuBar {
 
             if (Packified.debugMode) {
                 if (ImGui.beginMenu("Debug")) {
-                    if (ImGui.menuItem("Send pack to self") && PackifiedClient.currentPack != null) {
-                        PackUtils.sendFullPack(PackifiedClient.currentPack, MinecraftClient.getInstance().player.getUuid());
+                    if (ImGui.menuItem("Send pack to self") && PackHelper.isValid()) {
+                        PackUtils.sendFullPack(PackHelper.getCurrentPack(), MinecraftClient.getInstance().player.getUuid());
                     }
                     if (ImGui.isItemHovered()) {
                         ImGui.setTooltip("Please do not use this......");

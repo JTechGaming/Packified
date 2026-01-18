@@ -6,6 +6,7 @@ import imgui.flag.ImGuiCond;
 import imgui.type.ImBoolean;
 import me.jtech.packified.client.PackifiedClient;
 import me.jtech.packified.client.config.ModConfig;
+import me.jtech.packified.client.helpers.PackHelper;
 import me.jtech.packified.client.imgui.ImGuiImplementation;
 import me.jtech.packified.client.util.PackUtils;
 import me.jtech.packified.client.windows.EditorWindow;
@@ -50,14 +51,7 @@ public class PackBrowserWindow {
                 });
 
                 if (ImGui.menuItem(pack.getDisplayName().getString())) {
-                    EditorWindow.openFiles.clear();
-                    if (PackifiedClient.currentPack != null) {
-                        PackUtils.unloadPack(PackifiedClient.currentPack);
-                    }
-                    PackifiedClient.currentPack = pack;
-                    PackUtils.loadPack(pack);
-                    PackUtils.checkPackType(pack);
-                    ModConfig.savePackStatus(pack);
+                    PackHelper.updateCurrentPack(pack);
                     open.set(false);
                     first = true;
                 }

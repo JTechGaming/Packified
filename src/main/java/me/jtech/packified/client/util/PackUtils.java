@@ -1,5 +1,6 @@
 package me.jtech.packified.client.util;
 
+import me.jtech.packified.client.helpers.PackHelper;
 import me.jtech.packified.client.networking.PacketSender;
 import me.jtech.packified.Packified;
 import me.jtech.packified.client.PackifiedClient;
@@ -301,8 +302,8 @@ public class PackUtils {
         resourcePackManager.enable(currentPack.getId());
 
         CompletableFuture.runAsync(PackUtils::reloadPack);
-        if (PackifiedClient.currentPack != null) {
-            ClientPlayNetworking.send(new C2SInfoPacket(PackifiedClient.currentPack.getDisplayName().getString(), MinecraftClient.getInstance().player.getUuid()));
+        if (PackHelper.isValid() && MinecraftClient.getInstance().player != null) {
+            ClientPlayNetworking.send(new C2SInfoPacket(PackHelper.getCurrentPack().getDisplayName().getString(), MinecraftClient.getInstance().player.getUuid()));
         }
     }
 
@@ -343,8 +344,7 @@ public class PackUtils {
         List<ResourcePackProfile> refresh = refresh();
         for (ResourcePackProfile resourcePack : refresh) {
             if (resourcePack.getDisplayName().getString().equalsIgnoreCase(packName)) {
-                PackifiedClient.currentPack = resourcePack;
-                loadPack(resourcePack);
+                PackHelper.updateCurrentPack(resourcePack);
                 return;
             }
         }
@@ -363,7 +363,7 @@ public class PackUtils {
         String defaultFolder = FabricLoader.getInstance().getConfigDir().resolve("packified/exports").toString();
         File folderFile = Path.of(defaultFolder).toFile();
         folderFile.mkdirs();
-        FileDialog.saveFileDialog(defaultFolder, PackifiedClient.currentPack.getDisplayName().getString() + ".zip", "json", "png").thenAccept(pathStr -> {
+        FileDialog.saveFileDialog(defaultFolder, PackHelper.getCurrentPack().getDisplayName().getString() + ".zip", "json", "png").thenAccept(pathStr -> {
             if (pathStr != null) {
                 Path path = Path.of(pathStr);
                 Path folderPath = path.getParent();

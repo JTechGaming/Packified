@@ -11,6 +11,7 @@ import imgui.type.ImString;
 import me.jtech.packified.client.PackifiedClient;
 import me.jtech.packified.client.config.ModConfig;
 import me.jtech.packified.client.helpers.ExternalEditorHelper;
+import me.jtech.packified.client.helpers.PackHelper;
 import me.jtech.packified.client.imgui.ImGuiImplementation;
 import me.jtech.packified.client.util.FileUtils;
 import me.jtech.packified.client.util.PackUtils;
@@ -80,32 +81,40 @@ public class FileExplorerWindow {
             }
             return;
         }
+
+        if (PackHelper.isValid() && !this.currentDirectory.toString().contains(FileUtils.getPackFolderPath().toString())) {
+            currentDirectory = null;
+        }
+
         alreadyRenderedHoverThisFrame = false;
 
         ImGuiImplementation.saveExplorers();
 
-        if (PackifiedClient.currentPack != null) {
-            Path packFolder = PackUtils.getPackFolder(PackifiedClient.currentPack.createResourcePack());
+        if (PackHelper.isValid()) {
+            Path packFolder = PackUtils.getPackFolder(PackHelper.getCurrentPack().createResourcePack());
             // Only initialize/reset when there's no current directory or the pack changed
             if (currentDirectory == null) {
                 currentDirectory = packFolder;
-                lastPack = PackifiedClient.currentPack;
+                lastPack = PackHelper.getCurrentPack();
             }
         }
 
-        if (ImGui.begin("File Explorer " + (i + 1), isOpen) && PackifiedClient.currentPack != null) {
+        if (ImGui.begin("File Explorer " + (i + 1), isOpen) && PackHelper.isValid()) {
             if (ImGui.beginChild("Left Panel##" + i, 220f, 0f, true)) {
                 Path tempPath = currentDirectory;
-                Path root = PackUtils.getPackFolder(PackifiedClient.currentPack.createResourcePack()).getParent();
-                List<Path> ancestors = new ArrayList<>();
-                while (tempPath != null && !tempPath.equals(root)) {
-                    ancestors.add(tempPath);
-                    tempPath = tempPath.getParent();
-                }
-                for (int idx = ancestors.size() - 1; idx >= 0; idx--) {
-                    Path p = ancestors.get(idx);
-                    if (ImGuiImplementation.menuItemWithIcon(ImGuiImplementation.getFileIconTextureId("folder"), p.getFileName().toString(), 16, 16)) {
-                        currentDirectory = p;
+                Path packPath = PackUtils.getPackFolder(PackHelper.getCurrentPack().createResourcePack());
+                if (packPath != null) {
+                    Path root = packPath.getParent();
+                    List<Path> ancestors = new ArrayList<>();
+                    while (tempPath != null && !tempPath.equals(root)) {
+                        ancestors.add(tempPath);
+                        tempPath = tempPath.getParent();
+                    }
+                    for (int idx = ancestors.size() - 1; idx >= 0; idx--) {
+                        Path p = ancestors.get(idx);
+                        if (ImGuiImplementation.menuItemWithIcon(ImGuiImplementation.getFileIconTextureId("folder"), p.getFileName().toString(), 16, 16)) {
+                            currentDirectory = p;
+                        }
                     }
                 }
             }
@@ -195,7 +204,7 @@ public class FileExplorerWindow {
                     }
                 }
             }
-            if (PackifiedClient.currentPack == null) {
+            if (PackHelper.isInvalid()) {
                 ImGuiImplementation.centeredText("No pack loaded.");
             }
             ImGui.endChild();
@@ -387,7 +396,7 @@ public class FileExplorerWindow {
                 }
                 if (ImGui.menuItem("Close")) {
                     selectedFile = null;
-                    PackifiedClient.currentPack = null; // Close the current pack
+                    PackHelper.closePack();
                     ModConfig.savePackStatus(null);
                 }
                 if (ImGui.menuItem("Reload")) {
@@ -479,7 +488,7 @@ public class FileExplorerWindow {
                         String fileName = fileIdentifier.substring(fileIdentifier.lastIndexOf('/') + 1);
                         Path newPath = path.getParent().resolve(fileName);
                         String content = FileUtils.readFile(path);
-                        FileUtils.saveSingleFile(newPath, FileUtils.getFileExtension(fileName), content, PackifiedClient.currentPack);
+                        FileUtils.saveSingleFile(newPath, FileUtils.getFileExtension(fileName), content, PackHelper.getCurrentPack());
                     });
                 }
             }

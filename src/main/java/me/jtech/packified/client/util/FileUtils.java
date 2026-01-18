@@ -4,6 +4,7 @@ import imgui.ImGui;
 import me.jtech.packified.Packified;
 import me.jtech.packified.client.PackifiedClient;
 import me.jtech.packified.client.helpers.CornerNotificationsHelper;
+import me.jtech.packified.client.helpers.PackHelper;
 import me.jtech.packified.client.imgui.ImGuiImplementation;
 import me.jtech.packified.client.windows.*;
 import me.jtech.packified.client.windows.popups.SelectFolderWindow;
@@ -21,6 +22,7 @@ import java.io.*;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
+import java.security.MessageDigest;
 import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.List;
@@ -165,11 +167,11 @@ public class FileUtils {
     }
 
     public static void saveAllFiles() {
-        if (PackifiedClient.currentPack == null) {
+        if (PackHelper.isInvalid()) {
             LogWindow.addError("No resource pack is currently loaded.");
             return;
         }
-        File resourcePackFolder = new File("resourcepacks/" + PackifiedClient.currentPack.getDisplayName().getString());
+        File resourcePackFolder = new File("resourcepacks/" + PackHelper.getCurrentPack().getDisplayName().getString());
         makePackBackup(resourcePackFolder);
         for (PackFile file : EditorWindow.openFiles) {
             saveFile(file.getPath(), file.getExtension(), getContent(file));
@@ -249,10 +251,10 @@ public class FileUtils {
     }
 
     public static Path getPackFolderPath() {
-        if (PackifiedClient.currentPack == null) return null;
+        if (PackHelper.isInvalid()) return null;
         return FabricLoader.getInstance().getGameDir()
                 .resolve("resourcepacks")
-                .resolve(PackifiedClient.currentPack.getDisplayName().getString());
+                .resolve(PackHelper.getCurrentPack().getDisplayName().getString());
     }
 
     public static void saveFolder(Path path) {
@@ -287,15 +289,13 @@ public class FileUtils {
             });
         }
         PackUtils.refresh();
-        PackifiedClient.currentPack = PackUtils.getPack(targetDir.getName().replace(".zip", ""));
-        ResourcePackManager resourcePackManager = MinecraftClient.getInstance().getResourcePackManager();
-        resourcePackManager.enable(PackifiedClient.currentPack.getId());
+        PackHelper.updateCurrentPack(PackUtils.getPack(targetDir.getName().replace(".zip", "")));
     }
 
     public static void zip(File targetDir, String fileName) throws IOException {
         // zips the resource pack
         File zipFile = new File(targetDir, fileName.replace(".zip", "") + ".zip");
-        File folder = new File("resourcepacks/" + PackifiedClient.currentPack.getDisplayName().getString());
+        File folder = new File("resourcepacks/" + PackHelper.getCurrentPack().getDisplayName().getString());
 
         // get everything in the folder and write it to the zip file
         try (FileSystem zipFileSystem = FileSystems.newFileSystem(URI.create("jar:" + zipFile.toURI()), Map.of("create", "true"))) {
@@ -681,16 +681,13 @@ public class FileUtils {
         List<ResourcePackProfile> profiles = PackUtils.refresh();
         for (ResourcePackProfile profile : profiles) {
             if (profile.getDisplayName().getString().equals(packName)) {
-                PackifiedClient.currentPack = profile;
+                PackHelper.updateCurrentPack(profile);
                 break;
             }
         }
-        if (!Objects.equals(PackifiedClient.currentPack.getDisplayName().getString(), packName)) {
+        if (!Objects.equals(PackHelper.getCurrentPack().getDisplayName().getString(), packName)) {
             LogWindow.addWarning("Pack with name '" + packName + "' not found in the list of resource packs.");
         }
-
-        // Reload the resource packs
-        CompletableFuture.runAsync(PackUtils::reloadPack);
     }
 
     public static Path validateIdentifier(String path) {
@@ -916,5 +913,17 @@ public class FileUtils {
         LogWindow.addInfo("Generating folder: " + currentPath);
 
         currentPath.toFile().mkdirs();
+    }
+
+    public static String sha1(Path file) throws Exception {
+        MessageDigest digest = MessageDigest.getInstance("SHA-1");
+        byte[] bytes = Files.readAllBytes(file);
+        byte[] hash = digest.digest(bytes);
+
+        StringBuilder sb = new StringBuilder();
+        for (byte b : hash) {
+            sb.append(String.format("%02x", b));
+        }
+        return sb.toString();
     }
 }

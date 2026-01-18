@@ -19,10 +19,7 @@ import org.jetbrains.annotations.NotNull;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
 import org.lwjgl.glfw.GLFW;
-import org.lwjgl.opengl.GL11;
-import org.lwjgl.opengl.GL15;
-import org.lwjgl.opengl.GL20;
-import org.lwjgl.opengl.GL30;
+import org.lwjgl.opengl.*;
 import org.lwjgl.system.MemoryStack;
 
 import javax.imageio.ImageIO;
@@ -31,9 +28,7 @@ import java.io.*;
 import java.nio.FloatBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 @Environment(EnvType.CLIENT)
 public class ModelEditorWindow {
@@ -44,6 +39,23 @@ public class ModelEditorWindow {
     record DisplayElement(List<Float> rotation, List<Float> translation, List<Float> scale) { }
     record GroupElement(String name, List<Float> origin, int color, List<GroupChild> children) { }
     record BlockModel(String format_version, int[] texture_size, Map<String, String> textures, List<ModelElement> elements, Map<String, DisplayElement> display, List<GroupElement> groups) { }
+    record HistoryChange(List<Float> rotation, List<Float> translation, List<Float> scale) { }
+
+    private static class FaceMesh {
+        int vao, vbo, ebo;
+        int indexCount;
+        int textureId;
+        int elementIndex; // which ModelElement this belongs to
+        Matrix4f modelMatrix = new Matrix4f();
+
+        Matrix4f cachedMvp = new Matrix4f();
+        boolean dirty = true;
+    }
+
+    class BatchedMesh {
+        int vao, vbo, ebo;
+        int indexCount;
+    }
 
     // OpenGL data
     private static int fbo = 0;
@@ -53,7 +65,7 @@ public class ModelEditorWindow {
     private static int shaderProgram = 0;
 
     // camera state
-    private static float camDistance = 5.0f;
+    private static float camDistance = 1.0f;
     private static float camYaw = 0f;
     private static float camPitch = 20f;
     private static final Vector3f target = new Vector3f(0, 0, 0);
@@ -71,7 +83,7 @@ public class ModelEditorWindow {
 
     // grid data
     private static int gridVao = 0;
-    private static int gridShader = 0;
+    private static int colorShader = 0;
     private static int gridVertexCount = 0;
     private static boolean gridInitialized = false;
 
@@ -84,36 +96,43 @@ public class ModelEditorWindow {
 
     // model data
     private static class Cube {
-        float[] vertices; // pos(3) + color(3)
+        float[] vertices; // pos(3) + uv(2)
         int[] indices;
         int vao, vbo, ebo;
+        Map<String, Face> faces;
     }
     private static class Mesh {
-        float[] vertices; // pos(3) + color(3)
+        float[] vertices; // pos(3) + uv(2)
         int[] indices;
     }
     private static boolean modelUploaded = false;
-    private static final List<Cube> cubes = new ArrayList<>();
+    private static final Map<Integer, List<FaceMesh>> batchedFaceMeshes = new HashMap<>();
     private static final Map<String, BufferedImage> loadedTextures = new java.util.HashMap<>();
     private static BlockModel loadedModel;
     private static Path loadedModelPath;
     private static boolean unsavedChanges = false;
 
+    private static int mvpLoc = 0;
+    private static int texLoc = 0;
+    private static int selLoc = 0;
+
     private static final Matrix4f mvp = new Matrix4f();
+
+    private static final Stack<HistoryChange> undoHistory = new Stack<>();
+    private static final Stack<HistoryChange> redoHistory = new Stack<>();
 
     public static void loadModel(String path) {
         try (FileReader reader = new FileReader(path)) {
             Gson gson = new GsonBuilder()
-                    .registerTypeAdapter(GroupChild.class, new GroupChildDeserializer())
+                    .registerTypeAdapter(GroupChild.class, new GroupChildAdapter())
                     .create();
             loadedModel = gson.fromJson(reader, BlockModel.class);
             loadedModelPath = Path.of(path);
+            selectedTexturePath = null;
+            mvpLoc = 0;
             loadTextures();
+            modelUploaded = false;
             CornerNotificationsHelper.addNotification("Model loaded successfully" , "Loaded model with " + loadedModel.elements().size() + " elements.", LogWindow.LogType.SUCCESS.getColor(), 4f);
-            for (GroupElement groupElement : loadedModel.groups()) {
-                System.out.println(groupElement.name);
-                System.out.println(groupElement.children);
-            }
         } catch (Exception e) {
             PackifiedClient.LOGGER.error(e.getMessage());
         }
@@ -134,6 +153,15 @@ public class ModelEditorWindow {
                 ConfirmWindow.open("Missing Texture",
                         "Texture file not found: \n" + fullPath + "\nSome textures may not display correctly.", () -> { } );
             }
+        }
+    }
+
+    private static void ensureShaders() {
+        if (shaderProgram == 0) {
+            shaderProgram = createTextureShader();
+        }
+        if (colorShader == 0) {
+            colorShader = createColorShader();
         }
     }
 
@@ -274,20 +302,20 @@ public class ModelEditorWindow {
         alreadyRenderedHoverThisFrame = false;
 
         if (loadedModel != null) {
-            // Hierarchy with groups
-            j = 0;
             if (loadedModel.groups() != null && !loadedModel.groups().isEmpty()) {
-                for (GroupChild child : loadedModel.groups().getFirst().children()) {
-                    renderGroupChild(child, 0);
+                for (GroupElement rootGroup : loadedModel.groups()) {
+                    renderGroupChild(new GroupChild.Group(rootGroup));
                 }
             } else {
                 for (int i = 0; i < loadedModel.elements().size(); i++) {
+                    ImGui.pushID(i);
                     ModelElement e = loadedModel.elements().get(i);
-                    String label = e.name != null ? e.name() : "cube";
+                    String label = e.name() != null ? e.name() : "cube";
                     if (ImGui.selectable(label, selectedElementIndex == i)) {
                         previouslySelectedElementIndex = selectedElementIndex;
                         selectedElementIndex = i;
                     }
+                    ImGui.popID();
                 }
             }
         } else {
@@ -330,11 +358,11 @@ public class ModelEditorWindow {
                     elements.set(selectedElementIndex, e);
                     loadedModel = new BlockModel(loadedModel.format_version(), loadedModel.texture_size(), loadedModel.textures(), elements, loadedModel.display(), loadedModel.groups());
                 } else {
-                   if (e.rotation().origin() != null) {
-                       e.rotation().origin().set(0, pivot[0]);
-                       e.rotation().origin().set(1, pivot[1]);
-                       e.rotation().origin().set(2, pivot[2]);
-                   }
+                    if (e.rotation().origin() != null) {
+                        e.rotation().origin().set(0, pivot[0]);
+                        e.rotation().origin().set(1, pivot[1]);
+                        e.rotation().origin().set(2, pivot[2]);
+                    }
                 }
             }
             if (ImGui.sliderFloat3("Rotation", rotation, 0.0f, 360.0f)) {
@@ -364,10 +392,13 @@ public class ModelEditorWindow {
             List<ModelElement> elements = new ArrayList<>(loadedModel.elements());
             if (elements.get(selectedElementIndex) != e) { // detect if changed
                 unsavedChanges = true;
+                markDirty(selectedElementIndex);
             }
             elements.set(selectedElementIndex, e);
             loadedModel = new BlockModel(loadedModel.format_version(), loadedModel.texture_size(), loadedModel.textures(), elements, loadedModel.display(), loadedModel.groups());
-            modelUploaded = false; // force re-upload of model to GPU next frame
+            if (!ImGui.isAnyItemActive()) {
+                modelUploaded = false; // force re-upload of model to GPU next frame
+            }
         } else {
             ImGuiImplementation.centeredText("No element selected.");
         }
@@ -398,7 +429,7 @@ public class ModelEditorWindow {
         ImGui.end();
 
         ImGui.begin("UV Editor");
-        if (selectedTexturePath != null) {
+        if (selectedTexturePath != null && loadedModel != null) {
             int textureId = SafeTextureLoader.load(selectedTexturePath);
             int canvasSize = (int) Math.min(ImGui.getContentRegionAvailX(), ImGui.getContentRegionAvailY());
             if (textureId != -1) {
@@ -422,26 +453,33 @@ public class ModelEditorWindow {
         ImGui.end();
     }
 
-    private static void renderGroupChild(GroupChild child, int i) {
-        j++;
-        if (child instanceof GroupChild.Group) {
-            GroupElement group = ((GroupChild.Group) child).group();
-            boolean nodeOpen = ImGui.treeNodeEx(group.name()+"##"+j, ImGuiTreeNodeFlags.SpanFullWidth);
-            if (nodeOpen) {
+    private static void renderGroupChild(GroupChild child) {
+
+        if (child instanceof GroupChild.Group(GroupElement group)) {
+            int flags = ImGuiTreeNodeFlags.SpanFullWidth | ImGuiTreeNodeFlags.OpenOnArrow | ImGuiTreeNodeFlags.OpenOnDoubleClick;
+
+            boolean open = ImGui.treeNodeEx(group.name() + "##" + System.identityHashCode(group), flags);
+
+            if (open) {
                 for (GroupChild subChild : group.children()) {
-                    renderGroupChild(subChild, i + 1);
+                    renderGroupChild(subChild);
                 }
                 ImGui.treePop();
             }
-        } else if (child instanceof GroupChild.Id) {
-            int id = ((GroupChild.Id) child).id();
+        } else if (child instanceof GroupChild.Id(int id)) {
             if (id < 0 || id >= loadedModel.elements().size()) return;
+
             ModelElement e = loadedModel.elements().get(id);
-            String label = e.name != null ? e.name() : "cube##" + id;
-            if (ImGui.selectable(label, selectedElementIndex == loadedModel.elements().indexOf(e))) {
+
+            ImGui.pushID(id);
+            boolean selected = (selectedElementIndex == id);
+            String label = e.name() != null ? e.name() : "cube";
+
+            if (ImGui.selectable(label, selected)) {
                 previouslySelectedElementIndex = selectedElementIndex;
-                selectedElementIndex = loadedModel.elements().indexOf(e);
+                selectedElementIndex = id;
             }
+            ImGui.popID();
         }
     }
 
@@ -512,13 +550,33 @@ public class ModelEditorWindow {
         return rayWorld;
     }
 
+    private static void markDirty(int elementIndex) {
+        for (List<FaceMesh> batch : batchedFaceMeshes.values()) {
+            for (FaceMesh fm : batch) {
+                if (fm.elementIndex == elementIndex) {
+                    fm.dirty = true;
+                    break;
+                }
+            }
+        }
+    }
+
+    private static void markAllDirty() {
+        for (List<FaceMesh> batch : batchedFaceMeshes.values()) {
+            for (FaceMesh fm : batch) {
+                fm.dirty = true;
+            }
+        }
+    }
+
     private static void updateCameraAfterImage() {
         long windowHandle = MinecraftClient.getInstance().getWindow().getHandle();
-        boolean leftDown = ImGui.isItemHovered() && ImGui.isMouseDown(0);
+        boolean rightDown = ImGui.isItemHovered() && ImGui.isMouseDown(1);
+        boolean middleDown = ImGui.isItemHovered() && ImGui.isMouseDown(2);
         boolean shiftDown = ImGui.getIO().getKeyShift();
 
         // Start capture
-        if (leftDown && !capturingMouse) {
+        if (rightDown && !capturingMouse) {
             capturingMouse = true;
             GLFW.glfwSetInputMode(windowHandle, GLFW.GLFW_CURSOR, GLFW.GLFW_CURSOR_DISABLED);
 
@@ -531,12 +589,12 @@ public class ModelEditorWindow {
         }
 
         // Stop capture
-        if (!leftDown && capturingMouse) {
+        if (!rightDown && capturingMouse) {
             capturingMouse = false;
             GLFW.glfwSetInputMode(windowHandle, GLFW.GLFW_CURSOR, GLFW.GLFW_CURSOR_NORMAL);
         }
 
-        if (leftDown) {
+        if (rightDown) {
             double[] xpos = new double[1];
             double[] ypos = new double[1];
             GLFW.glfwGetCursorPos(windowHandle, xpos, ypos);
@@ -549,7 +607,7 @@ public class ModelEditorWindow {
 
             if (shiftDown) {
                 // --- Pan ---
-                float panSpeed = 0.01f * camDistance;
+                float panSpeed = 0.002f * camDistance;
                 Vector3f camPos = getCameraPosition();
                 Vector3f forward = new Vector3f(target).sub(camPos).normalize();
                 Vector3f right = forward.cross(new Vector3f(0, 1, 0), new Vector3f()).normalize();
@@ -563,13 +621,15 @@ public class ModelEditorWindow {
                 camPitch += dy * 0.3f;
                 camPitch = Math.max(-89, Math.min(89, camPitch));
             }
+
+            markAllDirty(); // Update ubo of all faces
         }
 
         // Zoom (wheel handled by ImGui IO)
         float wheel = ImGui.getIO().getMouseWheel();
         if (wheel != 0f && ImGui.isItemHovered()) {
-            camDistance += wheel * -0.5f;
-            camDistance = Math.max(1.0f, Math.min(50.0f, camDistance));
+            camDistance += wheel * -0.1f;
+            camDistance = Math.max(0.0f, Math.min(20.0f, camDistance));
         }
     }
 
@@ -584,16 +644,16 @@ public class ModelEditorWindow {
         // small lines length
         float len = Math.max(0.1f, Math.max(Math.abs(to.x - from.x) * 1.25f, Math.max(Math.abs(to.y - from.y) * 1.25f, Math.abs(to.z - from.z))) * 1.25f);
 
-        // draw three colored lines with your existing color shader: X red, Y green, Z blue
-        // Create a small temporary line VBO or use immediate GL_LINES if acceptable
-        GL20.glUseProgram(shaderProgram);
-        int mvpLoc = GL20.glGetUniformLocation(shaderProgram, "uMVP");
+        // draw three colored lines with existing color shader: X red, Y green, Z blue
+        GL20.glUseProgram(colorShader);
+        if (mvpLoc == 0) {
+            mvpLoc = GL20.glGetUniformLocation(colorShader, "uMVP");
+        }
         try (MemoryStack stack = MemoryStack.stackPush()) {
             FloatBuffer fb = stack.mallocFloat(16);
             ModelEditorWindow.mvp.get(fb);
             GL20.glUniformMatrix4fv(mvpLoc, false, fb);
         }
-        // build simple lines in a float[] and draw them (pos+color) as you do for grid
         float[] lines = {
                 // X axis (red)
                 center.x, center.y, center.z, 1, 0, 0,
@@ -605,7 +665,6 @@ public class ModelEditorWindow {
                 center.x, center.y, center.z, 0, 0, 1,
                 center.x, center.y, center.z + len, 0, 0, 1
         };
-        // upload to a temporary buffer and draw as GL_LINES (copy pattern from setupGrid)
         int tmpVao = GL30.glGenVertexArrays();
         int tmpVbo = GL15.glGenBuffers();
         GL30.glBindVertexArray(tmpVao);
@@ -659,17 +718,19 @@ public class ModelEditorWindow {
     }
 
     private static void renderScene() {
-        shaderProgram = createShader();
+        ensureShaders();
 
         // Use program BEFORE setting uniforms
         GL20.glUseProgram(shaderProgram);
 
-        int loc = GL20.glGetUniformLocation(shaderProgram, "uMVP");
-        if (loc >= 0) {
+        if (mvpLoc == 0) {
+            mvpLoc = GL20.glGetUniformLocation(shaderProgram, "uMVP");
+        }
+        if (mvpLoc >= 0) {
             try (MemoryStack stack = MemoryStack.stackPush()) {
                 FloatBuffer fb = stack.mallocFloat(16);
                 mvp.get(fb);
-                GL20.glUniformMatrix4fv(loc, false, fb);
+                GL20.glUniformMatrix4fv(mvpLoc, false, fb);
             }
         }
 
@@ -683,11 +744,16 @@ public class ModelEditorWindow {
     }
 
     private static void setupGrid() {
+        final float MODEL_UNIT = 1.0f / 16.0f;
+
         final int TILE_SIZE = 16; // each tile is 16x16 units, which is used to make sure the size is uniform so that the center tile can have a 16x16 grid
         final int GRID_TILES = 3; // 3x3
 
         final float HALF_WORLD = (GRID_TILES * TILE_SIZE) / 2.0f; // 24
         final float HALF_TILE = TILE_SIZE / 2.0f;                 // 8
+
+        final float HALF_WORLD_W = HALF_WORLD * MODEL_UNIT;
+        final float HALF_TILE_W  = HALF_TILE  * MODEL_UNIT;
 
         // Line counts
         int outerLinesPerAxis = GRID_TILES + 1; // 4
@@ -702,26 +768,26 @@ public class ModelEditorWindow {
 
         // 3x3 grid
         for (int i = 0; i <= GRID_TILES; i++) {
-            float pos = -HALF_WORLD + i * TILE_SIZE;
+            float pos = (-HALF_WORLD + i * TILE_SIZE) * MODEL_UNIT;
 
             float[] color = new float[]{0.4f, 0.4f, 0.4f};
 
             // Lines parallel to Z
             idx = putLine(verts, idx,
-                    pos, 0, -HALF_WORLD,
-                    pos, 0,  HALF_WORLD,
+                    pos, 0, -HALF_WORLD_W,
+                    pos, 0,  HALF_WORLD_W,
                     color);
 
             // Lines parallel to X
             idx = putLine(verts, idx,
-                    -HALF_WORLD, 0, pos,
-                    HALF_WORLD, 0, pos,
+                    -HALF_WORLD_W, 0, pos,
+                    HALF_WORLD_W, 0, pos,
                     color);
         }
 
         // Center tile, contains a 16x16 grid
         for (int i = 0; i <= TILE_SIZE; i++) {
-            float pos = -HALF_TILE + i;
+            float pos = (-HALF_TILE + i) * MODEL_UNIT;
 
             float[] color = (i == HALF_TILE)
                     ? new float[]{1f, 1f, 1f}   // axes
@@ -729,14 +795,14 @@ public class ModelEditorWindow {
 
             // Lines parallel to Z
             idx = putLine(verts, idx,
-                    pos, 0, -HALF_TILE,
-                    pos, 0,  HALF_TILE,
+                    pos, 0, -HALF_TILE_W,
+                    pos, 0,  HALF_TILE_W,
                     color);
 
             // Lines parallel to X
             idx = putLine(verts, idx,
-                    -HALF_TILE, 0, pos,
-                    HALF_TILE, 0, pos,
+                    -HALF_TILE_W, 0, pos,
+                    HALF_TILE_W, 0, pos,
                     color);
         }
 
@@ -760,7 +826,6 @@ public class ModelEditorWindow {
 
         GL30.glBindVertexArray(0);
 
-        gridShader = createShader();
         gridInitialized = true;
     }
 
@@ -791,13 +856,15 @@ public class ModelEditorWindow {
         if (!gridInitialized) {
             setupGrid();
         }
-        GL20.glUseProgram(gridShader);
+        GL20.glUseProgram(colorShader);
 
-        int loc = GL20.glGetUniformLocation(gridShader, "uMVP");
+        if (mvpLoc == 0) {
+            mvpLoc = GL20.glGetUniformLocation(colorShader, "uMVP");
+        }
         try (MemoryStack stack = MemoryStack.stackPush()) {
             FloatBuffer fb = stack.mallocFloat(16);
             ModelEditorWindow.mvp.get(fb);
-            GL20.glUniformMatrix4fv(loc, false, fb);
+            GL20.glUniformMatrix4fv(mvpLoc, false, fb);
         }
 
         GL30.glBindVertexArray(gridVao);
@@ -807,85 +874,125 @@ public class ModelEditorWindow {
         GL20.glUseProgram(0);
     }
 
-    private static Mesh buildCube(Vector3f from, Vector3f to, Rotation rotation, Map<String, Face> faces) {
+    private static List<FaceMesh> buildFaces(
+            int elementIndex,
+            Vector3f from,
+            Vector3f to,
+            Map<String, Face> faces
+    ) {
+        List<FaceMesh> out = new ArrayList<>();
         float[][] positions = calcPositions(from, to);
 
-        // Per-face colors based on texture (if any)
-        float[][] colors = new float[6][3];
-        String[] faceNames = {"north", "east", "south", "west", "up", "down"};
-        for (int i = 0; i < 6; i++) {
-            Face face = faces.get(faceNames[i]);
-            if (face != null && face.texture() != null) {
-                BufferedImage tex = loadedTextures.get(face.texture().substring(1)); // remove leading #
-                if (tex != null) {
-                    // take color from uv
-                    List<Float> uv = face.uv();
-                    int u = Math.min(tex.getWidth() - 1, Math.max(0, Math.round(uv.get(0))));
-                    int v = Math.min(tex.getHeight() - 1, Math.max(0, Math.round(uv.get(1))));
-                    int rgb = tex.getRGB(u, v);
-                    float r = ((rgb >> 16) & 0xFF) / 255f;
-                    float g = ((rgb >> 8) & 0xFF) / 255f;
-                    float b = (rgb & 0xFF) / 255f;
-                    colors[i] = new float[]{r, g, b};
-                } else {
-                    colors[i] = new float[]{0.8f, 0.8f, 0.8f}; // default gray
-                }
-            } else {
-                colors[i] = new float[]{0.8f, 0.8f, 0.8f}; // default gray
-            }
-        }
+        String[] faceNames = {"north", "south", "east", "west", "up", "down"};
 
-        // Apply rotation if any
-        if (rotation != null) {
-            Vector3f rotOrigin = new Vector3f(rotation.origin.get(0) / 16f - 0.5f,
-                    rotation.origin.get(1) / 16f - 0.5f,
-                    rotation.origin.get(2) / 16f - 0.5f);
-            float angleRad = (float) Math.toRadians(rotation.angle);
-            Vector3f axis = switch (rotation.axis) {
-                case "x" -> new Vector3f(1, 0, 0);
-                case "z" -> new Vector3f(0, 0, 1);
-                default -> new Vector3f(0, 1, 0); // y
+        for (int f = 0; f < 6; f++) {
+            Face face = faces.get(faceNames[f]);
+            if (face == null) continue;
+
+            // Resolve texture
+            String texRef = face.texture();          // "#side"
+            String texKey = texRef.startsWith("#") ? texRef.substring(1) : texRef;
+            String texPath = loadedModel.textures().get(texKey);
+            if (texPath == null) continue;
+
+            int textureId = SafeTextureLoader.load(
+                    FileUtils.getPackFolderPath()
+                            .resolve("assets/minecraft/textures/" + texPath + ".png")
+            );
+
+            // UVs
+            float u1 = 0, v1 = 0, u2 = 1, v2 = 1;
+            if (face.uv() != null && face.uv().size() == 4 && loadedModel.texture_size() != null) {
+                float tw = loadedModel.texture_size()[0];
+                float th = loadedModel.texture_size()[1];
+                u1 = face.uv().get(0) / tw;
+                v1 = 1.0f - (face.uv().get(1) / th);
+                u2 = face.uv().get(2) / tw;
+                v2 = 1.0f - (face.uv().get(3) / th);
+            }
+
+            // Depending on the face direction, the uv might have to be flipped
+            boolean flipU = false;
+            boolean flipV = false;
+            switch (faceNames[f]) {
+                case "south" -> flipU = true;
+                case "west"  -> flipU = true;
+                case "down"  -> flipV = true;
+            }
+            float uu1 = flipU ? u2 : u1;
+            float uu2 = flipU ? u1 : u2;
+            float vv1 = flipV ? v2 : v1;
+            float vv2 = flipV ? v1 : v2;
+
+            float[] verts = {
+                    positions[f*4+0][0], positions[f*4+0][1], positions[f*4+0][2], uu1, vv2,
+                    positions[f*4+1][0], positions[f*4+1][1], positions[f*4+1][2], uu2, vv2,
+                    positions[f*4+2][0], positions[f*4+2][1], positions[f*4+2][2], uu2, vv1,
+                    positions[f*4+3][0], positions[f*4+3][1], positions[f*4+3][2], uu1, vv1,
             };
-            for (int i = 0; i < positions.length; i++) {
-                Vector3f pos = new Vector3f(positions[i][0], positions[i][1], positions[i][2]);
-                pos.sub(rotOrigin).rotateAxis(angleRad, axis.x, axis.y, axis.z).add(rotOrigin);
-                positions[i][0] = pos.x;
-                positions[i][1] = pos.y;
-                positions[i][2] = pos.z;
-            }
+
+            int[] idx = {0, 1, 2, 0, 2, 3};
+
+            FaceMesh fm = new FaceMesh();
+            fm.textureId = textureId;
+            fm.elementIndex = elementIndex;
+            fm.indexCount = 6;
+
+            fm.vao = GL30.glGenVertexArrays();
+            fm.vbo = GL15.glGenBuffers();
+            fm.ebo = GL15.glGenBuffers();
+
+            GL30.glBindVertexArray(fm.vao);
+            GL15.glBindBuffer(GL15.GL_ARRAY_BUFFER, fm.vbo);
+            GL15.glBufferData(GL15.GL_ARRAY_BUFFER, verts, GL15.GL_STATIC_DRAW);
+            GL15.glBindBuffer(GL15.GL_ELEMENT_ARRAY_BUFFER, fm.ebo);
+            GL15.glBufferData(GL15.GL_ELEMENT_ARRAY_BUFFER, idx, GL15.GL_STATIC_DRAW);
+
+            int stride = 5 * Float.BYTES;
+            GL20.glVertexAttribPointer(0, 3, GL11.GL_FLOAT, false, stride, 0);
+            GL20.glEnableVertexAttribArray(0);
+            GL20.glVertexAttribPointer(1, 2, GL11.GL_FLOAT, false, stride, 3 * Float.BYTES);
+            GL20.glEnableVertexAttribArray(1);
+
+            GL30.glBindVertexArray(0);
+
+            out.add(fm);
         }
 
-        float[] verts = new float[24 * 6]; // pos(3) + color(3)
-        int vi = 0;
-        for (int face = 0; face < 6; face++) {
-            for (int v = 0; v < 4; v++) {
-                float[] pos = positions[face * 4 + v];
-                float[] col = colors[face];
-                verts[vi++] = pos[0];
-                verts[vi++] = pos[1];
-                verts[vi++] = pos[2];
-                verts[vi++] = col[0];
-                verts[vi++] = col[1];
-                verts[vi++] = col[2];
-            }
+        return out;
+    }
+
+    private static Matrix4f buildElementTransform(ModelElement e) {
+        Matrix4f m = new Matrix4f().identity();
+
+        if (e.rotation() == null) {
+            return m;
         }
 
-        // 6 faces × 2 triangles × 3 indices = 36
-        int[] idx = new int[36];
-        int ii = 0;
-        for (int face = 0; face < 6; face++) {
-            int base = face * 4;
-            idx[ii++] = base;
-            idx[ii++] = base + 1;
-            idx[ii++] = base + 2;
-            idx[ii++] = base;
-            idx[ii++] = base + 2;
-            idx[ii++] = base + 3;
+        Rotation r = e.rotation();
+        if (r.origin() == null || r.origin().size() != 3) {
+            return m;
         }
 
-        Mesh m = new Mesh();
-        m.vertices = verts;
-        m.indices = idx;
+        float ox = r.origin().get(0) / 16f - 0.5f;
+        float oy = r.origin().get(1) / 16f - 0.5f;
+        float oz = r.origin().get(2) / 16f - 0.5f;
+
+        float angleRad = (float) Math.toRadians(r.angle());
+
+        // Translate to pivot
+        m.translate(ox, oy, oz);
+
+        // Rotate
+        switch (r.axis()) {
+            case "x" -> m.rotateX(angleRad);
+            case "y" -> m.rotateY(angleRad);
+            case "z" -> m.rotateZ(angleRad);
+        }
+
+        // Translate back
+        m.translate(-ox, -oy, -oz);
+
         return m;
     }
 
@@ -915,30 +1022,27 @@ public class ModelEditorWindow {
     }
 
     private static void uploadBlockModel(BlockModel model) {
-        cubes.clear();
-        if (model == null || model.elements() == null || model.elements().isEmpty()) return;
-        for (ModelElement e : model.elements()) {
+        batchedFaceMeshes.clear();
+        if (model == null || model.elements() == null) return;
+
+        for (int i = 0; i < model.elements().size(); i++) {
+            ModelElement e = model.elements().get(i);
             Vector3f from = new Vector3f(e.from().get(0), e.from().get(1), e.from().get(2));
             Vector3f to = new Vector3f(e.to().get(0), e.to().get(1), e.to().get(2));
-            Mesh cube = buildCube(from, to, e.rotation(), e.faces());
-            Cube c = new Cube();
-            c.vertices = cube.vertices;
-            c.indices = cube.indices;
-            c.vao = GL30.glGenVertexArrays();
-            c.vbo = GL15.glGenBuffers();
-            c.ebo = GL15.glGenBuffers();
-            GL30.glBindVertexArray(c.vao);
-            GL15.glBindBuffer(GL15.GL_ARRAY_BUFFER, c.vbo);
-            GL15.glBufferData(GL15.GL_ARRAY_BUFFER, c.vertices, GL15.GL_STATIC_DRAW);
-            GL15.glBindBuffer(GL15.GL_ELEMENT_ARRAY_BUFFER, c.ebo);
-            GL15.glBufferData(GL15.GL_ELEMENT_ARRAY_BUFFER, c.indices, GL15.GL_STATIC_DRAW);
-            int stride = 6 * Float.BYTES;
-            GL20.glVertexAttribPointer(0, 3, GL11.GL_FLOAT, false, stride, 0);
-            GL20.glEnableVertexAttribArray(0);
-            GL20.glVertexAttribPointer(1, 3, GL11.GL_FLOAT, false, stride, 3 * Float.BYTES);
-            GL20.glEnableVertexAttribArray(1);
-            GL30.glBindVertexArray(0);
-            cubes.add(c);
+
+            // Apply element transforms and add to the render queue
+            Matrix4f elementTransform = buildElementTransform(e);
+            List<FaceMesh> faces = buildFaces(i, from, to, e.faces());
+            for (FaceMesh fm : faces) {
+                fm.modelMatrix.set(elementTransform);
+            }
+
+            for (FaceMesh face : faces) {
+                if (!batchedFaceMeshes.containsKey(face.textureId)) {
+                    batchedFaceMeshes.put(face.textureId, new ArrayList<>());
+                }
+                batchedFaceMeshes.get(face.textureId).add(face);
+            }
         }
 
         modelUploaded = true;
@@ -949,43 +1053,45 @@ public class ModelEditorWindow {
             uploadBlockModel(model);
         }
         GL20.glUseProgram(shaderProgram);
-        int loc = GL20.glGetUniformLocation(shaderProgram, "uMVP");
-        if (loc >= 0) {
-            try (MemoryStack stack = MemoryStack.stackPush()) {
-                FloatBuffer fb = stack.mallocFloat(16);
-                ModelEditorWindow.mvp.get(fb);
-                GL20.glUniformMatrix4fv(loc, false, fb);
-            }
-        }
-        for (Cube c : cubes) {
-            // See if the cube is selected
-            boolean isSelected = cubes.indexOf(c) == selectedElementIndex;
-            boolean wasSelected = cubes.indexOf(c) == previouslySelectedElementIndex;
-            if (isSelected) {
-                for (int i = 0; i < c.vertices.length / 6; i++) {
-                    c.vertices[i * 6 + 3] = 1.0f; // R
-                    c.vertices[i * 6 + 4] = 1.0f; // G
-                    c.vertices[i * 6 + 5] = 0.0f; // B
-                }
-                // Re-upload modified vertex data
-                GL15.glBindBuffer(GL15.GL_ARRAY_BUFFER, c.vbo);
-                GL15.glBufferData(GL15.GL_ARRAY_BUFFER, c.vertices, GL15.GL_STATIC_DRAW);
-            }
-//            if (wasSelected) {
-//                for (int i = 0; i < c.vertices.length / 6; i++) {
-//                    c.vertices[i * 6 + 3] -= 0.3f; // R
-//                    c.vertices[i * 6 + 4] -= 0.3f; // G
-//                    c.vertices[i * 6 + 5] -= 0.0f; // B
-//                }
-//                // Re-upload modified vertex data
-//                GL15.glBindBuffer(GL15.GL_ARRAY_BUFFER, c.vbo);
-//                GL15.glBufferData(GL15.GL_ARRAY_BUFFER, c.vertices, GL15.GL_STATIC_DRAW);
-//            }
 
-            GL30.glBindVertexArray(c.vao);
-            GL15.glBindBuffer(GL15.GL_ELEMENT_ARRAY_BUFFER, c.ebo); // If vbo is used for indices, otherwise bind the correct EBO
-            GL11.glDrawElements(GL11.GL_TRIANGLES, c.indices.length, GL11.GL_UNSIGNED_INT, 0);
-            GL30.glBindVertexArray(0);
+        // Uniform locations
+        if (mvpLoc == 0) {
+            mvpLoc = GL20.glGetUniformLocation(shaderProgram, "uMVP");
+        }
+        if (texLoc == 0) {
+            texLoc = GL20.glGetUniformLocation(shaderProgram, "uTexture");
+        }
+        if (selLoc == 0) {
+            selLoc = GL20.glGetUniformLocation(shaderProgram, "uSelected");
+        }
+
+        for (int textureId : batchedFaceMeshes.keySet()) {
+            List<FaceMesh> batch = batchedFaceMeshes.get(textureId);
+            // Bind the texture
+            GL13.glActiveTexture(GL13.GL_TEXTURE0);
+            GL11.glBindTexture(GL11.GL_TEXTURE_2D, textureId);
+            GL20.glUniform1i(texLoc, 0);
+
+            for (FaceMesh fm : batch) {
+                boolean selected = fm.elementIndex == selectedElementIndex;
+
+                // Apply model transform matrix
+                if (fm.dirty) {
+                    fm.cachedMvp.set(mvp).mul(fm.modelMatrix);
+                    fm.dirty = false;
+                }
+                try (MemoryStack stack = MemoryStack.stackPush()) {
+                    FloatBuffer fb = stack.mallocFloat(16);
+                    fm.cachedMvp.get(fb);
+                    GL20.glUniformMatrix4fv(mvpLoc, false, fb);
+                }
+
+                GL20.glUniform1i(selLoc, selected ? 1 : 0); // Upload whether the element this face belongs to is selected
+
+                // Draw the face
+                GL30.glBindVertexArray(fm.vao);
+                GL11.glDrawElements(GL11.GL_TRIANGLES, fm.indexCount, GL11.GL_UNSIGNED_INT, 0);
+            }
         }
         GL20.glUseProgram(0);
     }
@@ -1022,27 +1128,27 @@ public class ModelEditorWindow {
         return (!(tMin > tzMax)) && (!(tzMin > tMax));
     }
 
-    private static int createShader() {
-        String vertexSrc = """
-                    #version 150 core
-                    in vec3 aPos;
-                    in vec3 aColor;
-                    out vec3 vColor;
-                    uniform mat4 uMVP;
-                    void main() {
-                        gl_Position = uMVP * vec4(aPos, 1.0);
-                        vColor = aColor;
-                    }
-                """;
+    private static int createColorShader() {
+        String vertexSrc = """ 
+            #version 150 core
+            in vec3 aPos;
+            in vec3 aColor;
+            out vec3 vColor;
+            uniform mat4 uMVP;
+            void main() {
+                gl_Position = uMVP * vec4(aPos, 1.0);
+                vColor = aColor;
+            }
+         """;
 
         String fragmentSrc = """
-                    #version 150 core
-                    in vec3 vColor;
-                    out vec4 fragColor;
-                    void main() {
-                        fragColor = vec4(vColor, 1.0);
-                    }
-                """;
+            #version 150 core
+            in vec3 vColor;
+            out vec4 fragColor;
+            void main() {
+                fragColor = vec4(vColor, 1.0);
+            }
+         """;
 
         int vertexShader = GL20.glCreateShader(GL20.GL_VERTEX_SHADER);
         GL20.glShaderSource(vertexShader, vertexSrc);
@@ -1051,6 +1157,16 @@ public class ModelEditorWindow {
         int fragmentShader = GL20.glCreateShader(GL20.GL_FRAGMENT_SHADER);
         GL20.glShaderSource(fragmentShader, fragmentSrc);
         GL20.glCompileShader(fragmentShader);
+
+        if (GL20.glGetShaderi(vertexShader, GL20.GL_COMPILE_STATUS) == GL11.GL_FALSE) {
+            throw new RuntimeException("Vertex shader compile error:\n" +
+                    GL20.glGetShaderInfoLog(vertexShader));
+        }
+
+        if (GL20.glGetShaderi(fragmentShader, GL20.GL_COMPILE_STATUS) == GL11.GL_FALSE) {
+            throw new RuntimeException("Fragment shader compile error:\n" +
+                    GL20.glGetShaderInfoLog(fragmentShader));
+        }
 
         int program = GL20.glCreateProgram();
         GL20.glAttachShader(program, vertexShader);
@@ -1065,7 +1181,66 @@ public class ModelEditorWindow {
         return program;
     }
 
-    public static class GroupChildDeserializer implements JsonDeserializer<GroupChild> {
+    private static int createTextureShader() {
+        String vertexSrc = """
+            #version 150 core
+            in vec3 aPos;
+            in vec2 aUV;
+            out vec2 vUV;
+            uniform mat4 uMVP;
+            void main() {
+                gl_Position = uMVP * vec4(aPos, 1.0);
+                vUV = aUV;
+            }
+        """;
+
+        String fragmentSrc = """
+            #version 150 core
+            in vec2 vUV;
+            out vec4 fragColor;
+            uniform sampler2D uTexture;
+            uniform bool uSelected;
+            void main() {
+                vec4 tex = texture(uTexture, vUV);
+                if (uSelected) {
+                    tex.rgb = mix(tex.rgb, vec3(1.0, 1.0, 0.0), 0.4);
+                }
+                fragColor = tex;
+            }
+        """;
+
+        int vertexShader = GL20.glCreateShader(GL20.GL_VERTEX_SHADER);
+        GL20.glShaderSource(vertexShader, vertexSrc);
+        GL20.glCompileShader(vertexShader);
+
+        int fragmentShader = GL20.glCreateShader(GL20.GL_FRAGMENT_SHADER);
+        GL20.glShaderSource(fragmentShader, fragmentSrc);
+        GL20.glCompileShader(fragmentShader);
+
+        if (GL20.glGetShaderi(vertexShader, GL20.GL_COMPILE_STATUS) == GL11.GL_FALSE) {
+            throw new RuntimeException("Vertex shader compile error:\n" +
+                    GL20.glGetShaderInfoLog(vertexShader));
+        }
+
+        if (GL20.glGetShaderi(fragmentShader, GL20.GL_COMPILE_STATUS) == GL11.GL_FALSE) {
+            throw new RuntimeException("Fragment shader compile error:\n" +
+                    GL20.glGetShaderInfoLog(fragmentShader));
+        }
+
+        int program = GL20.glCreateProgram();
+        GL20.glAttachShader(program, vertexShader);
+        GL20.glAttachShader(program, fragmentShader);
+        GL20.glBindAttribLocation(program, 0, "aPos");
+        GL20.glBindAttribLocation(program, 1, "aUV");
+        GL20.glLinkProgram(program);
+
+        GL20.glDeleteShader(vertexShader);
+        GL20.glDeleteShader(fragmentShader);
+
+        return program;
+    }
+
+    public static class GroupChildAdapter implements JsonDeserializer<GroupChild>, JsonSerializer<GroupChild> {
         @Override
         public GroupChild deserialize(JsonElement json, java.lang.reflect.Type typeOfT, JsonDeserializationContext context) throws JsonParseException {
             if (json.isJsonPrimitive() && json.getAsJsonPrimitive().isNumber()) {
@@ -1075,6 +1250,16 @@ public class ModelEditorWindow {
                 return new GroupChild.Group(group);
             }
             throw new JsonParseException("Unknown child type: " + json);
+        }
+
+        @Override
+        public JsonElement serialize(GroupChild src, java.lang.reflect.Type typeOfSrc, JsonSerializationContext context) {
+            if (src instanceof GroupChild.Id(int id)) {
+                return new JsonPrimitive(id);
+            } else if (src instanceof GroupChild.Group(GroupElement group1)) {
+                return context.serialize(group1);
+            }
+            throw new JsonParseException("Unknown GroupChild subtype: " + src);
         }
     }
 
@@ -1097,7 +1282,7 @@ public class ModelEditorWindow {
 
         try (Writer writer = Files.newBufferedWriter(loadedModelPath)) {
             Gson gson = new GsonBuilder()
-                    .registerTypeAdapter(GroupChild.class, new GroupChildDeserializer())
+                    .registerTypeAdapter(GroupChild.class, new GroupChildAdapter())
                     .create();
             gson.toJson(loadedModel, writer);
 

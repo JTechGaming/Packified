@@ -7,6 +7,7 @@ import imgui.flag.ImGuiSelectableFlags;
 import imgui.flag.ImGuiWindowFlags;
 import imgui.type.ImBoolean;
 import me.jtech.packified.client.PackifiedClient;
+import me.jtech.packified.client.helpers.PackHelper;
 import me.jtech.packified.client.imgui.ImGuiImplementation;
 import me.jtech.packified.client.util.FileUtils;
 import me.jtech.packified.client.util.PackUtils;
@@ -45,7 +46,7 @@ public class BackupWindow {
                 ImGui.endMenuBar();
             }
 
-            ResourcePackProfile pack = PackifiedClient.currentPack;
+            ResourcePackProfile pack = PackHelper.getCurrentPack();
             if (pack == null) {
                 ImGui.setCursorPos((ImGui.getWindowWidth() - ImGui.calcTextSize("No pack loaded").x) / 2, (ImGui.getWindowHeight() - ImGui.getTextLineHeightWithSpacing()) / 2);
                 ImGui.text("No pack loaded");

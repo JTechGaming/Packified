@@ -4,8 +4,12 @@ import com.mojang.blaze3d.pipeline.RenderPipeline;
 import com.mojang.blaze3d.platform.DepthTestFunction;
 import com.mojang.blaze3d.vertex.VertexFormat;
 import imgui.ImGui;
+import imgui.ImGuiIO;
+import imgui.ImVec2;
+import imgui.flag.ImGuiConfigFlags;
 import me.jtech.packified.client.config.ModConfig;
 import me.jtech.packified.client.helpers.NotificationHelper;
+import me.jtech.packified.client.helpers.PackHelper;
 import me.jtech.packified.client.helpers.TutorialHelper;
 import me.jtech.packified.client.networking.PacketSender;
 import me.jtech.packified.Packified;
@@ -57,8 +61,6 @@ public class PackifiedClient implements ClientModInitializer {
 
     public static boolean shouldRender = false;
     private static KeyBinding keyBinding;
-
-    public static ResourcePackProfile currentPack;
 
     public static List<UUID> markedPlayers = new ArrayList<>();
     public static Map<UUID, String> playerPacks = new HashMap<>();
@@ -147,7 +149,7 @@ public class PackifiedClient implements ClientModInitializer {
                 ClientPlayNetworking.send(new C2SRequestFullPack(payload.packetData().packName(), payload.player()));
                 return;
             }
-            currentPack = pack;
+            PackHelper.updateCurrentPack(pack);
 
             SyncPacketData data = payload.packetData();
             accumulativeAssetDownload(data, pack, notification.get());
@@ -170,17 +172,17 @@ public class PackifiedClient implements ClientModInitializer {
 
                 LogWindow.addPackDownloadInfo("Downloading pack from server: " + payload.packetData().packName());
                 LogWindow.addPackDownloadInfo(notification.get().getProgress() + " / " + notification.get().getMaxProgress());
-                accumulativeAssetDownload(data, currentPack, notification.get());
+                accumulativeAssetDownload(data, PackHelper.getCurrentPack(), notification.get());
             });
         });
 
         ClientPlayNetworking.registerGlobalReceiver(S2CRequestFullPack.ID, (payload, context) -> {
             String packName = payload.packName();
             if (packName.equals("!!currentpack!!")) {
-                if (currentPack == null) {
+                if (PackHelper.isInvalid()) {
                     return;
                 }
-                packName = currentPack.getDisplayName().getString();
+                packName = PackHelper.getCurrentPack().getDisplayName().getString();
             }
             ResourcePackProfile pack = PackUtils.getPack(packName);
             if (pack == null) {
@@ -207,8 +209,8 @@ public class PackifiedClient implements ClientModInitializer {
 
         ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> {
             ClientPlayNetworking.send(new C2SHasMod(version));
-            if (PackifiedClient.currentPack != null) {
-                ClientPlayNetworking.send(new C2SInfoPacket(currentPack.getDisplayName().getString(), MinecraftClient.getInstance().player.getUuid()));
+            if (PackHelper.isValid()) {
+                ClientPlayNetworking.send(new C2SInfoPacket(PackHelper.getCurrentPack().getDisplayName().getString(), MinecraftClient.getInstance().player.getUuid()));
             }
         });
 
@@ -310,7 +312,7 @@ public class PackifiedClient implements ClientModInitializer {
                 enterGameKeyPressed = false;
             }
 
-            if (currentPack == null) {
+            if (PackHelper.isInvalid()) {
                 return;
             }
 
@@ -340,7 +342,7 @@ public class PackifiedClient implements ClientModInitializer {
                         if (EditorWindow.openFiles.isEmpty() || EditorWindow.currentFile == null) {
                             return;
                         }
-                        FileUtils.saveSingleFile(EditorWindow.currentFile.getPath(), EditorWindow.currentFile.getExtension(), FileUtils.getContent(EditorWindow.currentFile), currentPack);
+                        FileUtils.saveSingleFile(EditorWindow.currentFile.getPath(), EditorWindow.currentFile.getExtension(), FileUtils.getContent(EditorWindow.currentFile), PackHelper.getCurrentPack());
                     }
                 }
             } else {

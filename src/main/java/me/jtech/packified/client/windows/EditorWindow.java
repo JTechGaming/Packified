@@ -11,6 +11,7 @@ import imgui.extension.texteditor.flag.TextEditorPaletteIndex;
 import imgui.flag.*;
 import imgui.type.ImBoolean;
 import me.jtech.packified.client.PackifiedClient;
+import me.jtech.packified.client.helpers.PackHelper;
 import me.jtech.packified.client.imgui.ImGuiImplementation;
 import me.jtech.packified.client.util.*;
 import me.jtech.packified.client.windows.popups.ConfirmWindow;
@@ -113,7 +114,7 @@ public class EditorWindow {
             if (ImGui.isItemClicked()) {
                 // Logic to save the current file
                 if (currentFile != null) {
-                    FileUtils.saveSingleFile(currentFile.getPath(), FileUtils.getFileExtension(currentFile.getFileName()), currentFile.getTextEditor().getText(), PackifiedClient.currentPack);
+                    FileUtils.saveSingleFile(currentFile.getPath(), FileUtils.getFileExtension(currentFile.getFileName()), currentFile.getTextEditor().getText(), PackHelper.getCurrentPack());
                 }
             }
             if (ImGui.isItemHovered()) {
@@ -351,13 +352,13 @@ public class EditorWindow {
             if (currentFile.isModified()) {
                 switch (currentFile.getExtension()) {
                     case ".png":
-                        FileUtils.saveSingleFile(currentFile.getPath(), FileUtils.getFileExtension(currentFile.getFileName()), FileUtils.encodeImageToBase64(currentFile.getImageEditorContent()), PackifiedClient.currentPack);
+                        FileUtils.saveSingleFile(currentFile.getPath(), FileUtils.getFileExtension(currentFile.getFileName()), FileUtils.encodeImageToBase64(currentFile.getImageEditorContent()), PackHelper.getCurrentPack());
                         break;
                     case ".ogg":
-                        FileUtils.saveSingleFile(currentFile.getPath(), FileUtils.getFileExtension(currentFile.getFileName()), FileUtils.encodeSoundToString(currentFile.getSoundEditorContent()), PackifiedClient.currentPack);
+                        FileUtils.saveSingleFile(currentFile.getPath(), FileUtils.getFileExtension(currentFile.getFileName()), FileUtils.encodeSoundToString(currentFile.getSoundEditorContent()), PackHelper.getCurrentPack());
                         break;
                     default: // json, txt, etc. basically just all text files
-                        FileUtils.saveSingleFile(currentFile.getPath(), FileUtils.getFileExtension(currentFile.getFileName()), currentFile.getTextEditor().getText(), PackifiedClient.currentPack);
+                        FileUtils.saveSingleFile(currentFile.getPath(), FileUtils.getFileExtension(currentFile.getFileName()), currentFile.getTextEditor().getText(), PackHelper.getCurrentPack());
                         break;
                 }
             }
@@ -378,13 +379,13 @@ public class EditorWindow {
                 ConfirmWindow.open("Do you want to save this file first", "Otherwise, changes might be lost.", () -> {
                     switch (currentFile.getExtension()) {
                         case ".png":
-                            FileUtils.saveSingleFile(currentFile.getPath(), FileUtils.getFileExtension(currentFile.getFileName()), FileUtils.encodeImageToBase64(currentFile.getImageEditorContent()), PackifiedClient.currentPack);
+                            FileUtils.saveSingleFile(currentFile.getPath(), FileUtils.getFileExtension(currentFile.getFileName()), FileUtils.encodeImageToBase64(currentFile.getImageEditorContent()), PackHelper.getCurrentPack());
                             break;
                         case ".ogg":
-                            FileUtils.saveSingleFile(currentFile.getPath(), FileUtils.getFileExtension(currentFile.getFileName()), FileUtils.encodeSoundToString(currentFile.getSoundEditorContent()), PackifiedClient.currentPack);
+                            FileUtils.saveSingleFile(currentFile.getPath(), FileUtils.getFileExtension(currentFile.getFileName()), FileUtils.encodeSoundToString(currentFile.getSoundEditorContent()), PackHelper.getCurrentPack());
                             break;
                         default: // json, txt, etc. basically just all text files
-                            FileUtils.saveSingleFile(currentFile.getPath(), FileUtils.getFileExtension(currentFile.getFileName()), currentFile.getTextEditor().getText(), PackifiedClient.currentPack);
+                            FileUtils.saveSingleFile(currentFile.getPath(), FileUtils.getFileExtension(currentFile.getFileName()), currentFile.getTextEditor().getText(), PackHelper.getCurrentPack());
                             break;
                     }
 

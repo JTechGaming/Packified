@@ -9,6 +9,7 @@ import imgui.flag.ImGuiCond;
 import imgui.flag.ImGuiWindowFlags;
 import imgui.type.ImBoolean;
 import me.jtech.packified.client.PackifiedClient;
+import me.jtech.packified.client.helpers.PackHelper;
 import me.jtech.packified.client.imgui.ImGuiImplementation;
 import me.jtech.packified.client.util.PackFile;
 import me.jtech.packified.client.util.PackUtils;
@@ -101,9 +102,9 @@ public class AssetInspectorWindow {
                     ImGui.setCursorPos((ImGui.getContentRegionAvailX() - ImGui.calcTextSize("No file loaded").x) / 2, (ImGui.getContentRegionAvailY() - ImGui.getTextLineHeightWithSpacing()) / 2);
                     ImGui.text("No file loaded");
                     ImGui.setCursorPos((ImGui.getContentRegionAvailX() - ImGui.calcTextSize("Load File ").x) / 2, ImGui.getCursorPosY() + ImGui.getTextLineHeightWithSpacing()-20);
-                    if (ImGui.button(PackifiedClient.currentPack == null ? "Open Pack" : "Create File")) {
-                        if (PackifiedClient.currentPack != null) {
-
+                    if (ImGui.button(PackHelper.isInvalid() ? "Open Pack" : "Create File")) {
+                        if (PackHelper.isValid()) {
+                            // I forgot what i wanted to do here lol
                         } else {
                             PackBrowserWindow.open.set(true);
                         }

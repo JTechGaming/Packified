@@ -21,6 +21,8 @@ import me.jtech.packified.client.PackifiedClient;
 import me.jtech.packified.client.config.ModConfig;
 import me.jtech.packified.client.helpers.CornerNotificationsHelper;
 import me.jtech.packified.client.helpers.NotificationHelper;
+import me.jtech.packified.client.helpers.PackHelper;
+import me.jtech.packified.client.util.FileUtils;
 import me.jtech.packified.client.util.PackUtils;
 import me.jtech.packified.client.util.SafeTextureLoader;
 import me.jtech.packified.client.windows.elements.MenuBar;
@@ -347,6 +349,8 @@ public class ImGuiImplementation {
             if (ImGui.isWindowHovered() && ImGui.isMouseClicked(GLFW.GLFW_MOUSE_BUTTON_RIGHT) || enterGameKeyToggled) {
                 MinecraftClient client = MinecraftClient.getInstance();
                 GLFW.glfwSetInputMode(client.getWindow().getHandle(), GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+                ImGuiIO io = ImGui.getIO();
+                io.addConfigFlags(ImGuiConfigFlags.NoMouse);
                 grabbed = true;
                 client.mouse.lockCursor();
             }
@@ -356,10 +360,14 @@ public class ImGuiImplementation {
                     grabbed = false;
                     client.mouse.unlockCursor();
                     GLFW.glfwSetInputMode(client.getWindow().getHandle(), GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+                    ImGuiIO io = ImGui.getIO();
+                    io.removeConfigFlags(ImGuiConfigFlags.NoMouse);
                 }
             } else {
                 if (MinecraftClient.getInstance().currentScreen != null) {
                     GLFW.glfwSetInputMode(client.getWindow().getHandle(), GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+//                    ImGuiIO io = ImGui.getIO();
+//                    io.removeConfigFlags(ImGuiConfigFlags.NoMouse);
                 } else {
                     GLFW.glfwSetInputMode(client.getWindow().getHandle(), GLFW_CURSOR, GLFW_CURSOR_DISABLED);
                 }
@@ -405,9 +413,7 @@ public class ImGuiImplementation {
             if (lastPackName != null && !lastPackName.isBlank()) {
                 ResourcePackProfile pack = PackUtils.getPack(lastPackName);
                 if (pack != null) {
-                    PackifiedClient.currentPack = pack;
-                    PackUtils.loadPack(pack);
-                    PackUtils.checkPackType(pack);
+                    PackHelper.updateCurrentPack(pack);
                 }
             }
         }

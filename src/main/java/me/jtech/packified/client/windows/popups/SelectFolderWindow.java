@@ -3,6 +3,7 @@ package me.jtech.packified.client.windows.popups;
 import imgui.ImGui;
 import imgui.type.ImBoolean;
 import me.jtech.packified.client.PackifiedClient;
+import me.jtech.packified.client.helpers.PackHelper;
 import me.jtech.packified.client.util.FileUtils;
 import me.jtech.packified.client.windows.LogWindow;
 import me.jtech.packified.client.windows.FileExplorerWindow;
@@ -83,7 +84,7 @@ public class SelectFolderWindow {
                         }
                     }
                 } else {
-                    boolean success = FileUtils.saveSingleFile(targetPath, extension, content, PackifiedClient.currentPack);
+                    boolean success = FileUtils.saveSingleFile(targetPath, extension, content, PackHelper.getCurrentPack());
                     if (success) {
                         LogWindow.addInfo("File saved successfully.");
                     } else {
@@ -97,10 +98,10 @@ public class SelectFolderWindow {
     }
 
     private static Path getPackFolderPath() {
-        if (PackifiedClient.currentPack == null) return null;
+        if (PackHelper.isInvalid()) return null;
         return FabricLoader.getInstance().getGameDir()
                 .resolve("resourcepacks")
-                .resolve(PackifiedClient.currentPack.getDisplayName().getString());
+                .resolve(PackHelper.getCurrentPack().getDisplayName().getString());
     }
 
     private static List<Path> getSubFolders(Path root) {
