@@ -599,6 +599,13 @@ public class FileHierarchyWindow {
                     // Open file
                     FileUtils.openFile(path);
                 }
+                if (FileUtils.getExtensionFromPath(path).equals(".bbmodel")) {
+                    if (ExternalEditorHelper.findBlockBenchEditor().isPresent()) {
+                        if (ImGui.menuItem("Open in external editor: " + ExternalEditorHelper.findBlockBenchEditor().get().getFileName().toString().replace(".exe", ""))) {
+                            ExternalEditorHelper.openFileWithEditor(ExternalEditorHelper.findBlockBenchEditor().get(), path);
+                        }
+                    }
+                }
                 if (FileUtils.getExtensionFromPath(path).equals(".json")) {
                     if (ExternalEditorHelper.findJSONEditor().isPresent()) {
                         if (ImGui.menuItem("Open in external editor: " + ExternalEditorHelper.findJSONEditor().get().getFileName().toString().replace(".exe", ""))) {
@@ -609,14 +616,14 @@ public class FileHierarchyWindow {
                 if (FileUtils.getExtensionFromPath(path).equals(".png")) {
                     if (ExternalEditorHelper.findImageEditor().isPresent()) {
                         if (ImGui.menuItem("Open in external editor: " + ExternalEditorHelper.findImageEditor().get().getFileName().toString().replace(".exe", ""))) {
-                            ExternalEditorHelper.openFileWithEditor(ExternalEditorHelper.findJSONEditor().get(), path);
+                            ExternalEditorHelper.openFileWithEditor(ExternalEditorHelper.findImageEditor().get(), path);
                         }
                     }
                 }
                 if (FileUtils.getExtensionFromPath(path).equals(".ogg")) {
                     if (ExternalEditorHelper.findAudioEditor().isPresent()) {
                         if (ImGui.menuItem("Open in external editor: " + ExternalEditorHelper.findAudioEditor().get().getFileName().toString().replace(".exe", ""))) {
-                            ExternalEditorHelper.openFileWithEditor(ExternalEditorHelper.findJSONEditor().get(), path);
+                            ExternalEditorHelper.openFileWithEditor(ExternalEditorHelper.findAudioEditor().get(), path);
                         }
                     }
                 }

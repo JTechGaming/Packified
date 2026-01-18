@@ -8,6 +8,7 @@ import imgui.flag.*;
 import imgui.type.ImBoolean;
 import me.jtech.packified.client.PackifiedClient;
 import me.jtech.packified.client.helpers.CornerNotificationsHelper;
+import me.jtech.packified.client.helpers.ExternalEditorHelper;
 import me.jtech.packified.client.imgui.ImGuiImplementation;
 import me.jtech.packified.client.util.FileUtils;
 import me.jtech.packified.client.util.SafeTextureLoader;
@@ -41,18 +42,7 @@ public class ModelEditorWindow {
     record BlockModel(String format_version, int[] texture_size, Map<String, String> textures, List<ModelElement> elements, Map<String, DisplayElement> display, List<GroupElement> groups) { }
     record HistoryChange(List<Float> rotation, List<Float> translation, List<Float> scale) { }
 
-    private static class FaceMesh {
-        int vao, vbo, ebo;
-        int indexCount;
-        int textureId;
-        int elementIndex; // which ModelElement this belongs to
-        Matrix4f modelMatrix = new Matrix4f();
-
-        Matrix4f cachedMvp = new Matrix4f();
-        boolean dirty = true;
-    }
-
-    class BatchedMesh {
+    static class BatchedMesh {
         int vao, vbo, ebo;
         int indexCount;
     }
@@ -95,31 +85,38 @@ public class ModelEditorWindow {
     private static boolean closeNextFrame = false;
 
     // model data
-    private static class Cube {
-        float[] vertices; // pos(3) + uv(2)
-        int[] indices;
-        int vao, vbo, ebo;
-        Map<String, Face> faces;
-    }
-    private static class Mesh {
-        float[] vertices; // pos(3) + uv(2)
-        int[] indices;
-    }
     private static boolean modelUploaded = false;
-    private static final Map<Integer, List<FaceMesh>> batchedFaceMeshes = new HashMap<>();
+    private static final Map<Integer, BatchedMesh> batchedMeshes = new HashMap<>();
     private static final Map<String, BufferedImage> loadedTextures = new java.util.HashMap<>();
     private static BlockModel loadedModel;
     private static Path loadedModelPath;
     private static boolean unsavedChanges = false;
 
-    private static int mvpLoc = 0;
-    private static int texLoc = 0;
-    private static int selLoc = 0;
+    private static int modelMvpLoc = -1;
+    private static int modelSelLoc = -1;
+
+    private static int gridMvpLoc = -1;
 
     private static final Matrix4f mvp = new Matrix4f();
 
     private static final Stack<HistoryChange> undoHistory = new Stack<>();
     private static final Stack<HistoryChange> redoHistory = new Stack<>();
+
+    private static final int[][] FACE_UV_ORDER = {
+            {0, 1, 2, 3}, // north
+            {1, 0, 3, 2}, // south
+            {1, 0, 3, 2}, // east
+            {0, 1, 2, 3}, // west
+            {0, 1, 2, 3}, // up
+            {1, 0, 3, 2}  // down
+    };
+
+    private static final float[][] UV_CORNERS = {
+            {0, 1}, // bottom-left
+            {1, 1}, // bottom-right
+            {1, 0}, // top-right
+            {0, 0}  // top-left
+    };
 
     public static void loadModel(String path) {
         try (FileReader reader = new FileReader(path)) {
@@ -129,7 +126,7 @@ public class ModelEditorWindow {
             loadedModel = gson.fromJson(reader, BlockModel.class);
             loadedModelPath = Path.of(path);
             selectedTexturePath = null;
-            mvpLoc = 0;
+            modelMvpLoc = 0;
             loadTextures();
             modelUploaded = false;
             CornerNotificationsHelper.addNotification("Model loaded successfully" , "Loaded model with " + loadedModel.elements().size() + " elements.", LogWindow.LogType.SUCCESS.getColor(), 4f);
@@ -268,7 +265,7 @@ public class ModelEditorWindow {
                         ModelElement e = loadedModel.elements().get(i);
                         Vector3f min = new Vector3f(e.from().get(0) / 16f - 0.5f, e.from().get(1) / 16f - 0.5f, e.from().get(2) / 16f - 0.5f);
                         Vector3f max = new Vector3f(e.to().get(0) / 16f - 0.5f, e.to().get(1) / 16f - 0.5f, e.to().get(2) / 16f - 0.5f);
-                        boolean intersects = rayIntersectsAABB(rayOrigin, rayDir, min, max);
+                        boolean intersects = rayIntersectsElement(rayOrigin, rayDir, e);
                         if (intersects) {
                             float dist = new Vector3f(min).add(max).mul(0.5f).distance(rayOrigin);
                             if (dist < bestDist) {
@@ -293,8 +290,6 @@ public class ModelEditorWindow {
 
         ImGui.end();
     }
-
-    private static int j = 0;
 
     private static void renderSideBars() {
         ImGui.begin("Model Elements");
@@ -338,6 +333,8 @@ public class ModelEditorWindow {
                     e.rotation() != null ? e.rotation().angle() * (e.rotation().axis().equals("y") ? 1 : 0) : 0f,
                     e.rotation() != null ? e.rotation().angle() * (e.rotation().axis().equals("z") ? 1 : 0) : 0f };
 
+            boolean changeMade = false;
+
             if (ImGui.sliderFloat3("Position", position, -32.0f, 32.0f)) {
                 e.from().set(0, position[0]);
                 e.from().set(1, position[1]);
@@ -345,11 +342,13 @@ public class ModelEditorWindow {
                 e.to().set(0, position[0] + size[0]);
                 e.to().set(1, position[1] + size[1]);
                 e.to().set(2, position[2] + size[2]);
+                changeMade = true;
             }
             if (ImGui.sliderFloat3("Size", size, -32.0f, 32.0f)) {
                 e.to().set(0, position[0] + size[0]);
                 e.to().set(1, position[1] + size[1]);
                 e.to().set(2, position[2] + size[2]);
+                changeMade = true;
             }
             if (ImGui.sliderFloat3("Origin", pivot, -32.0f, 32.0f)) {
                 if (e.rotation() == null) {
@@ -364,6 +363,7 @@ public class ModelEditorWindow {
                         e.rotation().origin().set(2, pivot[2]);
                     }
                 }
+                changeMade = true;
             }
             if (ImGui.sliderFloat3("Rotation", rotation, 0.0f, 360.0f)) {
                 if (e.rotation() == null) {
@@ -386,19 +386,17 @@ public class ModelEditorWindow {
                     Rotation newRot = new Rotation(0f, "y", List.of(pivot[0], pivot[1], pivot[2]));
                     e = new ModelElement(e.name(), e.from(), e.to(), e.faces(), newRot);
                 }
+                changeMade = true;
             }
 
             // Update the elements in the model
             List<ModelElement> elements = new ArrayList<>(loadedModel.elements());
-            if (elements.get(selectedElementIndex) != e) { // detect if changed
+            if (changeMade) {
                 unsavedChanges = true;
-                markDirty(selectedElementIndex);
+                modelUploaded = false; // force re-upload of model to GPU next frame
             }
             elements.set(selectedElementIndex, e);
             loadedModel = new BlockModel(loadedModel.format_version(), loadedModel.texture_size(), loadedModel.textures(), elements, loadedModel.display(), loadedModel.groups());
-            if (!ImGui.isAnyItemActive()) {
-                modelUploaded = false; // force re-upload of model to GPU next frame
-            }
         } else {
             ImGuiImplementation.centeredText("No element selected.");
         }
@@ -434,6 +432,17 @@ public class ModelEditorWindow {
             int canvasSize = (int) Math.min(ImGui.getContentRegionAvailX(), ImGui.getContentRegionAvailY());
             if (textureId != -1) {
                 ImGui.image(textureId, canvasSize, canvasSize);
+                if (ImGui.beginPopupContextItem("UV Texture")) {
+                    if (ImGui.menuItem("Edit in internal image editor")) {
+                        FileUtils.openFile(selectedTexturePath);
+                    }
+                    if (ExternalEditorHelper.findImageEditor().isPresent()) {
+                        if (ImGui.menuItem("Open in external editor: " + ExternalEditorHelper.findImageEditor().get().getFileName().toString().replace(".exe", ""))) {
+                            ExternalEditorHelper.openFileWithEditor(ExternalEditorHelper.findImageEditor().get(), selectedTexturePath);
+                        }
+                    }
+                    ImGui.endPopup();
+                }
             }
             // Draw UV grid overlay
             ImDrawList drawList = ImGui.getWindowDrawList();
@@ -550,25 +559,6 @@ public class ModelEditorWindow {
         return rayWorld;
     }
 
-    private static void markDirty(int elementIndex) {
-        for (List<FaceMesh> batch : batchedFaceMeshes.values()) {
-            for (FaceMesh fm : batch) {
-                if (fm.elementIndex == elementIndex) {
-                    fm.dirty = true;
-                    break;
-                }
-            }
-        }
-    }
-
-    private static void markAllDirty() {
-        for (List<FaceMesh> batch : batchedFaceMeshes.values()) {
-            for (FaceMesh fm : batch) {
-                fm.dirty = true;
-            }
-        }
-    }
-
     private static void updateCameraAfterImage() {
         long windowHandle = MinecraftClient.getInstance().getWindow().getHandle();
         boolean rightDown = ImGui.isItemHovered() && ImGui.isMouseDown(1);
@@ -621,8 +611,6 @@ public class ModelEditorWindow {
                 camPitch += dy * 0.3f;
                 camPitch = Math.max(-89, Math.min(89, camPitch));
             }
-
-            markAllDirty(); // Update ubo of all faces
         }
 
         // Zoom (wheel handled by ImGui IO)
@@ -646,13 +634,13 @@ public class ModelEditorWindow {
 
         // draw three colored lines with existing color shader: X red, Y green, Z blue
         GL20.glUseProgram(colorShader);
-        if (mvpLoc == 0) {
-            mvpLoc = GL20.glGetUniformLocation(colorShader, "uMVP");
+        if (modelMvpLoc == 0) {
+            modelMvpLoc = GL20.glGetUniformLocation(colorShader, "uMVP");
         }
         try (MemoryStack stack = MemoryStack.stackPush()) {
             FloatBuffer fb = stack.mallocFloat(16);
             ModelEditorWindow.mvp.get(fb);
-            GL20.glUniformMatrix4fv(mvpLoc, false, fb);
+            GL20.glUniformMatrix4fv(modelMvpLoc, false, fb);
         }
         float[] lines = {
                 // X axis (red)
@@ -723,16 +711,18 @@ public class ModelEditorWindow {
         // Use program BEFORE setting uniforms
         GL20.glUseProgram(shaderProgram);
 
-        if (mvpLoc == 0) {
-            mvpLoc = GL20.glGetUniformLocation(shaderProgram, "uMVP");
+        if (modelMvpLoc < 0) {
+            modelMvpLoc = GL20.glGetUniformLocation(shaderProgram, "uMVP");
+            modelSelLoc = GL20.glGetUniformLocation(shaderProgram, "uSelected");
         }
-        if (mvpLoc >= 0) {
-            try (MemoryStack stack = MemoryStack.stackPush()) {
-                FloatBuffer fb = stack.mallocFloat(16);
-                mvp.get(fb);
-                GL20.glUniformMatrix4fv(mvpLoc, false, fb);
-            }
+
+        try (MemoryStack stack = MemoryStack.stackPush()) {
+            FloatBuffer fb = stack.mallocFloat(16);
+            mvp.get(fb);
+            GL20.glUniformMatrix4fv(modelMvpLoc, false, fb);
         }
+
+        GL20.glUniform1i(modelSelLoc, selectedElementIndex);
 
         renderGrid();
 
@@ -858,13 +848,14 @@ public class ModelEditorWindow {
         }
         GL20.glUseProgram(colorShader);
 
-        if (mvpLoc == 0) {
-            mvpLoc = GL20.glGetUniformLocation(colorShader, "uMVP");
+        if (gridMvpLoc < 0) {
+            gridMvpLoc = GL20.glGetUniformLocation(colorShader, "uMVP");
         }
+
         try (MemoryStack stack = MemoryStack.stackPush()) {
             FloatBuffer fb = stack.mallocFloat(16);
-            ModelEditorWindow.mvp.get(fb);
-            GL20.glUniformMatrix4fv(mvpLoc, false, fb);
+            mvp.get(fb);
+            GL20.glUniformMatrix4fv(gridMvpLoc, false, fb);
         }
 
         GL30.glBindVertexArray(gridVao);
@@ -872,128 +863,6 @@ public class ModelEditorWindow {
         GL30.glBindVertexArray(0);
 
         GL20.glUseProgram(0);
-    }
-
-    private static List<FaceMesh> buildFaces(
-            int elementIndex,
-            Vector3f from,
-            Vector3f to,
-            Map<String, Face> faces
-    ) {
-        List<FaceMesh> out = new ArrayList<>();
-        float[][] positions = calcPositions(from, to);
-
-        String[] faceNames = {"north", "south", "east", "west", "up", "down"};
-
-        for (int f = 0; f < 6; f++) {
-            Face face = faces.get(faceNames[f]);
-            if (face == null) continue;
-
-            // Resolve texture
-            String texRef = face.texture();          // "#side"
-            String texKey = texRef.startsWith("#") ? texRef.substring(1) : texRef;
-            String texPath = loadedModel.textures().get(texKey);
-            if (texPath == null) continue;
-
-            int textureId = SafeTextureLoader.load(
-                    FileUtils.getPackFolderPath()
-                            .resolve("assets/minecraft/textures/" + texPath + ".png")
-            );
-
-            // UVs
-            float u1 = 0, v1 = 0, u2 = 1, v2 = 1;
-            if (face.uv() != null && face.uv().size() == 4 && loadedModel.texture_size() != null) {
-                float tw = loadedModel.texture_size()[0];
-                float th = loadedModel.texture_size()[1];
-                u1 = face.uv().get(0) / tw;
-                v1 = 1.0f - (face.uv().get(1) / th);
-                u2 = face.uv().get(2) / tw;
-                v2 = 1.0f - (face.uv().get(3) / th);
-            }
-
-            // Depending on the face direction, the uv might have to be flipped
-            boolean flipU = false;
-            boolean flipV = false;
-            switch (faceNames[f]) {
-                case "south" -> flipU = true;
-                case "west"  -> flipU = true;
-                case "down"  -> flipV = true;
-            }
-            float uu1 = flipU ? u2 : u1;
-            float uu2 = flipU ? u1 : u2;
-            float vv1 = flipV ? v2 : v1;
-            float vv2 = flipV ? v1 : v2;
-
-            float[] verts = {
-                    positions[f*4+0][0], positions[f*4+0][1], positions[f*4+0][2], uu1, vv2,
-                    positions[f*4+1][0], positions[f*4+1][1], positions[f*4+1][2], uu2, vv2,
-                    positions[f*4+2][0], positions[f*4+2][1], positions[f*4+2][2], uu2, vv1,
-                    positions[f*4+3][0], positions[f*4+3][1], positions[f*4+3][2], uu1, vv1,
-            };
-
-            int[] idx = {0, 1, 2, 0, 2, 3};
-
-            FaceMesh fm = new FaceMesh();
-            fm.textureId = textureId;
-            fm.elementIndex = elementIndex;
-            fm.indexCount = 6;
-
-            fm.vao = GL30.glGenVertexArrays();
-            fm.vbo = GL15.glGenBuffers();
-            fm.ebo = GL15.glGenBuffers();
-
-            GL30.glBindVertexArray(fm.vao);
-            GL15.glBindBuffer(GL15.GL_ARRAY_BUFFER, fm.vbo);
-            GL15.glBufferData(GL15.GL_ARRAY_BUFFER, verts, GL15.GL_STATIC_DRAW);
-            GL15.glBindBuffer(GL15.GL_ELEMENT_ARRAY_BUFFER, fm.ebo);
-            GL15.glBufferData(GL15.GL_ELEMENT_ARRAY_BUFFER, idx, GL15.GL_STATIC_DRAW);
-
-            int stride = 5 * Float.BYTES;
-            GL20.glVertexAttribPointer(0, 3, GL11.GL_FLOAT, false, stride, 0);
-            GL20.glEnableVertexAttribArray(0);
-            GL20.glVertexAttribPointer(1, 2, GL11.GL_FLOAT, false, stride, 3 * Float.BYTES);
-            GL20.glEnableVertexAttribArray(1);
-
-            GL30.glBindVertexArray(0);
-
-            out.add(fm);
-        }
-
-        return out;
-    }
-
-    private static Matrix4f buildElementTransform(ModelElement e) {
-        Matrix4f m = new Matrix4f().identity();
-
-        if (e.rotation() == null) {
-            return m;
-        }
-
-        Rotation r = e.rotation();
-        if (r.origin() == null || r.origin().size() != 3) {
-            return m;
-        }
-
-        float ox = r.origin().get(0) / 16f - 0.5f;
-        float oy = r.origin().get(1) / 16f - 0.5f;
-        float oz = r.origin().get(2) / 16f - 0.5f;
-
-        float angleRad = (float) Math.toRadians(r.angle());
-
-        // Translate to pivot
-        m.translate(ox, oy, oz);
-
-        // Rotate
-        switch (r.axis()) {
-            case "x" -> m.rotateX(angleRad);
-            case "y" -> m.rotateY(angleRad);
-            case "z" -> m.rotateZ(angleRad);
-        }
-
-        // Translate back
-        m.translate(-ox, -oy, -oz);
-
-        return m;
     }
 
     private static float[] @NotNull [] calcPositions(Vector3f from, Vector3f to) {
@@ -1022,110 +891,177 @@ public class ModelEditorWindow {
     }
 
     private static void uploadBlockModel(BlockModel model) {
-        batchedFaceMeshes.clear();
+        batchedMeshes.clear();
         if (model == null || model.elements() == null) return;
 
-        for (int i = 0; i < model.elements().size(); i++) {
-            ModelElement e = model.elements().get(i);
+        Map<Integer, List<Float>> vertexData = new HashMap<>();
+        Map<Integer, List<Integer>> indexData = new HashMap<>();
+        Map<Integer, Integer> indexCursor = new HashMap<>();
+
+        for (int ei = 0; ei < model.elements().size(); ei++) {
+            ModelElement e = model.elements().get(ei);
+
             Vector3f from = new Vector3f(e.from().get(0), e.from().get(1), e.from().get(2));
-            Vector3f to = new Vector3f(e.to().get(0), e.to().get(1), e.to().get(2));
+            Vector3f to   = new Vector3f(e.to().get(0),   e.to().get(1),   e.to().get(2));
 
-            // Apply element transforms and add to the render queue
-            Matrix4f elementTransform = buildElementTransform(e);
-            List<FaceMesh> faces = buildFaces(i, from, to, e.faces());
-            for (FaceMesh fm : faces) {
-                fm.modelMatrix.set(elementTransform);
-            }
+            float[][] pos = calcPositions(from, to);
+            String[] faceNames = {"north","south","east","west","up","down"};
 
-            for (FaceMesh face : faces) {
-                if (!batchedFaceMeshes.containsKey(face.textureId)) {
-                    batchedFaceMeshes.put(face.textureId, new ArrayList<>());
+            for (int f = 0; f < 6; f++) {
+                Face face = e.faces().get(faceNames[f]);
+                if (face == null) continue;
+
+                String texKey = face.texture().substring(1);
+                String texPath = model.textures().get(texKey);
+                int textureId = SafeTextureLoader.load(
+                        FileUtils.getPackFolderPath()
+                                .resolve("assets/minecraft/textures/" + texPath + ".png")
+                );
+
+                vertexData.computeIfAbsent(textureId, k -> new ArrayList<>());
+                indexData.computeIfAbsent(textureId, k -> new ArrayList<>());
+                indexCursor.putIfAbsent(textureId, 0);
+
+                float u1 = 0, v1 = 0, u2 = 1, v2 = 1;
+                if (face.uv() != null && model.texture_size() != null) {
+                    float tw = model.texture_size()[0];
+                    float th = model.texture_size()[1];
+                    u1 = face.uv().get(0) / tw;
+                    v1 = 1 - face.uv().get(1) / th;
+                    u2 = face.uv().get(2) / tw;
+                    v2 = 1 - face.uv().get(3) / th;
                 }
-                batchedFaceMeshes.get(face.textureId).add(face);
+
+                int base = indexCursor.get(textureId);
+
+                for (int v = 0; v < 4; v++) {
+                    Vector3f p = new Vector3f(
+                            pos[f * 4 + v][0],
+                            pos[f * 4 + v][1],
+                            pos[f * 4 + v][2]
+                    );
+
+                    applyRotation(p, e);
+
+                    vertexData.get(textureId).add(p.x);
+                    vertexData.get(textureId).add(p.y);
+                    vertexData.get(textureId).add(p.z);
+
+                    int uvIndex = FACE_UV_ORDER[f][v];
+                    float u = (UV_CORNERS[uvIndex][0] == 0) ? u1 : u2;
+                    float vTex = (UV_CORNERS[uvIndex][1] == 0) ? v1 : v2;
+
+                    vertexData.get(textureId).add(u);
+                    vertexData.get(textureId).add(vTex);
+                    vertexData.get(textureId).add((float) ei);
+                }
+
+                indexData.get(textureId).add(base);
+                indexData.get(textureId).add(base + 1);
+                indexData.get(textureId).add(base + 2);
+                indexData.get(textureId).add(base);
+                indexData.get(textureId).add(base + 2);
+                indexData.get(textureId).add(base + 3);
+
+                indexCursor.put(textureId, base + 4);
             }
+        }
+
+        // Upload GPU buffers
+        for (int tex : vertexData.keySet()) {
+            BatchedMesh mesh = new BatchedMesh();
+
+            float[] verts = toFloatArray(vertexData.get(tex));
+            int[] inds = indexData.get(tex).stream().mapToInt(i -> i).toArray();
+
+            mesh.vao = GL30.glGenVertexArrays();
+            mesh.vbo = GL15.glGenBuffers();
+            mesh.ebo = GL15.glGenBuffers();
+            mesh.indexCount = inds.length;
+
+            GL30.glBindVertexArray(mesh.vao);
+
+            GL15.glBindBuffer(GL15.GL_ARRAY_BUFFER, mesh.vbo);
+            GL15.glBufferData(GL15.GL_ARRAY_BUFFER, verts, GL15.GL_STATIC_DRAW);
+
+            GL15.glBindBuffer(GL15.GL_ELEMENT_ARRAY_BUFFER, mesh.ebo);
+            GL15.glBufferData(GL15.GL_ELEMENT_ARRAY_BUFFER, inds, GL15.GL_STATIC_DRAW);
+
+            int stride = 6 * Float.BYTES;
+            GL20.glVertexAttribPointer(0, 3, GL11.GL_FLOAT, false, stride, 0);
+            GL20.glEnableVertexAttribArray(0);
+            GL20.glVertexAttribPointer(1, 2, GL11.GL_FLOAT, false, stride, 3 * Float.BYTES);
+            GL20.glEnableVertexAttribArray(1);
+            GL20.glVertexAttribPointer(2, 1, GL11.GL_FLOAT, false, stride, 5 * Float.BYTES);
+            GL20.glEnableVertexAttribArray(2);
+
+            GL30.glBindVertexArray(0);
+
+            batchedMeshes.put(tex, mesh);
         }
 
         modelUploaded = true;
     }
 
-    private static void renderBlockModel(BlockModel model) {
-        if (!modelUploaded) {
-            uploadBlockModel(model);
+    private static float[] toFloatArray(List<Float> floats) {
+        float[] result = new float[floats.size()];
+        for (int i = 0; i < floats.size(); i++) {
+            result[i] = floats.get(i);
         }
-        GL20.glUseProgram(shaderProgram);
-
-        // Uniform locations
-        if (mvpLoc == 0) {
-            mvpLoc = GL20.glGetUniformLocation(shaderProgram, "uMVP");
-        }
-        if (texLoc == 0) {
-            texLoc = GL20.glGetUniformLocation(shaderProgram, "uTexture");
-        }
-        if (selLoc == 0) {
-            selLoc = GL20.glGetUniformLocation(shaderProgram, "uSelected");
-        }
-
-        for (int textureId : batchedFaceMeshes.keySet()) {
-            List<FaceMesh> batch = batchedFaceMeshes.get(textureId);
-            // Bind the texture
-            GL13.glActiveTexture(GL13.GL_TEXTURE0);
-            GL11.glBindTexture(GL11.GL_TEXTURE_2D, textureId);
-            GL20.glUniform1i(texLoc, 0);
-
-            for (FaceMesh fm : batch) {
-                boolean selected = fm.elementIndex == selectedElementIndex;
-
-                // Apply model transform matrix
-                if (fm.dirty) {
-                    fm.cachedMvp.set(mvp).mul(fm.modelMatrix);
-                    fm.dirty = false;
-                }
-                try (MemoryStack stack = MemoryStack.stackPush()) {
-                    FloatBuffer fb = stack.mallocFloat(16);
-                    fm.cachedMvp.get(fb);
-                    GL20.glUniformMatrix4fv(mvpLoc, false, fb);
-                }
-
-                GL20.glUniform1i(selLoc, selected ? 1 : 0); // Upload whether the element this face belongs to is selected
-
-                // Draw the face
-                GL30.glBindVertexArray(fm.vao);
-                GL11.glDrawElements(GL11.GL_TRIANGLES, fm.indexCount, GL11.GL_UNSIGNED_INT, 0);
-            }
-        }
-        GL20.glUseProgram(0);
+        return result;
     }
 
-    public static boolean rayIntersectsAABB(Vector3f rayOrigin, Vector3f rayDir, Vector3f min, Vector3f max) {
-        float tMin = (min.x - rayOrigin.x) / rayDir.x;
-        float tMax = (max.x - rayOrigin.x) / rayDir.x;
-        if (tMin > tMax) {
-            float tmp = tMin;
-            tMin = tMax;
-            tMax = tmp;
+    private static Vector3f applyRotation(
+            Vector3f v,
+            ModelElement e
+    ) {
+        if (e.rotation() == null) return v;
+
+        Rotation r = e.rotation();
+        if (r.origin() == null || r.origin().size() != 3) return v;
+
+        Vector3f origin = new Vector3f(
+                r.origin().get(0) / 16f - 0.5f,
+                r.origin().get(1) / 16f - 0.5f,
+                r.origin().get(2) / 16f - 0.5f
+        );
+
+        // translate to pivot
+        v.sub(origin);
+
+        float angleRad = (float) Math.toRadians(r.angle());
+
+        switch (r.axis()) {
+            case "x" -> v.rotateX(angleRad);
+            case "y" -> v.rotateY(angleRad);
+            case "z" -> v.rotateZ(angleRad);
         }
 
-        float tyMin = (min.y - rayOrigin.y) / rayDir.y;
-        float tyMax = (max.y - rayOrigin.y) / rayDir.y;
-        if (tyMin > tyMax) {
-            float tmp = tyMin;
-            tyMin = tyMax;
-            tyMax = tmp;
+        // translate back
+        v.add(origin);
+
+        return v;
+    }
+
+    private static void renderBlockModel(BlockModel model) {
+        if (!modelUploaded) uploadBlockModel(model);
+
+        GL20.glUseProgram(shaderProgram);
+
+        GL20.glUniformMatrix4fv(modelMvpLoc, false, mvp.get(new float[16]));
+        GL20.glUniform1i(modelSelLoc, selectedElementIndex);
+
+        for (var entry : batchedMeshes.entrySet()) {
+            GL13.glActiveTexture(GL13.GL_TEXTURE0);
+            GL11.glBindTexture(GL11.GL_TEXTURE_2D, entry.getKey());
+
+            BatchedMesh mesh = entry.getValue();
+            GL30.glBindVertexArray(mesh.vao);
+            GL11.glDrawElements(GL11.GL_TRIANGLES, mesh.indexCount, GL11.GL_UNSIGNED_INT, 0);
         }
 
-        if ((tMin > tyMax) || (tyMin > tMax)) return false;
-        if (tyMin > tMin) tMin = tyMin;
-        if (tyMax < tMax) tMax = tyMax;
-
-        float tzMin = (min.z - rayOrigin.z) / rayDir.z;
-        float tzMax = (max.z - rayOrigin.z) / rayDir.z;
-        if (tzMin > tzMax) {
-            float tmp = tzMin;
-            tzMin = tzMax;
-            tzMax = tmp;
-        }
-
-        return (!(tMin > tzMax)) && (!(tzMin > tMax));
+        GL30.glBindVertexArray(0);
+        GL20.glUseProgram(0);
     }
 
     private static int createColorShader() {
@@ -1183,30 +1119,38 @@ public class ModelEditorWindow {
 
     private static int createTextureShader() {
         String vertexSrc = """
-            #version 150 core
-            in vec3 aPos;
-            in vec2 aUV;
-            out vec2 vUV;
-            uniform mat4 uMVP;
-            void main() {
-                gl_Position = uMVP * vec4(aPos, 1.0);
-                vUV = aUV;
-            }
+                    #version 150 core
+                    in vec3 aPos;
+                    in vec2 aUV;
+                    in float aElement;
+                    out vec2 vUV;
+                    flat out int vElement;
+                
+                    uniform mat4 uMVP;
+                
+                    void main() {
+                        gl_Position = uMVP * vec4(aPos, 1.0);
+                        vUV = aUV;
+                        vElement = int(aElement);
+                    }
         """;
 
         String fragmentSrc = """
-            #version 150 core
-            in vec2 vUV;
-            out vec4 fragColor;
-            uniform sampler2D uTexture;
-            uniform bool uSelected;
-            void main() {
-                vec4 tex = texture(uTexture, vUV);
-                if (uSelected) {
-                    tex.rgb = mix(tex.rgb, vec3(1.0, 1.0, 0.0), 0.4);
-                }
-                fragColor = tex;
-            }
+                     #version 150 core
+                     in vec2 vUV;
+                     flat in int vElement;
+                     out vec4 fragColor;
+                
+                     uniform sampler2D uTexture;
+                     uniform int uSelected;
+                
+                     void main() {
+                         vec4 tex = texture(uTexture, vUV);
+                         if (vElement == uSelected) {
+                             tex.rgb -= 0.3;
+                         }
+                         fragColor = tex;
+                     }
         """;
 
         int vertexShader = GL20.glCreateShader(GL20.GL_VERTEX_SHADER);
@@ -1232,7 +1176,13 @@ public class ModelEditorWindow {
         GL20.glAttachShader(program, fragmentShader);
         GL20.glBindAttribLocation(program, 0, "aPos");
         GL20.glBindAttribLocation(program, 1, "aUV");
+        GL20.glBindAttribLocation(program, 2, "aElement");
         GL20.glLinkProgram(program);
+
+        int texLoc = GL20.glGetUniformLocation(shaderProgram, "uTexture");
+        GL20.glUniform1i(texLoc, 0);
+
+        modelSelLoc = GL20.glGetUniformLocation(shaderProgram, "uSelected");
 
         GL20.glDeleteShader(vertexShader);
         GL20.glDeleteShader(fragmentShader);
@@ -1316,6 +1266,91 @@ public class ModelEditorWindow {
             loadedModel = null;
             loadedModelPath = null;
         }
+    }
+
+    private static boolean rayIntersectsElement(
+            Vector3f rayOrigin,
+            Vector3f rayDir,
+            ModelElement e
+    ) {
+        Vector3f localOrigin = new Vector3f(rayOrigin);
+        Vector3f localDir = new Vector3f(rayDir);
+
+        if (e.rotation() != null) {
+            Rotation r = e.rotation();
+
+            Vector3f pivot = new Vector3f(
+                    r.origin().get(0) / 16f - 0.5f,
+                    r.origin().get(1) / 16f - 0.5f,
+                    r.origin().get(2) / 16f - 0.5f
+            );
+
+            localOrigin.sub(pivot);
+
+            float angle = (float) Math.toRadians(-r.angle());
+            switch (r.axis()) {
+                case "x" -> {
+                    localOrigin.rotateX(angle);
+                    localDir.rotateX(angle);
+                }
+                case "y" -> {
+                    localOrigin.rotateY(angle);
+                    localDir.rotateY(angle);
+                }
+                case "z" -> {
+                    localOrigin.rotateZ(angle);
+                    localDir.rotateZ(angle);
+                }
+            }
+
+            localOrigin.add(pivot);
+        }
+
+        Vector3f min = new Vector3f(
+                e.from().get(0) / 16f - 0.5f,
+                e.from().get(1) / 16f - 0.5f,
+                e.from().get(2) / 16f - 0.5f
+        );
+
+        Vector3f max = new Vector3f(
+                e.to().get(0) / 16f - 0.5f,
+                e.to().get(1) / 16f - 0.5f,
+                e.to().get(2) / 16f - 0.5f
+        );
+
+        return rayIntersectsAABB(localOrigin, localDir, min, max);
+    }
+
+    public static boolean rayIntersectsAABB(Vector3f rayOrigin, Vector3f rayDir, Vector3f min, Vector3f max) {
+        float tMin = (min.x - rayOrigin.x) / rayDir.x;
+        float tMax = (max.x - rayOrigin.x) / rayDir.x;
+        if (tMin > tMax) {
+            float tmp = tMin;
+            tMin = tMax;
+            tMax = tmp;
+        }
+
+        float tyMin = (min.y - rayOrigin.y) / rayDir.y;
+        float tyMax = (max.y - rayOrigin.y) / rayDir.y;
+        if (tyMin > tyMax) {
+            float tmp = tyMin;
+            tyMin = tyMax;
+            tyMax = tmp;
+        }
+
+        if ((tMin > tyMax) || (tyMin > tMax)) return false;
+        if (tyMin > tMin) tMin = tyMin;
+        if (tyMax < tMax) tMax = tyMax;
+
+        float tzMin = (min.z - rayOrigin.z) / rayDir.z;
+        float tzMax = (max.z - rayOrigin.z) / rayDir.z;
+        if (tzMin > tzMax) {
+            float tmp = tzMin;
+            tzMin = tzMax;
+            tzMax = tmp;
+        }
+
+        return (!(tMin > tzMax)) && (!(tzMin > tMax));
     }
 
     public static boolean isModelWindowOpen() {

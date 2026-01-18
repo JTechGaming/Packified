@@ -439,14 +439,14 @@ public class FileExplorerWindow {
                 if (FileUtils.getExtensionFromPath(path).equals(".png")) {
                     if (ExternalEditorHelper.findImageEditor().isPresent()) {
                         if (ImGui.menuItem("Open in external editor: " + ExternalEditorHelper.findImageEditor().get().getFileName().toString().replace(".exe", ""))) {
-                            ExternalEditorHelper.openFileWithEditor(ExternalEditorHelper.findJSONEditor().get(), path);
+                            ExternalEditorHelper.openFileWithEditor(ExternalEditorHelper.findImageEditor().get(), path);
                         }
                     }
                 }
                 if (FileUtils.getExtensionFromPath(path).equals(".ogg")) {
                     if (ExternalEditorHelper.findAudioEditor().isPresent()) {
                         if (ImGui.menuItem("Open in external editor: " + ExternalEditorHelper.findAudioEditor().get().getFileName().toString().replace(".exe", ""))) {
-                            ExternalEditorHelper.openFileWithEditor(ExternalEditorHelper.findJSONEditor().get(), path);
+                            ExternalEditorHelper.openFileWithEditor(ExternalEditorHelper.findAudioEditor().get(), path);
                         }
                     }
                 }
