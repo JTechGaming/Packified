@@ -15,7 +15,6 @@
     "MouseMixin",
     "SoundErrorMixin",
     "SpriteAtlasInfoMixin",
-    "test",
     "UnihexFontLoaderMixin",
     "WindowMixin"
   ],

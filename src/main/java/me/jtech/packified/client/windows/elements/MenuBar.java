@@ -162,6 +162,9 @@ public class MenuBar {
                 if (ImGui.menuItem("Multiplayer", null, MultiplayerWindow.isOpen.get())) {
                     MultiplayerWindow.isOpen.set(!MultiplayerWindow.isOpen.get());
                 }
+                if (ImGui.menuItem("Version Control", null, VersionControlWindow.isOpen.get())) {
+                    VersionControlWindow.isOpen.set(!VersionControlWindow.isOpen.get());
+                }
                 if (ImGui.menuItem("File Hierarchy", null, FileHierarchyWindow.isOpen.get())) {
                     FileHierarchyWindow.isOpen.set(!FileHierarchyWindow.isOpen.get());
                 }

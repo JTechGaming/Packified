@@ -277,7 +277,6 @@ public class ModelEditorWindow {
                     if (bestIndex >= 0) {
                         previouslySelectedElementIndex = selectedElementIndex;
                         selectedElementIndex = bestIndex;
-                        //System.out.println("Picked element=" + selectedElementIndex);
                     }
                 }
             }
@@ -1052,8 +1051,10 @@ public class ModelEditorWindow {
         GL20.glUniform1i(modelSelLoc, selectedElementIndex);
 
         for (var entry : batchedMeshes.entrySet()) {
-            GL13.glActiveTexture(GL13.GL_TEXTURE0);
-            GL11.glBindTexture(GL11.GL_TEXTURE_2D, entry.getKey());
+            if (entry.getKey() > 0) { // Don't bind texture if the model doesn't have one
+                GL13.glActiveTexture(GL13.GL_TEXTURE0);
+                GL11.glBindTexture(GL11.GL_TEXTURE_2D, entry.getKey());
+            }
 
             BatchedMesh mesh = entry.getValue();
             GL30.glBindVertexArray(mesh.vao);
@@ -1239,11 +1240,6 @@ public class ModelEditorWindow {
             unsavedChanges = false;
         } catch (Exception e) {
             LogWindow.addError("Failed to write save data for model: " + loadedModelPath.getFileName() + " -> " + e.getMessage());
-        }
-
-        for (GroupElement groupElement : loadedModel.groups()) {
-            System.out.println(groupElement.name);
-            System.out.println(groupElement.children);
         }
 
         LogWindow.addLog("Successfully saved model!", LogWindow.LogType.SUCCESS.getColor());

@@ -117,18 +117,6 @@ public class MultiplayerWindow {
                 }
                 ImGui.endChild();
             }
-
-            ImGui.text("World:");
-            if (MinecraftClient.getInstance().player != null) {
-                ItemStack stack = MinecraftClient.getInstance().player.getMainHandStack();
-                if (stack == null || stack.isEmpty()) {
-                    ImGui.text("Hold an item to add a custom model to it");
-                } else {
-                    if (ImGui.button("Add custom model to item")) {
-                        ModelPickerWindow.open();
-                    }
-                }
-            }
         }
         ImGui.end();
     }

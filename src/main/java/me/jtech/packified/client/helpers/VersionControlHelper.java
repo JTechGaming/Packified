@@ -1,23 +1,24 @@
 package me.jtech.packified.client.helpers;
 
-import com.google.common.reflect.TypeToken;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import imgui.type.ImBoolean;
 import me.jtech.packified.client.util.FileUtils;
 import net.minecraft.client.MinecraftClient;
 
 import java.io.IOException;
 import java.io.Reader;
-import java.lang.reflect.Type;
-import java.nio.file.Files;
-import java.nio.file.Path;
+import java.nio.file.*;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 //todo document this
 public class VersionControlHelper {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private static VersionControlMeta meta;
+    private static final List<FileChange> fileChanges = new ArrayList<>();
 
     public static void init(String packName) {
         Path vcPath = getVersionControlFile(packName);
@@ -91,8 +92,9 @@ public class VersionControlHelper {
     private static Map<String, String> computeFileHashes(Path root) {
         Map<String, String> hashes = new HashMap<>();
 
-        try {
-            Files.walk(root)
+        //try {
+            fileChanges.stream().filter(fileChange -> fileChange.include.get()).map(fileChange -> fileChange.filePath)
+            //Files.walk(root)
                     .filter(Files::isRegularFile)
                     .filter(path -> !path.getFileName().toString().equals("meta.pkfvc"))
                     .forEach(path -> {
@@ -103,9 +105,9 @@ public class VersionControlHelper {
                             throw new RuntimeException(e);
                         }
                     });
-        } catch (IOException e) {
-            throw new RuntimeException("Failed to compute file hashes", e);
-        }
+//        } catch (IOException e) {
+//            throw new RuntimeException("Failed to compute file hashes", e);
+//        }
 
         return hashes;
     }
@@ -133,8 +135,56 @@ public class VersionControlHelper {
         return result;
     }
 
+    public static String getCurrentVersion() {
+        if (meta == null) {
+            return null;
+        }
+        return meta.currentVersion();
+    }
+
+    public static void submitFileChange(FileChange change) {
+        for (FileChange c : fileChanges) {
+            if (c.getFilePath().equals(change.getFilePath())) {
+                return;
+            }
+        }
+        fileChanges.add(change);
+    }
+
+    public static List<FileChange> queryFileChanges() {
+        return fileChanges;
+    }
+
+    public static void pushToRemote() {
+
+    }
+
+    public static void toggleAll(boolean state) {
+        for (FileChange fileChange : fileChanges) {
+            fileChange.getInclude().set(state);
+        }
+    }
+
     public enum ChangeType {
-        ADDED, MODIFIED, DELETED
+        ADDED(0x618333), MODIFIED(0x6496BA), DELETED(0x6B6B59);
+
+        private final int color;
+
+        ChangeType(int color){ this.color = color; }
+
+        public int getColor() {
+            return color;
+        }
+
+        public static ChangeType parseStandardWatchEventKinds(WatchEvent.Kind<?> eventKind) {
+            if (eventKind == StandardWatchEventKinds.ENTRY_CREATE)
+                return ADDED;
+            if (eventKind == StandardWatchEventKinds.ENTRY_MODIFY)
+                return MODIFIED;
+            if (eventKind == StandardWatchEventKinds.ENTRY_DELETE)
+                return DELETED;
+            return null;
+        }
     }
 
     public record VersionControlMeta(
@@ -163,6 +213,34 @@ public class VersionControlHelper {
 
         public Map<String, String> getFileHashes() {
             return fileHashes;
+        }
+    }
+
+    public static class FileChange {
+        private final Path filePath;
+        private final ChangeType changeType;
+        private final ImBoolean include = new ImBoolean(false);
+
+        public FileChange(Path filePath, ChangeType changeType) {
+            this.filePath = filePath;
+            this.changeType = changeType;
+        }
+
+        public FileChange(Path filePath, WatchEvent.Kind<?> changeType) {
+            this.filePath = filePath;
+            this.changeType = ChangeType.parseStandardWatchEventKinds(changeType);
+        }
+
+        public Path getFilePath() {
+            return filePath;
+        }
+
+        public ChangeType getChangeType() {
+            return changeType;
+        }
+
+        public ImBoolean getInclude() {
+            return include;
         }
     }
 }

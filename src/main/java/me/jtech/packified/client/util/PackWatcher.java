@@ -1,6 +1,8 @@
 package me.jtech.packified.client.util;
 
+import me.jtech.packified.client.helpers.VersionControlHelper;
 import me.jtech.packified.client.windows.LogWindow;
+import me.jtech.packified.client.windows.VersionControlWindow;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 
@@ -98,6 +100,7 @@ public class PackWatcher implements Runnable {
                 }
 
                 invalidated = true;
+                VersionControlHelper.submitFileChange(new VersionControlHelper.FileChange(child, kind));
             }
 
             boolean valid = key.reset();

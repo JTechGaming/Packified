@@ -54,8 +54,7 @@ public class FileHierarchyWindow {
     private static boolean isCreatingNewFile = false;
     private static Path selectedFileForCreation = null;
 
-    private static FileHierarchyWindow cachedHierarchy = null;
-    private static PackWatcher watcher;
+    public static FileHierarchyWindow cachedHierarchy = null;
 
     private static final Map<Path, Integer> textureCache = new HashMap<>();
 
@@ -71,40 +70,13 @@ public class FileHierarchyWindow {
     }
 
     public static FileHierarchyWindow getCachedHierarchy(Path rootPath) {
-        if (watcher != null && !watcher.rootPath.equals(rootPath)) {
-            try {
-                watcher.stop();
-            } catch (IOException e) {
-                LogWindow.addError(e.getMessage());
-            }
-            watcher = null; // Reset the watcher if the root path has changed
-            cachedHierarchy = null; // Reset the cached hierarchy
-            LogWindow.addDebugInfo("PackWatcher: Stopped and reset due to root path change.");
-        }
-        if (watcher == null) {
-            try {
-                watcher = new PackWatcher(rootPath);
-                watcher.start();
-            } catch (IOException e) {
-                LogWindow.addError(e.getMessage());
-            }
-
-            Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-                try {
-                    if (watcher != null) watcher.stop();
-                } catch (IOException e) {
-                    LogWindow.addError(e.getMessage());
-                }
-            }));
-        }
-
-        if (cachedHierarchy == null || watcher.isInvalidated() || !lastFrameSearch.equals(searchQuery.get()) || !selectedExtension.equals(lastFrameExtension)) {
+        if (cachedHierarchy == null || PackHelper.getWatcher().isInvalidated() || !lastFrameSearch.equals(searchQuery.get()) || !selectedExtension.equals(lastFrameExtension)) {
             LogWindow.addDebugInfo("PackWatcher: Successfully rebuilt file hierarchy");
             cachedHierarchy = buildFileHierarchy(rootPath);
             if (PreferencesWindow.autoReloadAssets.get()) {
                 CompletableFuture.runAsync(PackUtils::reloadPack);
             }
-            if (watcher != null) watcher.resetInvalidated();
+            if (PackHelper.getWatcher() != null) PackHelper.getWatcher().resetInvalidated();
         }
 
         return cachedHierarchy;
@@ -112,14 +84,8 @@ public class FileHierarchyWindow {
 
     public static void clearCache() {
         textureCache.clear();
-        cachedHierarchy = null;
-        if (watcher != null) {
-            try {
-                watcher.stop();
-            } catch (IOException e) {
-                LogWindow.addError(e.getMessage());
-            }
-            watcher = null; // Reset the watcher
+        if (PackHelper.isValid()) {
+            PackHelper.disposeWatcher();
         }
         LogWindow.addDebugInfo("PackWatcher: Cache cleared and watcher reset.");
     }

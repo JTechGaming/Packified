@@ -387,6 +387,8 @@ public class ImGuiImplementation {
         FileHierarchyWindow.render();
         BackupWindow.render();
         PackBrowserWindow.render();
+        VersionControlWindow.render();
+        WorldWindow.render();
         MultiplayerWindow.render();
         SelectFolderWindow.render();
         ModifyFileWindow.render();

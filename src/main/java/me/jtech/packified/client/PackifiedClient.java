@@ -11,6 +11,7 @@ import me.jtech.packified.client.config.ModConfig;
 import me.jtech.packified.client.helpers.NotificationHelper;
 import me.jtech.packified.client.helpers.PackHelper;
 import me.jtech.packified.client.helpers.TutorialHelper;
+import me.jtech.packified.client.helpers.VersionControlHelper;
 import me.jtech.packified.client.networking.PacketSender;
 import me.jtech.packified.Packified;
 import me.jtech.packified.client.util.SyncPacketData;
