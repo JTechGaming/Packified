@@ -437,6 +437,8 @@ public class EditorWindow {
         TextEditor textEditor = file.getTextEditor();
         // Set syntax highlighting
 
+        ColorCodeHighlighting.parseColorCodes(file.getTextEditor().getText());
+
         // Set error markers
         Map<Integer, String> errorMarkers = checkForErrors(file);
         textEditor.setErrorMarkers(errorMarkers);
@@ -595,32 +597,6 @@ public class EditorWindow {
         try (JsonParser parser = factory.createParser(file.getTextEditor().getText())) {
             while (parser.nextToken() != null) {
                 // If it reaches here, the current line in the JSON is valid
-//                String currentLine = parser.getText();
-//                if (currentLine.contains("vec3") || currentLine.contains("vec4")) {
-//                    System.out.println("Found vec3/vec4 line: " + currentLine);
-//                    // Is probably a color code line
-//                    int lineNumber = parser.currentLocation().getLineNr() - 1;
-//                    int rgbStart = currentLine.indexOf('(');
-//                    int rgbEnd = currentLine.indexOf(')');
-//                    if (rgbStart != -1 && rgbEnd != -1 && rgbEnd > rgbStart) {
-//                        String rgbValues = currentLine.substring(rgbStart + 1, rgbEnd);
-//                        String[] rgbParts = rgbValues.split(",");
-//                        if (rgbParts.length >= 3) {
-//                            try {
-//                                float r = Float.parseFloat(rgbParts[0].trim());
-//                                float g = Float.parseFloat(rgbParts[1].trim());
-//                                float b = Float.parseFloat(rgbParts[2].trim());
-//                                if (r < 0.0 || r > 1.0 || g < 0.0 || g > 1.0 || b < 0.0 || b > 1.0) {
-//                                    errorMarkers.put(lineNumber, "RGB values must be between 0.0 and 1.0");
-//                                }
-//
-//                                drawColorSquare(10, 20 + (lineNumber * 16), 12, r, g, b);
-//                            } catch (NumberFormatException e) {
-//                                errorMarkers.put(lineNumber, "Invalid RGB values");
-//                            }
-//                        }
-//                    }
-//                }
             }
         } catch (JsonParseException e) {
             if (!file.getExtension().equals(".json")) return new HashMap<>();
@@ -632,10 +608,5 @@ public class EditorWindow {
             errorMarkers.put(0, "Unknown error reading content");
         }
         return errorMarkers;
-    }
-
-    private static void drawColorSquare(int x, int y, int size, float r, float g, float b) {
-        ImGui.getWindowDrawList().addRectFilled(x, y, x + size, y + size, ImGui.getColorU32(r, g, b, 1.0f));
-        System.out.println("Drawing color square at (" + x + ", " + y + ") with size " + size + " and color RGB(" + r + ", " + g + ", " + b + ")");
     }
 }

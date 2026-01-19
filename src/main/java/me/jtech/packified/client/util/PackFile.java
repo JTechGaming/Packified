@@ -24,6 +24,8 @@ public class PackFile {
     private TextEditor textEditor;
     private PixelArtEditor pixelArtEditor;
     private boolean open = false;
+    private boolean textFileWasChanged = false;
+    private boolean firstChange = false;
 
     public PackFile(Path path, BufferedImage content) {
         this.path = path;
@@ -119,11 +121,17 @@ public class PackFile {
     }
 
     public boolean isModified() {
-        // normalize and strip common invisible chars
+        if (textEditor != null && textEditor.isTextChanged()) {
+            if (firstChange) {
+                firstChange = false;
+            } else {
+                textFileWasChanged = true;
+            }
+        }
         return switch (extension) {
             case ".png" -> pixelArtEditor.wasModified;
             case ".ogg" -> !Arrays.equals(soundContent, soundEditorContent);
-            default -> !textContent.equals(textEditor.getText().substring(0, textEditor.getText().length()-1));
+            default -> textFileWasChanged;
         };
     }
 
@@ -141,6 +149,7 @@ public class PackFile {
             case ".ogg" -> soundContent = soundEditorContent;
             default -> textContent = textEditor.getText();
         }
+        textFileWasChanged = false;
     }
 
     public TextEditor getTextEditor() {
@@ -160,7 +169,9 @@ public class PackFile {
     }
 
     public void setOpen(boolean open) {
-        textEditor.setText(textContent); // Prevent unsaved changes when reopening
+        // Prevent unsaved changes when reopening
+        firstChange = true;
+        textEditor.setText(textContent);
         this.open = open;
     }
 }

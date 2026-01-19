@@ -799,6 +799,12 @@ public class ImGuiImplementation {
         ImGui.popTextWrapPos();
     }
 
+    public static void whiteSpace(int size) {
+        for (int i=0; i<size;i++) {
+            ImGui.spacing();
+        }
+    }
+
     public static int getFileIconTextureId(String extension) {
         switch (extension) {
             case ".json" -> {

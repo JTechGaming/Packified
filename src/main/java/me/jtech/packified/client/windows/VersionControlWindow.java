@@ -3,22 +3,16 @@ package me.jtech.packified.client.windows;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import imgui.ImGui;
-import imgui.ImGuiStyle;
 import imgui.flag.ImGuiCol;
-import imgui.flag.ImGuiInputTextFlags;
-import imgui.flag.ImGuiStyleVar;
 import imgui.type.ImBoolean;
 import imgui.type.ImString;
 import me.jtech.packified.client.helpers.PackHelper;
 import me.jtech.packified.client.helpers.VersionControlHelper;
+import me.jtech.packified.client.imgui.ImGuiImplementation;
 import me.jtech.packified.client.util.FileUtils;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.minecraft.client.MinecraftClient;
-
-import java.io.Reader;
-import java.nio.file.Files;
-import java.nio.file.Path;
 
 @Environment(EnvType.CLIENT)
 public class VersionControlWindow { // todo implement version control system for packs
@@ -41,18 +35,22 @@ public class VersionControlWindow { // todo implement version control system for
         }
 
         if (ImGui.begin("Version Control")) {
-            if (!VersionControlHelper.queryFileChanges().isEmpty()) {
+            if (!VersionControlHelper.queryStages().isEmpty()) {
                 if (ImGui.checkbox("All", commitAll)) {
                     VersionControlHelper.toggleAll(commitAll.get());
                 }
                 ImGui.separator();
-                for (VersionControlHelper.FileChange fileChange : VersionControlHelper.queryFileChanges()) {
-                    ImGui.pushStyleColor(ImGuiCol.Text, fileChange.getChangeType().getColor());
-                    ImGui.checkbox(fileChange.getFilePath().getFileName().toString(), fileChange.getInclude());
+                for (VersionControlHelper.FileStage fileStage : VersionControlHelper.queryStages()) {
+                    ImGui.pushStyleColor(ImGuiCol.Text, fileStage.getStageType().getColor());
+                    ImGui.checkbox(fileStage.getFilePath().getFileName().toString(), fileStage.getInclude());
                     ImGui.popStyleColor();
                     ImGui.sameLine();
-                    ImGui.textDisabled(FileUtils.getRelativePackPath(fileChange.getFilePath()));
+                    ImGui.textDisabled(FileUtils.getRelativePackPath(fileStage.getFilePath()));
                 }
+            } else {
+                ImGuiImplementation.whiteSpace(10);
+                ImGuiImplementation.centeredText("You don't have any awaiting changes yet...");
+                ImGuiImplementation.whiteSpace(10);
             }
             ImGui.spacing();
             ImGui.separator();
@@ -67,14 +65,19 @@ public class VersionControlWindow { // todo implement version control system for
                 ImGui.sameLine();
                 ImGui.textColored(0xff0033, "That version already exists, change to a higher one");
             }
-            boolean noChanges = VersionControlHelper.queryFileChanges().stream().filter(fileChange -> fileChange.getInclude().get()).toList().isEmpty();
-            if (noChanges) {
+            boolean canCommit = !VersionControlHelper.queryStages().stream().filter(fileStage -> fileStage.getInclude().get()).toList().isEmpty()
+                    && commitMessage.isNotEmpty()
+                    && commitVersion.isNotEmpty()
+                    && !commitVersion.get().equalsIgnoreCase(VersionControlHelper.getCurrentVersion());
+
+            if (!canCommit) {
                 ImGui.beginDisabled();
             }
             if (ImGui.button("Commit Changes") && MinecraftClient.getInstance().player != null) {
                 if (commitVersion.isNotEmpty() && !commitVersion.get().equalsIgnoreCase(VersionControlHelper.getCurrentVersion())) {
                     if (commitMessage.isNotEmpty()) {
                         VersionControlHelper.commit(PackHelper.getCurrentPack().getDisplayName().getString(), commitVersion.get(), commitMessage.get(), MinecraftClient.getInstance().player.getUuidAsString());
+                        commitMessage.clear();
                     } else {
                         ImGui.textColored(0xff0033, "You must provide a commit message");
                     }
@@ -82,7 +85,7 @@ public class VersionControlWindow { // todo implement version control system for
                     ImGui.textColored(0xff0033, "Provided version already exists, change to a higher one");
                 }
             }
-            if (noChanges) {
+            if (!canCommit) {
                 ImGui.endDisabled();
                 if (ImGui.isItemHovered()) {
                     ImGui.setTooltip("No file changes found to commit");
@@ -91,22 +94,22 @@ public class VersionControlWindow { // todo implement version control system for
             }
             ImGui.sameLine();
             if (ImGui.button("Commit Changes & Push") && MinecraftClient.getInstance().player != null) {
-                if (commitVersion.isNotEmpty() && !commitVersion.get().equalsIgnoreCase(VersionControlHelper.getCurrentVersion())) {
-                    if (commitMessage.isNotEmpty()) {
-                        VersionControlHelper.commit(PackHelper.getCurrentPack().getDisplayName().getString(), commitVersion.get(), commitMessage.get(), MinecraftClient.getInstance().player.getUuidAsString());
-                        VersionControlHelper.pushToRemote();
-                    } else {
-                        ImGui.textColored(0xff0033, "You must provide a commit message");
-                    }
-                } else {
-                    ImGui.textColored(0xff0033, "Provided version already exists, change to a higher one");
-                }
+                VersionControlHelper.commit(PackHelper.getCurrentPack().getDisplayName().getString(), commitVersion.get(), commitMessage.get(), MinecraftClient.getInstance().player.getUuidAsString());
+                VersionControlHelper.pushToRemote();
+                commitMessage.clear();
             }
-            if (noChanges) {
+            if (!canCommit) {
                 ImGui.endDisabled();
                 if (ImGui.isItemHovered()) {
                     ImGui.setTooltip("No file changes found to commit");
                 }
+            }
+
+            if (commitMessage.isEmpty()) {
+                ImGui.textColored(0xff0033, "You must provide a commit message");
+            }
+            if (commitVersion.isEmpty() || commitVersion.get().equalsIgnoreCase(VersionControlHelper.getCurrentVersion())) {
+                ImGui.textColored(0xff0033, "Provided version already exists, change to a higher one");
             }
         }
         ImGui.end();
