@@ -12,6 +12,7 @@ import imgui.flag.*;
 import imgui.type.ImBoolean;
 import me.jtech.packified.client.PackifiedClient;
 import me.jtech.packified.client.helpers.PackHelper;
+import me.jtech.packified.client.helpers.TutorialHelper;
 import me.jtech.packified.client.imgui.ImGuiImplementation;
 import me.jtech.packified.client.util.*;
 import me.jtech.packified.client.windows.popups.ConfirmWindow;
@@ -109,6 +110,10 @@ public class EditorWindow {
             }
 
             ImGui.pushStyleColor(ImGuiCol.FrameBg, 0x00000000);
+            if (TutorialHelper.beginTutorialFocus(TutorialHelper.EDITOR_STAGE, "This is the toolbar. Here you can save, reload, and manage your files.")) {
+                ImGui.pushStyleVar(ImGuiStyleVar.FrameBorderSize, 4.0f);
+                ImGui.pushStyleColor(ImGuiCol.Border, 0xFFFF0000);
+            }
             ImGui.beginChild("Toolbar", ImGui.getWindowWidth(), 40, false, ImGuiWindowFlags.HorizontalScrollbar);
             ImGui.imageButton(ImGuiImplementation.loadTextureFromOwnIdentifier("textures/ui/neu_save.png"), 24, 24);
             if (ImGui.isItemClicked()) {
@@ -140,6 +145,10 @@ public class EditorWindow {
             }
 
             ImGui.endChild();
+            if (TutorialHelper.endTutorialFocus()) {
+                ImGui.popStyleVar();
+                ImGui.popStyleColor();
+            }
             ImGui.popStyleColor();
 
             if (ImGui.beginTabBar("FileEditorTabs", ImGuiTabBarFlags.Reorderable | ImGuiTabBarFlags.AutoSelectNewTabs | ImGuiTabBarFlags.TabListPopupButton)) {

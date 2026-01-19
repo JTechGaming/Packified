@@ -40,14 +40,18 @@ public class LogWindow {
 
             // Display log entries
             synchronized (logEntries) {
-                for (LogEntry entry : new LinkedList<>(logEntries)) { // Create a copy to avoid concurrent modification
-                    if (entry == null) continue; // Skip null entries
-                    Color color = entry.getColor();
-                    float r = color.getRed() / 255.0f;
-                    float g = color.getGreen() / 255.0f;
-                    float b = color.getBlue() / 255.0f;
-                    float alpha = 1.0f;
-                    ImGui.textColored(r, g, b, alpha, "[" + timestampToString(entry.getTimestamp()) + "] " + entry.getMessage());
+                try {
+                    for (LogEntry entry : new LinkedList<>(logEntries)) { // Create a copy to avoid concurrent modification
+                        if (entry == null) continue; // Skip null entries
+                        Color color = entry.getColor();
+                        float r = color.getRed() / 255.0f;
+                        float g = color.getGreen() / 255.0f;
+                        float b = color.getBlue() / 255.0f;
+                        float alpha = 1.0f;
+                        ImGui.textColored(r, g, b, alpha, "[" + timestampToString(entry.getTimestamp()) + "] " + entry.getMessage());
+                    }
+                } catch (ArrayIndexOutOfBoundsException e) {
+                    // do nothing
                 }
             }
 
