@@ -11,22 +11,28 @@ import com.mojang.blaze3d.vertex.VertexFormat;
 import imgui.*;
 import imgui.extension.implot.ImPlot;
 import imgui.flag.ImGuiConfigFlags;
-import imgui.flag.ImGuiDockNodeFlags;
+import imgui.flag.ImGuiStyleVar;
 import imgui.flag.ImGuiWindowFlags;
 import imgui.glfw.ImGuiImplGlfw;
 import imgui.internal.ImGuiContext;
+import imgui.internal.flag.ImGuiDockNodeFlags;
 import me.jtech.packified.Packified;
 import me.jtech.packified.client.PackifiedClient;
+import me.jtech.packified.client.config.ModConfig;
 import me.jtech.packified.client.helpers.CornerNotificationsHelper;
 import me.jtech.packified.client.helpers.NotificationHelper;
+import me.jtech.packified.client.helpers.PackHelper;
+import me.jtech.packified.client.util.FileUtils;
+import me.jtech.packified.client.util.PackUtils;
 import me.jtech.packified.client.util.SafeTextureLoader;
 import me.jtech.packified.client.windows.elements.MenuBar;
 import me.jtech.packified.client.util.IniUtil;
 import me.jtech.packified.client.helpers.TutorialHelper;
 import me.jtech.packified.client.windows.*;
 import me.jtech.packified.client.windows.popups.ConfirmWindow;
+import me.jtech.packified.client.windows.popups.ModelPickerWindow;
 import me.jtech.packified.client.windows.popups.SelectFolderWindow;
-import me.jtech.packified.client.windows.popups.SelectPackWindow;
+import me.jtech.packified.client.windows.popups.PackBrowserWindow;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.minecraft.client.MinecraftClient;
@@ -35,6 +41,7 @@ import net.minecraft.client.gl.SimpleFramebuffer;
 import net.minecraft.client.network.ClientPlayerInteractionManager;
 import net.minecraft.client.render.*;
 import net.minecraft.resource.Resource;
+import net.minecraft.resource.ResourcePackProfile;
 import net.minecraft.util.Identifier;
 import org.jetbrains.annotations.ApiStatus;
 import org.joml.Matrix4f;
@@ -90,7 +97,14 @@ public class ImGuiImplementation {
     public static ImFont currentFont = null;
 
     private static final Map<String, Integer> textureCache = new HashMap<>();
+    public static boolean enterGameKeyToggled = false;
 
+    public static boolean firstFrameAfterInit = true;
+
+    /**
+     * PLEASE DO NOT CALL THIS METHOD!
+     * This method is already called during initialization to properly set up ImGui.
+     */
     public static void create() {
         if (initialized) {
             throw new IllegalStateException("Packified UI initialized twice");
@@ -111,6 +125,12 @@ public class ImGuiImplementation {
         data.setFontGlobalScale(1F);
 
         ImguiThemes.setDeepDarkTheme();
+        // Load file explorers from config
+        Map<Integer, ModConfig.FileExplorerInfo> explorers = ModConfig.getDockConfig().explorers;
+        for (int explorerID : explorers.keySet()) {
+            FileExplorerWindow explorer = new FileExplorerWindow(explorerID, Path.of(explorers.get(explorerID).lastDirectory));
+            explorer.isOpen.set(explorers.get(explorerID).isOpen);
+        }
 
         // font initialization
         float sizeScalar = 1.5f; // Render a higher quality font texture (for sizing)
@@ -127,12 +147,12 @@ public class ImGuiImplementation {
             fontConfig.setName(name);
             fontConfig.setGlyphOffset(0, 0);
 
-            short[] glyphRanges = new short[] {
+            short[] glyphRanges = new short[]{
                     0x0020, 0x00FF, // Basic Latin + Latin-1 Supplement
                     0x0000 // End of ranges
             };
             ImFont font = data.getFonts().addFontFromMemoryTTF(
-                    loadFont(identifier.getPath().replace("fonts/", "")),
+                    loadFont(identifier),
                     16 * sizeScalar,
                     fontConfig,
                     glyphRanges
@@ -147,6 +167,9 @@ public class ImGuiImplementation {
         data.getFonts().build();
 
         ImGui.getIO().setFontGlobalScale(PreferencesWindow.fontSize.get() / 14.0f);
+        if (PreferencesWindow.selectedFont.get() >= loadedFonts.size()) {
+            PreferencesWindow.selectedFont.set(0);
+        }
         currentFont = loadedFonts.get(PreferencesWindow.selectedFont.get());
 
         data.setConfigFlags(ImGuiConfigFlags.DockingEnable | ImGuiConfigFlags.ViewportsEnable);
@@ -166,10 +189,11 @@ public class ImGuiImplementation {
         ).keySet().stream().toList();
     }
 
-    private static byte[] loadFont(String name) {
+    private static byte[] loadFont(Identifier identifier) {
         try {
-            var resource = MinecraftClient.getInstance().getResourceManager().getResource(Packified.identifier("fonts/" + name));
-            if (resource.isEmpty()) throw new MissingResourceException("Missing font: " + name, "Font", "");
+            var resource = MinecraftClient.getInstance().getResourceManager().getResource(identifier);
+            if (resource.isEmpty())
+                throw new MissingResourceException("Missing font: " + identifier.getPath(), "Font", "");
             try (InputStream is = resource.get().getInputStream()) {
                 return is.readAllBytes();
             }
@@ -243,15 +267,47 @@ public class ImGuiImplementation {
             return;
         }
 
-        // Setup docking
-        ImGui.setNextWindowBgAlpha(0);
-        int mainDock = ImGui.dockSpaceOverViewport(ImGui.getMainViewport(), ImGuiDockNodeFlags.NoDockingInCentralNode);
-        imgui.internal.ImGui.dockBuilderGetCentralNode(mainDock).addLocalFlags(imgui.internal.flag.ImGuiDockNodeFlags.NoTabBar);
+        // Setup Docking
+        ImGui.setNextWindowBgAlpha(0f);
+        ImGuiViewport viewport = ImGui.getMainViewport();
+
+        // Make the host window cover the main viewport
+        ImGui.setNextWindowPos(viewport.getPosX(), viewport.getPosY());
+        ImGui.setNextWindowSize(viewport.getSizeX(), viewport.getSizeY());
+        ImGui.setNextWindowViewport(viewport.getID());
+
+        // Remove rounding so dockspace fills cleanly
+        ImGui.pushStyleVar(ImGuiStyleVar.WindowRounding, 0.0f);
+        ImGui.pushStyleVar(ImGuiStyleVar.WindowBorderSize, 0.0f);
+
+        int hostWindowFlags = ImGuiWindowFlags.NoTitleBar
+                | ImGuiWindowFlags.NoCollapse
+                | ImGuiWindowFlags.NoResize
+                | ImGuiWindowFlags.NoMove
+                | ImGuiWindowFlags.NoBackground
+                | ImGuiWindowFlags.NoScrollbar
+                | ImGuiWindowFlags.MenuBar
+                | ImGuiWindowFlags.NoBringToFrontOnFocus
+                | ImGuiWindowFlags.NoNavFocus
+                | ImGuiWindowFlags.NoDocking;
+
+        ImGui.begin("DockHost", hostWindowFlags);
+
+        ImGui.setCursorPosX(ImGui.getCursorPosX() - ImGui.getStyle().getFramePaddingX());
+        ImGui.setCursorPosY(ImGui.getCursorPosY() - ImGui.getStyle().getFramePaddingY() * 2.4f); // Adjust for the padding between menu bar and dockspace
+
+        ImGui.popStyleVar(2);
+
+        int mainDock = ImGui.getID("MainDockSpace");
+        ImGui.dockSpace(mainDock, 0.0f, 0.0f, ImGuiDockNodeFlags.NoWindowMenuButton);
+        ImGui.end();
 
         ImGui.setNextWindowDockID(mainDock);
 
-        if (ImGui.begin("Main", ImGuiWindowFlags.NoMove | ImGuiWindowFlags.NoNavInputs | ImGuiWindowFlags.NoResize | ImGuiWindowFlags.NoBackground | ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoCollapse |
+        if (ImGui.begin("Main", ImGuiWindowFlags.NoMove | ImGuiWindowFlags.NoNavInputs | ImGuiWindowFlags.NoResize |
+                ImGuiWindowFlags.NoBackground | ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoCollapse |
                 ImGuiWindowFlags.NoSavedSettings)) {
+
             minX = ImGui.getWindowContentRegionMinX();
             maxX = ImGui.getWindowContentRegionMaxX();
             minY = ImGui.getWindowContentRegionMinY();
@@ -290,33 +346,37 @@ public class ImGuiImplementation {
             ImGuiImplementation.setFrameX(frameX);
             ImGuiImplementation.setFrameY(frameY);
 
-            if (ImGui.isWindowHovered() && ImGui.isMouseClicked(GLFW.GLFW_MOUSE_BUTTON_RIGHT)) {
-                // If the main window is clicked, we grab the mouse
+            if (ImGui.isWindowHovered() && ImGui.isMouseClicked(GLFW.GLFW_MOUSE_BUTTON_RIGHT) || enterGameKeyToggled) {
                 MinecraftClient client = MinecraftClient.getInstance();
                 GLFW.glfwSetInputMode(client.getWindow().getHandle(), GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+                ImGuiIO io = ImGui.getIO();
+                io.addConfigFlags(ImGuiConfigFlags.NoMouse);
                 grabbed = true;
                 client.mouse.lockCursor();
             }
             MinecraftClient client = MinecraftClient.getInstance();
-            if (!client.mouse.wasRightButtonClicked()) {
+            if (!client.mouse.wasRightButtonClicked() && !enterGameKeyToggled) {
                 if (grabbed) {
                     grabbed = false;
                     client.mouse.unlockCursor();
                     GLFW.glfwSetInputMode(client.getWindow().getHandle(), GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+                    ImGuiIO io = ImGui.getIO();
+                    io.removeConfigFlags(ImGuiConfigFlags.NoMouse);
                 }
             } else {
                 if (MinecraftClient.getInstance().currentScreen != null) {
                     GLFW.glfwSetInputMode(client.getWindow().getHandle(), GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+//                    ImGuiIO io = ImGui.getIO();
+//                    io.removeConfigFlags(ImGuiConfigFlags.NoMouse);
                 } else {
                     GLFW.glfwSetInputMode(client.getWindow().getHandle(), GLFW_CURSOR, GLFW_CURSOR_DISABLED);
                 }
 
-                ImGui.setWindowFocus("Main");
+                ImGui.setWindowFocus("DockHost");
                 ImGui.getIO().setWantCaptureKeyboard(false);
                 ImGui.getIO().setWantCaptureMouse(false);
             }
         }
-
         ImGui.end();
 
         SafeTextureLoader.garbageCollect();
@@ -324,9 +384,11 @@ public class ImGuiImplementation {
         // Window rendering
         LogWindow.render();
         EditorWindow.render();
-        FileHierarchy.render();
+        FileHierarchyWindow.render();
         BackupWindow.render();
-        SelectPackWindow.render();
+        PackBrowserWindow.render();
+        VersionControlWindow.render();
+        WorldWindow.render();
         MultiplayerWindow.render();
         SelectFolderWindow.render();
         ModifyFileWindow.render();
@@ -336,11 +398,27 @@ public class ImGuiImplementation {
         PreferencesWindow.render();
         PackCreationWindow.render();
         AssetInspectorWindow.render();
+        FileExplorerWindow.renderAll();
         ModelEditorWindow.render();
+        ModelPickerWindow.render();
 
         TutorialHelper.render();
 
         ImGui.popFont();
+
+        if (firstFrameAfterInit) {
+            firstFrameAfterInit = false;
+            ImGui.setWindowFocus("Main");
+
+            // Load last opened pack
+            String lastPackName = ModConfig.getDockConfig().lastOpenedPack;
+            if (lastPackName != null && !lastPackName.isBlank()) {
+                ResourcePackProfile pack = PackUtils.getPack(lastPackName);
+                if (pack != null) {
+                    PackHelper.updateCurrentPack(pack);
+                }
+            }
+        }
 
         // end frame
         ImGui.render();
@@ -357,10 +435,32 @@ public class ImGuiImplementation {
         openOrClose(true);
     }
 
-    @ApiStatus.Internal
+    public static void saveExplorers() {
+        Map<Integer, ModConfig.FileExplorerInfo> explorers = new HashMap<>();
+        List<FileExplorerWindow> explorerList = FileExplorerWindow.explorers.stream().filter(explorer -> !explorer.allowFolderSelection).toList();
+
+        for (FileExplorerWindow explorer : explorerList) {
+            ModConfig.FileExplorerInfo info = new ModConfig.FileExplorerInfo();
+            info.isOpen = explorer.isOpen.get();
+            if (explorer.getCurrentDirectory() != null) {
+                info.lastDirectory = explorer.getCurrentDirectory().toString();
+            }
+            explorers.put(explorer.i, info);
+        }
+        ModConfig.DockConfig dockConfig = ModConfig.getDockConfig();
+        dockConfig.explorers = explorers;
+        ModConfig.saveDockConfig(dockConfig);
+    }
+
+    /**
+     * PLEASE DO NOT CALL THIS METHOD!
+     * This method is already called by PackifiedClient during shutdown to properly dispose of ImGui resources.
+     */
     public static void dispose() {
+        saveExplorers();
+
         clearTextureCache();
-        FileHierarchy.clearCache();
+        FileHierarchyWindow.clearCache();
 
         imGuiImplGl3.shutdown();
 
@@ -441,6 +541,16 @@ public class ImGuiImplementation {
         return fromBufferedImage(image);
     }
 
+    public static boolean menuItemWithIcon(int glTextureId, String label, float iconSizeX, float iconSizeY) {
+        ImGui.pushID(label); // isolate ID space
+        // Draw the icon (GL texture created by ImGuiImplementation.fromBufferedImage / loadTextureFromOwnIdentifier)
+        ImGui.image(glTextureId, iconSizeX, iconSizeY);
+        ImGui.sameLine(); // put text to the right of the icon
+        boolean activated = ImGui.menuItem(label);
+        ImGui.popID();
+        return activated;
+    }
+
     //Can be used to load buffered images in ImGui
     public static int fromBufferedImage(BufferedImage image) {
         if (image == null) {
@@ -477,10 +587,17 @@ public class ImGuiImplementation {
         return texture;
     }
 
-    private static final ProjectionMatrix2 projectionBuffers = new ProjectionMatrix2("Blit render target", 1000.0f, 3000.0f, true);
-    private static final Framebuffer outputFramebuffer = new SimpleFramebuffer(null, 1, 1, true);
+    private static ProjectionMatrix2 projectionBuffers = null;
+    private static Framebuffer outputFramebuffer = null;
 
     public static void blit(Framebuffer framebuffer, int width, int height, float x1, float y1, float x2, float y2) {
+        if (projectionBuffers == null) {
+            projectionBuffers = new ProjectionMatrix2("Blit render target", 1000.0f, 3000.0f, true);
+        }
+        if (outputFramebuffer == null) {
+            outputFramebuffer = new SimpleFramebuffer(null, 1, 1, true);
+        }
+
         GlStateManager._viewport(0, 0, width, height); // Resize the viewport itself
 
         // Resize the framebuffer if the viewport size has changed
@@ -504,10 +621,10 @@ public class ImGuiImplementation {
 
         BufferBuilder builder = Tessellator.getInstance().begin(VertexFormat.DrawMode.QUADS, VertexFormats.POSITION_TEXTURE);
         // Draw a quad that fills up the area where the viewport needs to be
-        builder.vertex(width*x1, height*y2, 0.0f).texture(0.0f, 0.0f);
-        builder.vertex(width*x2, height*y2, 0.0f).texture(1.0f, 0.0f);
-        builder.vertex(width*x2, height*y1, 0.0f).texture(1.0f, 1.0f);
-        builder.vertex(width*x1, height*y1, 0.0f).texture(0.0f, 1.0f);
+        builder.vertex(width * x1, height * y2, 0.0f).texture(0.0f, 0.0f);
+        builder.vertex(width * x2, height * y2, 0.0f).texture(1.0f, 0.0f);
+        builder.vertex(width * x2, height * y1, 0.0f).texture(1.0f, 1.0f);
+        builder.vertex(width * x1, height * y1, 0.0f).texture(0.0f, 1.0f);
         try (BuiltBuffer meshData = builder.end()) {
             // -------------------------------------------------------
             // Derived from the >=1.21.5 FrameBuffer.drawBlit() method
@@ -682,5 +799,28 @@ public class ImGuiImplementation {
         ImGui.pushTextWrapPos(win_width - text_indentation);
         ImGui.textWrapped(text);
         ImGui.popTextWrapPos();
+    }
+
+    public static void whiteSpace(int size) {
+        for (int i=0; i<size;i++) {
+            ImGui.spacing();
+        }
+    }
+
+    public static int getFileIconTextureId(String extension) {
+        switch (extension) {
+            case ".json" -> {
+                return SafeTextureLoader.loadFromIdentifier(Packified.identifier("textures/ui/neu_model.png"), true);
+            }
+            case ".png", ".jpg", ".jpeg", ".bmp", ".gif" -> {
+                return SafeTextureLoader.loadFromIdentifier(Packified.identifier("textures/ui/neu_image.png"), true);
+            }
+            case "folder" -> {
+                return SafeTextureLoader.loadFromIdentifier(Packified.identifier("textures/ui/neu_folder.png"), true);
+            }
+            default -> {
+                return SafeTextureLoader.loadFromIdentifier(Packified.identifier("textures/ui/neu_file.png"), true);
+            }
+        }
     }
 }

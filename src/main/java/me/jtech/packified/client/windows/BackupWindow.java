@@ -7,11 +7,12 @@ import imgui.flag.ImGuiSelectableFlags;
 import imgui.flag.ImGuiWindowFlags;
 import imgui.type.ImBoolean;
 import me.jtech.packified.client.PackifiedClient;
+import me.jtech.packified.client.helpers.PackHelper;
 import me.jtech.packified.client.imgui.ImGuiImplementation;
 import me.jtech.packified.client.util.FileUtils;
 import me.jtech.packified.client.util.PackUtils;
 import me.jtech.packified.client.windows.popups.ConfirmWindow;
-import me.jtech.packified.client.windows.popups.SelectPackWindow;
+import me.jtech.packified.client.windows.popups.PackBrowserWindow;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.fabricmc.loader.api.FabricLoader;
@@ -40,19 +41,19 @@ public class BackupWindow {
             if (ImGui.beginMenuBar()) {
                 if (ImGui.menuItem("Clear Backups")) {
                     // Delete file
-                    ConfirmWindow.open("delete all backups", "They will be lost forever", FileUtils::clearBackups);
+                    ConfirmWindow.open("Are you sure you want to delete all backups", "They will be lost forever", FileUtils::clearBackups);
                 }
                 ImGui.endMenuBar();
             }
 
-            ResourcePackProfile pack = PackifiedClient.currentPack;
+            ResourcePackProfile pack = PackHelper.getCurrentPack();
             if (pack == null) {
                 ImGui.setCursorPos((ImGui.getWindowWidth() - ImGui.calcTextSize("No pack loaded").x) / 2, (ImGui.getWindowHeight() - ImGui.getTextLineHeightWithSpacing()) / 2);
                 ImGui.text("No pack loaded");
                 // Centered button to load a pack
                 ImGui.setCursorPos((ImGui.getWindowWidth() - ImGui.calcTextSize("Load Pack").x) / 2, (ImGui.getWindowHeight() - ImGui.getTextLineHeightWithSpacing()) / 2 + ImGui.getTextLineHeightWithSpacing());
                 if (ImGui.button("Load Pack")) {
-                    SelectPackWindow.open.set(true);
+                    PackBrowserWindow.open.set(true);
                 }
                 ImGui.end();
                 return;
@@ -101,7 +102,7 @@ public class BackupWindow {
                                 ImGui.separator();
                                 if (ImGui.menuItem("Delete All")) {
                                     // Delete file
-                                    ConfirmWindow.open("delete all backups", "They will be lost forever", FileUtils::clearBackups);
+                                    ConfirmWindow.open("Are you sure you want to delete all backups", "They will be lost forever", FileUtils::clearBackups);
                                 }
                                 ImGui.endPopup();
                             }

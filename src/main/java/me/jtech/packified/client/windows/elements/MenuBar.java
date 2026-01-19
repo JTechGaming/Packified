@@ -3,10 +3,13 @@ package me.jtech.packified.client.windows.elements;
 import imgui.ImGui;
 import me.jtech.packified.Packified;
 import me.jtech.packified.client.PackifiedClient;
+import me.jtech.packified.client.config.ModConfig;
+import me.jtech.packified.client.helpers.PackHelper;
 import me.jtech.packified.client.util.FileDialog;
 import me.jtech.packified.client.util.FileUtils;
 import me.jtech.packified.client.util.PackUtils;
 import me.jtech.packified.client.helpers.TutorialHelper;
+import me.jtech.packified.client.util.WebUtil;
 import me.jtech.packified.client.windows.*;
 import me.jtech.packified.client.networking.packets.C2SInfoPacket;
 import me.jtech.packified.client.windows.popups.ConfirmWindow;
@@ -37,7 +40,8 @@ public class MenuBar {
                 if (ImGui.beginMenu("New")) {
                     if (ImGui.menuItem("Pack")) {
                         EditorWindow.openFiles.clear();
-                        PackifiedClient.currentPack = null;
+                        PackHelper.closePack();
+                        ModConfig.savePackStatus(null);
                         PackCreationWindow.isOpen.set(!PackCreationWindow.isOpen.get());
                     }
                     ImGui.endMenu();
@@ -60,7 +64,7 @@ public class MenuBar {
                             }
                         });
                     }
-                    if (PackifiedClient.currentPack != null) {
+                    if (PackHelper.isValid()) {
                         if (ImGui.menuItem("File")) {
                             String defaultFolder = FabricLoader.getInstance().getConfigDir().resolve("packified").toString();
                             FileDialog.openFileDialog(defaultFolder, "Files", "json", "png").thenAccept(pathStr -> {
@@ -75,7 +79,7 @@ public class MenuBar {
                     }
                     ImGui.endMenu();
                 }
-                if (PackifiedClient.currentPack != null) {
+                if (PackHelper.isValid()) {
                     if (ImGui.menuItem("Export")) {
                         PackUtils.exportPack();
                     }
@@ -92,15 +96,7 @@ public class MenuBar {
                     }
                     for (ResourcePackProfile pack : packs) {
                         if (ImGui.menuItem(pack.getDisplayName().getString())) {
-                            EditorWindow.openFiles.clear();
-                            PackifiedClient.currentPack = pack;
-                            PackUtils.checkPackType(pack);
-                            ResourcePackManager resourcePackManager = MinecraftClient.getInstance().getResourcePackManager();
-
-                            if (PackifiedClient.currentPack != null) {
-                                resourcePackManager.enable(PackifiedClient.currentPack.getDisplayName().getString());
-                                ClientPlayNetworking.send(new C2SInfoPacket(PackifiedClient.currentPack.getDisplayName().getString(), MinecraftClient.getInstance().player.getUuid()));
-                            }
+                            PackHelper.updateCurrentPack(pack);
                         }
                     }
                     ImGui.endMenu();
@@ -119,15 +115,7 @@ public class MenuBar {
                         if (ImGui.menuItem(pack.getDisplayName().getString())) {
                             ConfirmWindow.open("do that?", "You are about to load a pack from another mod. Before you do this, make sure that '" + pack.getDisplayName().getString() + "' has a license that allows you to look at/modify it's resources. Continue at your own risk.", () -> {
                                 FileUtils.loadIdentifierPackAssets(pack);
-                                EditorWindow.openFiles.clear();
-                                PackUtils.refresh();
-                                PackifiedClient.currentPack = PackUtils.getPack(PackUtils.legalizeName(pack.getDisplayName().getString()));
-                                ResourcePackManager resourcePackManager = MinecraftClient.getInstance().getResourcePackManager();
-
-                                if (PackifiedClient.currentPack != null) {
-                                    resourcePackManager.enable(PackifiedClient.currentPack.getDisplayName().getString());
-                                    ClientPlayNetworking.send(new C2SInfoPacket(PackifiedClient.currentPack.getDisplayName().getString(), MinecraftClient.getInstance().player.getUuid()));
-                                }
+                                PackHelper.updateCurrentPack(PackUtils.getPack(PackUtils.legalizeName(pack.getDisplayName().getString())));
                             });
                         }
                     }
@@ -175,8 +163,11 @@ public class MenuBar {
                 if (ImGui.menuItem("Multiplayer", null, MultiplayerWindow.isOpen.get())) {
                     MultiplayerWindow.isOpen.set(!MultiplayerWindow.isOpen.get());
                 }
-                if (ImGui.menuItem("File Hierarchy", null, FileHierarchy.isOpen.get())) {
-                    FileHierarchy.isOpen.set(!FileHierarchy.isOpen.get());
+                if (ImGui.menuItem("Version Control", null, VersionControlWindow.isOpen.get())) {
+                    VersionControlWindow.isOpen.set(!VersionControlWindow.isOpen.get());
+                }
+                if (ImGui.menuItem("File Hierarchy", null, FileHierarchyWindow.isOpen.get())) {
+                    FileHierarchyWindow.isOpen.set(!FileHierarchyWindow.isOpen.get());
                 }
                 if (ImGui.menuItem("File Editor", null, EditorWindow.isOpen.get())) {
                     EditorWindow.isOpen.set(!EditorWindow.isOpen.get());
@@ -184,16 +175,29 @@ public class MenuBar {
                 if (ImGui.menuItem("Log", null, LogWindow.isOpen.get())) {
                     LogWindow.isOpen.set(!LogWindow.isOpen.get());
                 }
-                if (ImGui.menuItem("Model Editor (BETA)", null, ModelEditorWindow.shouldRender)) {
-                    ModelEditorWindow.shouldRender = !ModelEditorWindow.shouldRender;
+                if (ImGui.menuItem("Model Editor (BETA)", null, ModelEditorWindow.isOpen.get())) {
+                    ModelEditorWindow.isOpen.set(!ModelEditorWindow.isOpen.get());
+                }
+                if (ImGui.beginMenu("File Browsers")) {
+                    if (ImGui.menuItem("New File Explorer")) {
+                        FileExplorerWindow.createNewExplorer(null);
+                    }
+                    ImGui.separator();
+                    for (int i = 0; i < FileExplorerWindow.explorers.size(); i++) {
+                        FileExplorerWindow explorer = FileExplorerWindow.explorers.get(i);
+                        if (ImGui.menuItem("File Explorer " + (i + 1), null, explorer.isOpen.get())) {
+                            explorer.isOpen.set(!explorer.isOpen.get());
+                        }
+                    }
+                    ImGui.endMenu();
                 }
                 ImGui.endMenu();
             }
 
             if (Packified.debugMode) {
                 if (ImGui.beginMenu("Debug")) {
-                    if (ImGui.menuItem("Send pack to self") && PackifiedClient.currentPack != null) {
-                        PackUtils.sendFullPack(PackifiedClient.currentPack, MinecraftClient.getInstance().player.getUuid());
+                    if (ImGui.menuItem("Send pack to self") && PackHelper.isValid()) {
+                        PackUtils.sendFullPack(PackHelper.getCurrentPack(), MinecraftClient.getInstance().player.getUuid());
                     }
                     if (ImGui.isItemHovered()) {
                         ImGui.setTooltip("Please do not use this......");
@@ -204,7 +208,7 @@ public class MenuBar {
 
             if (ImGui.beginMenu("Help")) {
                 if (ImGui.menuItem("About")) {
-                    System.out.println("Show About Window");
+                    WebUtil.openWebpage("https://github.com/JTechGaming/Packified");
                 }
                 if (ImGui.menuItem("Toggle Debug Mode", null, Packified.debugMode)) {
                     Packified.debugMode = !Packified.debugMode;

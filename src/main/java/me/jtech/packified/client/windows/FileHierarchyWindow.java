@@ -5,63 +5,63 @@ import imgui.flag.*;
 import imgui.type.ImBoolean;
 import imgui.type.ImString;
 import me.jtech.packified.client.PackifiedClient;
+import me.jtech.packified.client.config.ModConfig;
+import me.jtech.packified.client.helpers.DisplayScaleHelper;
+import me.jtech.packified.client.helpers.ExternalEditorHelper;
+import me.jtech.packified.client.helpers.PackHelper;
 import me.jtech.packified.client.helpers.TutorialHelper;
 import me.jtech.packified.client.imgui.ImGuiImplementation;
 import me.jtech.packified.client.util.*;
 import me.jtech.packified.client.windows.popups.ConfirmWindow;
-import me.jtech.packified.client.windows.popups.SelectPackWindow;
+import me.jtech.packified.client.windows.popups.PackBrowserWindow;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
-import net.fabricmc.fabric.api.resource.ResourceManagerHelper;
-import net.fabricmc.fabric.api.resource.SimpleSynchronousResourceReloadListener;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.MinecraftClient;
-import net.minecraft.resource.ResourceManager;
-import net.minecraft.resource.ResourceType;
-import org.lwjgl.opengl.GL11;
+import org.lwjgl.glfw.GLFWDropCallback;
 
-import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.nio.file.*;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
-import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.lwjgl.glfw.GLFW.glfwSetDropCallback;
+
 @Environment(EnvType.CLIENT)
-public class FileHierarchy {
+public class FileHierarchyWindow {
     public static ImBoolean isOpen = new ImBoolean(true);
 
     private static boolean fileSelect;
-    private Path filePath;
-    private final Map<String, FileHierarchy> children = new HashMap<>();
+    private final Path filePath;
+    private final Map<String, FileHierarchyWindow> children = new HashMap<>();
 
-    private static ImString searchQuery = new ImString();
+    private static final ImString searchQuery = new ImString();
     private static String lastFrameSearch = searchQuery.get();
     private static String selectedExtension = "none";
     private static String lastFrameExtension = selectedExtension;
     private static Path selectedFile;
-    public static final String[] extensions = {
-            "none", ".png", ".json", ".ogg", ".mcmeta", ".txt", ".properties", ".vsh", ".fsh", ".bbmodel", ".bbmodel.json"
+    public static final String[] extensions = { // These are only used for filtering, so if a user wants to filter by a custom extension they can type it in the search bar, and if a type is unknown it doesn't really affect other code
+            "none", ".png", ".json", ".ogg", ".mcmeta", ".txt", ".properties", ".vsh", ".fsh", ".glsl", ".bbmodel", ".bbmodel.json"
     };
     private static float itemHoverTime = 0.0f;
     private static String selectedFileName = null;
     private static boolean alreadyRenderedHoverThisFrame = false;
 
     private static boolean isEditingName = false;
-    private static ImString fileNameInput = new ImString(100);
+    private static final ImString fileNameInput = new ImString(100);
 
     private static boolean isCreatingNewFile = false;
     private static Path selectedFileForCreation = null;
 
-    private static FileHierarchy cachedHierarchy = null;
-    private static PackWatcher watcher;
+    public static FileHierarchyWindow cachedHierarchy = null;
 
     private static final Map<Path, Integer> textureCache = new HashMap<>();
 
     private static final int inportIcon = ImGuiImplementation.loadTextureFromOwnIdentifier("textures/ui/neu_import.png");
     private static final int deleteIcon = ImGuiImplementation.loadTextureFromOwnIdentifier("textures/ui/neu_delete.png");
 
+    @Deprecated
     private static int getOrLoadTexture(Path filePath) {
         if (textureCache.size() >= 40 && !textureCache.containsKey(filePath)) { // prevent the cache from growing too large
             textureCache.clear();
@@ -69,38 +69,14 @@ public class FileHierarchy {
         return textureCache.computeIfAbsent(filePath, ImGuiImplementation::loadTextureFromPath);
     }
 
-    public static FileHierarchy getCachedHierarchy(Path rootPath) {
-        if (watcher != null && !watcher.rootPath.equals(rootPath)) {
-            try {
-                watcher.stop();
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-            watcher = null; // Reset the watcher if the root path has changed
-            cachedHierarchy = null; // Reset the cached hierarchy
-            LogWindow.addDebugInfo("PackWatcher: Stopped and reset due to root path change.");
-        }
-        if (watcher == null) {
-            try {
-                watcher = new PackWatcher(rootPath);
-                watcher.start();
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-
-            Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-                try {
-                    if (watcher != null) watcher.stop();
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-            }));
-        }
-
-        if (cachedHierarchy == null || watcher.isInvalidated() || !lastFrameSearch.equals(searchQuery.get()) || !selectedExtension.equals(lastFrameExtension)) {
+    public static FileHierarchyWindow getCachedHierarchy(Path rootPath) {
+        if (cachedHierarchy == null || PackHelper.getWatcher().isInvalidated() || !lastFrameSearch.equals(searchQuery.get()) || !selectedExtension.equals(lastFrameExtension)) {
             LogWindow.addDebugInfo("PackWatcher: Successfully rebuilt file hierarchy");
             cachedHierarchy = buildFileHierarchy(rootPath);
-            if (watcher != null) watcher.resetInvalidated();
+            if (PreferencesWindow.autoReloadAssets.get()) {
+                CompletableFuture.runAsync(PackUtils::reloadPack);
+            }
+            if (PackHelper.getWatcher() != null) PackHelper.getWatcher().resetInvalidated();
         }
 
         return cachedHierarchy;
@@ -108,19 +84,13 @@ public class FileHierarchy {
 
     public static void clearCache() {
         textureCache.clear();
-        cachedHierarchy = null;
-        if (watcher != null) {
-            try {
-                watcher.stop();
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-            watcher = null; // Reset the watcher
+        if (PackHelper.isValid()) {
+            PackHelper.disposeWatcher();
         }
         LogWindow.addDebugInfo("PackWatcher: Cache cleared and watcher reset.");
     }
 
-    public FileHierarchy(Path filePath) {
+    public FileHierarchyWindow(Path filePath) {
         this.filePath = filePath;
     }
 
@@ -129,6 +99,7 @@ public class FileHierarchy {
      */
     public void addFile(Path path) {
         // Ensure the relative path is calculated correctly
+        if (FileUtils.getPackFolderPath() == null) return;
         Path relativePath = FileUtils.getPackFolderPath().relativize(path);
         List<String> parts = new ArrayList<>();
 
@@ -140,18 +111,18 @@ public class FileHierarchy {
 
         if (parts.isEmpty()) return;
 
-        FileHierarchy current = this;
+        FileHierarchyWindow current = this;
         for (int i = 0; i < parts.size(); i++) {
             String part = parts.get(i);
             if (i == parts.size() - 1 && Files.isRegularFile(path)) {
                 // Add file to the hierarchy
-                current.children.putIfAbsent(part, new FileHierarchy(path));
+                current.children.putIfAbsent(part, new FileHierarchyWindow(path));
             } else {
                 // Construct the full path for the folder using relativePath
                 Path folderPath = FileUtils.getPackFolderPath().resolve(String.join("/", parts.subList(0, i + 1)));
 
                 // Add folder to the hierarchy
-                current.children.putIfAbsent(part, new FileHierarchy(folderPath));
+                current.children.putIfAbsent(part, new FileHierarchyWindow(folderPath));
                 current = current.children.get(part); // Navigate deeper
             }
         }
@@ -185,10 +156,10 @@ public class FileHierarchy {
                     try (Stream<Path> stream = Files.list(filePath)) {
                         stream.forEach(this::addFile); // lazy add files
                     } catch (IOException e) {
-                        e.printStackTrace();
+                        LogWindow.addError(e.getMessage());
                     }
                 }
-                for (Map.Entry<String, FileHierarchy> entry : children.entrySet()) {
+                for (Map.Entry<String, FileHierarchyWindow> entry : children.entrySet()) {
                     entry.getValue().renderTree(entry.getKey());
                 }
 
@@ -199,7 +170,7 @@ public class FileHierarchy {
                         selectedFileForCreation = null;
                         System.out.println(filePath);
                         Path newPath = filePath.resolve(fileNameInput.get());
-                        FileUtils.saveSingleFile(newPath, FileUtils.getFileExtension(newPath.toString()), "", PackifiedClient.currentPack);
+                        FileUtils.saveSingleFile(newPath, FileUtils.getFileExtension(newPath.toString()), "", PackHelper.getCurrentPack());
                     }
                 }
 
@@ -283,14 +254,25 @@ public class FileHierarchy {
     }
 
     public static void render() {
-        if (!isOpen.get()) {
-            return; // If the window is not open, do not render
-        }
+        if (!isOpen.get() || ModelEditorWindow.isModelWindowFocused()) return;
+
         alreadyRenderedHoverThisFrame = false;
 
         ImGui.setNextWindowViewport(ImGui.getMainViewport().getID());
 
         ImGui.begin("File Hierarchy", isOpen);
+
+        // Register the drop callback after window creation
+        GLFWDropCallback dropCallback = new GLFWDropCallback() {
+            @Override
+            public void invoke(long window, int count, long names) {
+                for (int i = 0; i < count; i++) {
+                    String path = GLFWDropCallback.getName(names, i);
+                    FileUtils.importFile(Path.of(path));
+                }
+            }
+        };
+        glfwSetDropCallback(MinecraftClient.getInstance().getWindow().getHandle(), dropCallback);
 
         ImGuiImplementation.pushWindowCenterPos();
 
@@ -326,32 +308,30 @@ public class FileHierarchy {
             ImGui.popStyleColor();
         }
 
-        if (PackifiedClient.currentPack != null) {
-            ImGui.imageButton(inportIcon, 14, 14);
+        int buttonSize = DisplayScaleHelper.getUIButtonSize();
+
+        if (PackHelper.isValid()) {
+            ImGui.imageButton(inportIcon, buttonSize, buttonSize);
             if (ImGui.isItemClicked()) {
                 // Logic to import a file
                 String defaultFolder = FabricLoader.getInstance().getConfigDir().resolve("packified").toString();
-                FileDialog.openFileDialog(defaultFolder, "Files", "json", "png").thenAccept(pathStr -> {
+                FileDialog.openFileDialog(defaultFolder, "Files").thenAccept(pathStr -> {
                     if (pathStr != null) {
                         Path path = Path.of(pathStr);
-                        MinecraftClient.getInstance().submit(() -> {
-                            FileUtils.importFile(path);
-                        });
+                        MinecraftClient.getInstance().submit(() -> FileUtils.importFile(path));
                     }
                 });
             }
             ImGui.sameLine();
-            ImGui.imageButton(deleteIcon, 14, 14);
+            ImGui.imageButton(deleteIcon, buttonSize, buttonSize);
             if (ImGui.isItemClicked()) {
                 // Logic to delete a file
-                ConfirmWindow.open("delete this file", "The file will be lost forever.", () -> {
-                    FileUtils.deleteFile(selectedFile);
-                });
+                ConfirmWindow.open("Are you sure you want to delete this file", "The file will be lost forever.", () -> FileUtils.deleteFile(selectedFile));
             }
 
             Path packPath = getPackFolderPath();
             if (packPath != null && Files.exists(packPath)) {
-                FileHierarchy root = getCachedHierarchy(packPath);
+                FileHierarchyWindow root = getCachedHierarchy(packPath);
                 if (ImGui.beginTable("FileHierarchyTable", 3, ImGuiTableFlags.RowBg | ImGuiTableFlags.Resizable | ImGuiTableFlags.ScrollX | ImGuiTableFlags.ScrollY)) {
                     ImGui.tableSetupColumn("Name");
                     ImGui.tableSetupColumn("Size");
@@ -376,7 +356,7 @@ public class FileHierarchy {
                         }
                         if (ImGui.menuItem("Load Pack")) {
                             // Open the select pack window
-                            SelectPackWindow.open.set(true);
+                            PackBrowserWindow.open.set(true);
                         }
                         ImGui.endPopup();
                     }
@@ -392,7 +372,7 @@ public class FileHierarchy {
             // Centered button to load a pack
             ImGui.setCursorPos((ImGui.getWindowWidth() - ImGui.calcTextSize("Load Pack").x) / 2, (ImGui.getWindowHeight() - ImGui.getTextLineHeightWithSpacing()) / 2 + ImGui.getTextLineHeightWithSpacing());
             if (ImGui.button("Load Pack")) {
-                SelectPackWindow.open.set(true);
+                PackBrowserWindow.open.set(true);
             }
         }
 
@@ -403,26 +383,26 @@ public class FileHierarchy {
     }
 
     public static Path getPackFolderPath() {
-        if (PackifiedClient.currentPack == null) return null;
+        if (PackHelper.isInvalid()) return null;
         return FabricLoader.getInstance().getGameDir()
                 .resolve("resourcepacks")
-                .resolve(PackifiedClient.currentPack.getDisplayName().getString());
+                .resolve(PackHelper.getCurrentPack().getDisplayName().getString());
     }
 
-    public static FileHierarchy buildFileHierarchy(Path rootPath) {
-        FileHierarchy root = new FileHierarchy(rootPath);
+    public static FileHierarchyWindow buildFileHierarchy(Path rootPath) {
+        FileHierarchyWindow root = new FileHierarchyWindow(rootPath);
         try (Stream<Path> paths = Files.walk(rootPath)) {
             List<Path> sortedPaths = paths
                     .filter(Files::exists)
                     .filter(path -> searchQuery.get().isEmpty() || path.toString().toLowerCase().contains(searchQuery.get().toLowerCase()))
                     .filter(path -> selectedExtension.equals("none") || path.toString().toLowerCase().endsWith(selectedExtension.toLowerCase()))
                     .sorted(Comparator.comparing(Path::toString))
-                    .collect(Collectors.toList());
+                    .toList();
             for (Path path : sortedPaths) {
                 root.addFile(path);
             }
         } catch (IOException e) {
-            e.printStackTrace();
+            LogWindow.addError(e.getMessage());
         }
         return root;
     }
@@ -432,6 +412,19 @@ public class FileHierarchy {
             fileSelect = true;
             selectedFile = path;
             // Open file
+            if (!isFolder) {
+                if (ImGui.menuItem("Open")) {
+                    FileUtils.openFile(path);
+                }
+                if (FileUtils.getExtensionFromPath(path).equals(".json")) {
+                    if (ImGui.menuItem("Open in model editor")) {
+                        ModelEditorWindow.loadModel(path.toString());
+                        if (!ModelEditorWindow.isModelWindowOpen()) {
+                            ModelEditorWindow.isOpen.set(true);
+                        }
+                    }
+                }
+            }
             if (ImGui.beginMenu("New")) {
                 if (ImGui.menuItem("File")) {
                     // Create a new file
@@ -542,11 +535,12 @@ public class FileHierarchy {
                 if (ImGui.menuItem("Load")) {
                     selectedFile = path;
                     // Open the select pack window
-                    SelectPackWindow.open.set(true);
+                    PackBrowserWindow.open.set(true);
                 }
                 if (ImGui.menuItem("Close")) {
                     selectedFile = null;
-                    PackifiedClient.currentPack = null; // Close the current pack
+                    PackHelper.closePack();
+                    ModConfig.savePackStatus(null);
                 }
                 if (ImGui.menuItem("Reload")) {
                     selectedFile = path;
@@ -570,6 +564,34 @@ public class FileHierarchy {
 
                     // Open file
                     FileUtils.openFile(path);
+                }
+                if (FileUtils.getExtensionFromPath(path).equals(".bbmodel")) {
+                    if (ExternalEditorHelper.findBlockBenchEditor().isPresent()) {
+                        if (ImGui.menuItem("Open in external editor: " + ExternalEditorHelper.findBlockBenchEditor().get().getFileName().toString().replace(".exe", ""))) {
+                            ExternalEditorHelper.openFileWithEditor(ExternalEditorHelper.findBlockBenchEditor().get(), path);
+                        }
+                    }
+                }
+                if (FileUtils.getExtensionFromPath(path).equals(".json")) {
+                    if (ExternalEditorHelper.findJSONEditor().isPresent()) {
+                        if (ImGui.menuItem("Open in external editor: " + ExternalEditorHelper.findJSONEditor().get().getFileName().toString().replace(".exe", ""))) {
+                            ExternalEditorHelper.openFileWithEditor(ExternalEditorHelper.findJSONEditor().get(), path);
+                        }
+                    }
+                }
+                if (FileUtils.getExtensionFromPath(path).equals(".png")) {
+                    if (ExternalEditorHelper.findImageEditor().isPresent()) {
+                        if (ImGui.menuItem("Open in external editor: " + ExternalEditorHelper.findImageEditor().get().getFileName().toString().replace(".exe", ""))) {
+                            ExternalEditorHelper.openFileWithEditor(ExternalEditorHelper.findImageEditor().get(), path);
+                        }
+                    }
+                }
+                if (FileUtils.getExtensionFromPath(path).equals(".ogg")) {
+                    if (ExternalEditorHelper.findAudioEditor().isPresent()) {
+                        if (ImGui.menuItem("Open in external editor: " + ExternalEditorHelper.findAudioEditor().get().getFileName().toString().replace(".exe", ""))) {
+                            ExternalEditorHelper.openFileWithEditor(ExternalEditorHelper.findAudioEditor().get(), path);
+                        }
+                    }
                 }
                 ImGui.separator();
                 if (ImGui.beginMenu("Refactor")) {
@@ -607,10 +629,9 @@ public class FileHierarchy {
                     ModifyFileWindow.open("Duplicate File", path, (fileIdentifier) -> {
                         // Create the file
                         String fileName = fileIdentifier.substring(fileIdentifier.lastIndexOf('/') + 1);
-                        String newIdentifierPath = path.toString().substring(0, path.toString().lastIndexOf('/') + 1) + fileName;
-                        Path newPath = FileUtils.validateIdentifier(newIdentifierPath);
+                        Path newPath = path.getParent().resolve(fileName);
                         String content = FileUtils.readFile(path);
-                        FileUtils.saveSingleFile(newPath, FileUtils.getFileExtension(fileName), content, PackifiedClient.currentPack);
+                        FileUtils.saveSingleFile(newPath, FileUtils.getFileExtension(fileName), content, PackHelper.getCurrentPack());
                     });
                 }
             }
@@ -624,9 +645,7 @@ public class FileHierarchy {
             ImGui.separator();
             if (ImGui.menuItem("Delete")) {
                 // Delete file
-                ConfirmWindow.open("delete this file", "The file will be lost forever.", () -> {
-                    FileUtils.deleteFile(path);
-                });
+                ConfirmWindow.open("Are you sure you want to delete this file", "The file will be lost forever.", () -> FileUtils.deleteFile(path));
             }
             ImGui.endPopup();
         }

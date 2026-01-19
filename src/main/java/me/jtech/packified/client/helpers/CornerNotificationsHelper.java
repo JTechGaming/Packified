@@ -4,6 +4,8 @@ import imgui.ImGui;
 import imgui.flag.ImGuiCond;
 import imgui.flag.ImGuiWindowFlags;
 import me.jtech.packified.client.windows.LogWindow;
+import net.fabricmc.api.EnvType;
+import net.fabricmc.api.Environment;
 
 import java.awt.*;
 import java.util.ConcurrentModificationException;
@@ -11,6 +13,7 @@ import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 
+@Environment(EnvType.CLIENT)
 public class CornerNotificationsHelper {
     private static final List<ImGuiNotification> notifications = new LinkedList<>();
 

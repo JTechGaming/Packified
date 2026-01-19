@@ -1,12 +1,16 @@
 package me.jtech.packified.client.util;
 
+import me.jtech.packified.client.helpers.VersionControlHelper;
 import me.jtech.packified.client.windows.LogWindow;
+import net.fabricmc.api.EnvType;
+import net.fabricmc.api.Environment;
 
 import java.io.IOException;
 import java.nio.file.*;
 import java.util.*;
 import java.util.concurrent.*;
 
+@Environment(EnvType.CLIENT)
 public class PackWatcher implements Runnable {
     private final WatchService watchService;
     private final Map<WatchKey, Path> keys = new HashMap<>();
@@ -95,6 +99,7 @@ public class PackWatcher implements Runnable {
                 }
 
                 invalidated = true;
+                VersionControlHelper.stageFile(new VersionControlHelper.FileStage(child, kind));
             }
 
             boolean valid = key.reset();

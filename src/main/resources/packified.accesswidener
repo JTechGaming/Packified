@@ -18,3 +18,5 @@ accessible class net/minecraft/client/font/FontManager$FontKey
 accessible class net/minecraft/client/render/model/BakedModelManager$BakingResult
 accessible field net/minecraft/client/font/FontManager GSON Lcom/google/gson/Gson;
 accessible method net/minecraft/client/texture/NativeImage setColor (III)V
+accessible class net/minecraft/client/gui/screen/pack/ResourcePackOrganizer$AbstractPack
+accessible field net/minecraft/client/render/model/BakedModelManager bakedItemModels Ljava/util/Map;

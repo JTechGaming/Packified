@@ -9,7 +9,6 @@ import me.jtech.packified.client.imgui.ImGuiImplementation;
 import me.jtech.packified.client.util.FileUtils;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
-import net.minecraft.util.Identifier;
 
 import java.nio.file.Path;
 
@@ -18,10 +17,10 @@ public class ModifyFileWindow {
     public static ImBoolean open = new ImBoolean(false);
     private static String text;
     private static Path path;
-    private static FileHierarchy.FileModifyAction action;
+    private static FileHierarchyWindow.FileModifyAction action;
     private static ImString fileName;
 
-    public static void open(String text, Path path, FileHierarchy.FileModifyAction action) {
+    public static void open(String text, Path path, FileHierarchyWindow.FileModifyAction action) {
         open.set(true);
         ModifyFileWindow.text = text;
         ModifyFileWindow.path = path;

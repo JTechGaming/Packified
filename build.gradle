@@ -34,6 +34,8 @@ repositories {
         content {
             includeGroup("me.djtheredstoner")
         }
+        mavenCentral()
+        maven { url 'https://jitpack.io' }
     }
 }
 
@@ -92,6 +94,9 @@ dependencies {
     include(implementation("com.moulberry:mixinconstraints:1.0.5"))
     modRuntimeOnly("me.djtheredstoner:DevAuth-fabric:1.1.2")
     shadow(implementation('com.fasterxml.jackson.core:jackson-core:2.17.0'))
+
+    //modCompileOnly(implementation 'com.github.sakura-ryoko:malilib:1.21.7-0.25.2')
+    //modCompileOnly(implementation(rootProject.files("dependencies/Axiom-4.3.3-for-MC1.21.jar")))
 }
 
 loom {
@@ -171,3 +176,67 @@ publishing {
         // retrieving dependencies.
     }
 }
+
+task updateModInfo {
+    doLast {
+        // Paths to files
+        def versionFile = file('.version')
+        def devFile = file('.dev')
+
+        // Read .version file and .dev file
+        def currentVersion = versionFile.exists() ? versionFile.text.trim() : "1.0.0"
+        def isDevBuild = devFile.exists() ? devFile.text.trim().toBoolean() : false
+
+        def baseVersion
+        def devVersion = 0
+
+        // Parse version
+        if (currentVersion.contains("+d")) {
+            (baseVersion, devVersion) = currentVersion.split("\\+d")
+            devVersion = devVersion.toInteger()
+        } else {
+            baseVersion = currentVersion
+        }
+
+        def (major, minor, patch) = baseVersion.tokenize('.').collect { it.toInteger() }
+
+        // Increment version based on dev mode
+        if (isDevBuild) {
+            devVersion++ // Increment dev version
+        }
+
+        // Build new version
+        def newVersion = isDevBuild ? "${major}.${minor}.${patch}+d${devVersion}" : "${major}.${minor}.${patch}"
+        if (newVersion.contains(".null")) {
+            newVersion = newVersion.replace(".null", "")
+        }
+        // Save new version to the .version file
+        if (isDevBuild) {
+            versionFile.text = newVersion
+        } else {
+            versionFile.text = "${newVersion}+d${devVersion}"
+        }
+
+        // Paths to main class and fabric.mod.json
+        def mainClassFile = file('src/main/java/me/jtech/packified/Packified.java')
+        def gradlePropertiesFile = file('gradle.properties')
+
+        // Update Java class
+        mainClassFile.text = mainClassFile.text.replaceAll(
+                /(String version = ").*?(")/,
+                "\$1$newVersion\$2"
+        )
+
+        // Update gradle.properties
+        def gradleProperties = gradlePropertiesFile.text
+        gradleProperties = gradleProperties.replaceAll(
+                /(mod_version\s*=\s*).*/,
+                "\$1$newVersion"
+        )
+        gradlePropertiesFile.text = gradleProperties
+
+        println "Version updated to $newVersion"
+    }
+}
+
+compileJava.dependsOn updateModInfo // run on compilation

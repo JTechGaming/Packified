@@ -19,7 +19,7 @@ public class Packified implements ModInitializer {
     public static final String MOD_ID = "packified";
     public static Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
 
-    public static final String version = "1.0.1";
+    public static final String version = "1.2+d404";
 
     public static List<UUID> moddedPlayers = new ArrayList<>();
 
@@ -73,9 +73,6 @@ public class Packified implements ModInitializer {
                     return;
                 }
                 LOGGER.info(payload.packetData().lastData() ? "Last data chunk received" : "Receiving full pack from player: {}", player.getUuid());
-                for (SyncPacketData.AssetData asset : payload.packetData().assets()) {
-                    LOGGER.info("Sending file: {}", asset.path());
-                }
                 ServerPlayNetworking.send(player, new S2CSendFullPack(payload.packetData()));
             });
         });

@@ -7,18 +7,24 @@ import imgui.flag.ImGuiCond;
 import imgui.type.ImBoolean;
 import imgui.type.ImInt;
 import me.jtech.packified.client.PackifiedClient;
+import me.jtech.packified.client.helpers.DisplayScaleHelper;
 import me.jtech.packified.client.imgui.ImGuiImplementation;
 import me.jtech.packified.client.imgui.ImguiThemes;
 import me.jtech.packified.client.config.ModConfig;
+import net.fabricmc.api.EnvType;
+import net.fabricmc.api.Environment;
 
 import java.util.Map;
 
+@Environment(EnvType.CLIENT)
 public class PreferencesWindow {
     public static ImBoolean stayInCreative = new ImBoolean(ModConfig.getBoolean("stayincreative", false));
+    public static ImBoolean autoReloadAssets = new ImBoolean(ModConfig.getBoolean("autoreloadassets", false));
+    public static ImBoolean dontSaveExplorerOnClose = new ImBoolean(ModConfig.getBoolean("dontsaveexploreronclose", false));
     public static ImInt maxBackupCount = new ImInt(ModConfig.getInt("maxBackupCount", 10)); // Maximum number of backups to keep
     public static ImBoolean logPackReloadData = new ImBoolean(ModConfig.getBoolean("packreloadlogging", true));
     public static ImBoolean logPackDownloadInfo = new ImBoolean(ModConfig.getBoolean("packdownloadlogging", true));
-    public static ImInt fontSize = new ImInt(ModConfig.getInt("fontsize", 14));
+    public static ImInt fontSize = new ImInt(ModConfig.getInt("fontsize", DisplayScaleHelper.getIdealFontSize()));
     public static ImInt selectedFont = new ImInt(ModConfig.getInt("font",
             ImGuiImplementation.loadedFontNames.indexOf("Roboto (Regular)")
     ));
@@ -40,13 +46,29 @@ public class PreferencesWindow {
                     ModConfig.updateSettings(Map.of("stayincreative", stayInCreative.get()));
                     PackifiedClient.changeGameMode(PackifiedClient.getPreviousGameMode());
                 }
+                if (ImGui.checkbox("Auto Reload Assets: ", autoReloadAssets)) {
+                    ModConfig.updateSettings(Map.of("autoreloadassets", autoReloadAssets.get()));
+                }
+                if (ImGui.isItemHovered()) {
+                    ImGui.setTooltip("Whether assets should automatically be hotswapped when changed on disk.");
+                }
+                if (ImGui.checkbox("Don't Save Explorer State On Close: ", dontSaveExplorerOnClose)) {
+                    ModConfig.updateSettings(Map.of("dontsaveexploreronclose", dontSaveExplorerOnClose.get()));
+                }
+                if (ImGui.isItemHovered()) {
+                    ImGui.setTooltip("If enabled, the file explorer state will not be retained when it is closed.");
+                }
                 if (ImGui.inputInt("Max backups", maxBackupCount)) {
                     ModConfig.updateSettings(Map.of("maxBackupCount", maxBackupCount.get()));
                 }
             }
             if (ImGui.collapsingHeader("Appearance & Behavior")) {
                 if (ImGui.combo("Theme", ImguiThemes.getCurrentTheme(), ImguiThemes.getAvailableThemes())) {
-                    ImguiThemes.setTheme(ImguiThemes.getCurrentTheme());
+                    ImguiThemes.setTheme(ImguiThemes.getCurrentTheme(), false);
+                }
+                if (ImGui.checkbox("Flat style", ImguiThemes.flatStyle)) {
+                    ImguiThemes.applyStyle();
+                    ModConfig.updateSettings(Map.of("flatstyle", ImguiThemes.flatStyle.get()));
                 }
                 if (ImGui.inputInt("Font size", fontSize)) {
                     ImGui.getIO().setFontGlobalScale(fontSize.get() / 14.0f);

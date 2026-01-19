@@ -15,6 +15,8 @@ public class PackFile {
     private BufferedImage imageContent;
     private String textContent;
     private byte[] soundContent;
+    private int sampleRate;
+    private int channels;
     private final String extension;
     private BufferedImage imageEditorContent;
     private byte[] soundEditorContent;
@@ -22,6 +24,8 @@ public class PackFile {
     private TextEditor textEditor;
     private PixelArtEditor pixelArtEditor;
     private boolean open = false;
+    private boolean textFileWasChanged = false;
+    private boolean firstChange = false;
 
     public PackFile(Path path, BufferedImage content) {
         this.path = path;
@@ -55,7 +59,7 @@ public class PackFile {
             case ".fsh", ".vsh":
                 textEditor.setLanguageDefinition(TextEditorLanguageDefinition.glsl());
                 break;
-            case ".properties", ".txt":
+            default:
                 textEditor.setLanguageDefinition(createTxtLanguageDefinition());
                 break;
         }
@@ -73,7 +77,7 @@ public class PackFile {
             case ".fsh", ".vsh":
                 textEditor.setLanguageDefinition(TextEditorLanguageDefinition.glsl());
                 break;
-            case ".properties", ".txt":
+            default:
                 textEditor.setLanguageDefinition(createTxtLanguageDefinition());
                 break;
         }
@@ -117,11 +121,17 @@ public class PackFile {
     }
 
     public boolean isModified() {
+        if (textEditor != null && textEditor.isTextChanged()) {
+            if (firstChange) {
+                firstChange = false;
+            } else {
+                textFileWasChanged = true;
+            }
+        }
         return switch (extension) {
             case ".png" -> pixelArtEditor.wasModified;
-            case ".json" -> !textContent.equals(textEditor.getText());
             case ".ogg" -> !Arrays.equals(soundContent, soundEditorContent);
-            default -> false;
+            default -> textFileWasChanged;
         };
     }
 
@@ -136,9 +146,10 @@ public class PackFile {
     public void saveFile() {
         switch (extension) {
             case ".png" -> pixelArtEditor.wasModified = false;
-            case ".json" -> textContent = textEditor.getText();
             case ".ogg" -> soundContent = soundEditorContent;
+            default -> textContent = textEditor.getText();
         }
+        textFileWasChanged = false;
     }
 
     public TextEditor getTextEditor() {
@@ -158,6 +169,9 @@ public class PackFile {
     }
 
     public void setOpen(boolean open) {
+        // Prevent unsaved changes when reopening
+        firstChange = true;
+        textEditor.setText(textContent);
         this.open = open;
     }
 }

@@ -9,10 +9,13 @@ import imgui.flag.ImGuiCond;
 import imgui.flag.ImGuiWindowFlags;
 import imgui.type.ImBoolean;
 import me.jtech.packified.client.PackifiedClient;
+import me.jtech.packified.client.helpers.PackHelper;
 import me.jtech.packified.client.imgui.ImGuiImplementation;
 import me.jtech.packified.client.util.PackFile;
 import me.jtech.packified.client.util.PackUtils;
-import me.jtech.packified.client.windows.popups.SelectPackWindow;
+import me.jtech.packified.client.windows.popups.PackBrowserWindow;
+import net.fabricmc.api.EnvType;
+import net.fabricmc.api.Environment;
 import net.minecraft.resource.ResourcePackProfile;
 
 import java.util.ArrayList;
@@ -21,6 +24,7 @@ import java.util.Map;
 
 import static me.jtech.packified.client.windows.EditorWindow.checkForErrors;
 
+@Environment(EnvType.CLIENT)
 public class AssetInspectorWindow {
     public static ImBoolean isOpen = new ImBoolean(false);
 
@@ -98,11 +102,11 @@ public class AssetInspectorWindow {
                     ImGui.setCursorPos((ImGui.getContentRegionAvailX() - ImGui.calcTextSize("No file loaded").x) / 2, (ImGui.getContentRegionAvailY() - ImGui.getTextLineHeightWithSpacing()) / 2);
                     ImGui.text("No file loaded");
                     ImGui.setCursorPos((ImGui.getContentRegionAvailX() - ImGui.calcTextSize("Load File ").x) / 2, ImGui.getCursorPosY() + ImGui.getTextLineHeightWithSpacing()-20);
-                    if (ImGui.button(PackifiedClient.currentPack == null ? "Open Pack" : "Create File")) {
-                        if (PackifiedClient.currentPack != null) {
-
+                    if (ImGui.button(PackHelper.isInvalid() ? "Open Pack" : "Create File")) {
+                        if (PackHelper.isValid()) {
+                            // I forgot what i wanted to do here lol
                         } else {
-                            SelectPackWindow.open.set(true);
+                            PackBrowserWindow.open.set(true);
                         }
                     }
                     if (ImGui.isItemHovered()) {
@@ -125,7 +129,7 @@ public class AssetInspectorWindow {
         // Set syntax highlighting
 
         // Set error markers
-        Map<Integer, String> errorMarkers = checkForErrors(file.getTextEditor().getText());
+        Map<Integer, String> errorMarkers = checkForErrors(file);
         textEditor.setErrorMarkers(errorMarkers);
 
         int[] customPalette = textEditor.getDarkPalette();

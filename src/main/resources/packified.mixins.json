@@ -4,7 +4,8 @@
   "package": "me.jtech.packified.mixin",
   "compatibilityLevel": "JAVA_21",
   "mixins": [
-    "compat.AxiomCompatMixin"
+    "compat.AxiomCompatMixin",
+    "compat.MalilibCompatMixin"
   ],
   "client": [
     "FontInfoMixin",

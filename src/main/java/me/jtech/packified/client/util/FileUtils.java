@@ -1,7 +1,10 @@
 package me.jtech.packified.client.util;
 
+import imgui.ImGui;
 import me.jtech.packified.Packified;
 import me.jtech.packified.client.PackifiedClient;
+import me.jtech.packified.client.helpers.CornerNotificationsHelper;
+import me.jtech.packified.client.helpers.PackHelper;
 import me.jtech.packified.client.imgui.ImGuiImplementation;
 import me.jtech.packified.client.windows.*;
 import me.jtech.packified.client.windows.popups.SelectFolderWindow;
@@ -13,11 +16,13 @@ import net.minecraft.util.Identifier;
 import net.minecraft.util.InvalidIdentifierException;
 
 import javax.imageio.ImageIO;
+import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.io.*;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
+import java.security.MessageDigest;
 import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.List;
@@ -32,36 +37,8 @@ public class FileUtils {
         return fileName.substring(lastIndexOf);
     }
 
-    public static String getFileExtensionName(String fileName, String[] supportedExtensions) {
-        String extension = getFileExtension(fileName);
-        for (String supportedExtension : supportedExtensions) {
-            if (extension.equals(supportedExtension)) {
-                return supportedExtension;
-            }
-        }
-        return null;
-    }
-
-    public static String getExtension(Path path) {
+    public static String getExtensionFromPath(Path path) {
         return getFileExtension(path.getFileName().toString());
-    }
-
-    public static String getFileExtensionName(String fileName) {
-        return getFileExtensionName(fileName, FileHierarchy.extensions);
-    }
-
-    public static boolean isSupportedFileExtension(String fileName, String[] supportedExtensions) {
-        String extension = getFileExtension(fileName);
-        for (String supportedExtension : supportedExtensions) {
-            if (extension.equals(supportedExtension)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    public static boolean isSupportedFileExtension(String fileName) {
-        return isSupportedFileExtension(fileName, FileHierarchy.extensions);
     }
 
     public static void deleteFile(Path path) {
@@ -83,7 +60,7 @@ public class FileUtils {
                 try {
                     Files.delete(file.toPath());
                 } catch (IOException e) {
-                    e.printStackTrace();
+                    LogWindow.addError("Failed to delete file: " + e.getMessage());
                 }
             }
         }
@@ -104,96 +81,108 @@ public class FileUtils {
             } else {
                 // Import file
                 String fileName = file.getName();
-                String extension = getFileExtensionName(fileName);
-                if (extension == null) {
-                    System.err.println("Unsupported file extension: " + fileName);
-                    return;
-                }
+                String extension = getFileExtension(fileName);
                 String content = null;
                 BufferedImage image;
                 if (extension.equals(".png")) {
-                    System.out.println("Importing image: " + fileName);
+                    LogWindow.addInfo("Importing image file: " + fileName);
                     try {
                         image = ImageIO.read(file);
                         if (image != null) {
                             SelectFolderWindow.open(fileName, extension, encodeImageToBase64(image));
                         } else {
-                            System.err.println("Failed to load image: " + fileName);
+                            CornerNotificationsHelper.addNotification("Failed to load image: " + fileName, "failed to import file", Color.RED, 3);
+                            LogWindow.addError("Failed to load image: " + fileName);
                         }
                     } catch (IOException e) {
-                        e.printStackTrace();
+                        LogWindow.addError("Failed to read image file: " + fileName + " - " + e.getMessage());
                     }
-                } else {
+                } else if(extension.equals(".ogg")) {
+                    LogWindow.addInfo("Importing sound file: " + fileName);
+                    try {
+                        byte[] audioData = Files.readAllBytes(file.toPath());
+                        SelectFolderWindow.open(fileName, extension, encodeSoundToString(audioData));
+                    } catch (IOException e) {
+                        LogWindow.addError("Failed to read sound file: " + fileName + " - " + e.getMessage());
+                    }
+                } else {  // json, txt, etc. basically just all text files
                     try {
                         content = Files.readString(file.toPath());
                     } catch (IOException e) {
-                        e.printStackTrace();
+                        LogWindow.addError("Failed to read file: " + fileName + " - " + e.getMessage());
                     }
                     if (content == null) {
-                        System.err.println("Failed to read file: " + file.getAbsolutePath());
+                        CornerNotificationsHelper.addNotification("Failed to read file: " + fileName, "failed to import file", Color.RED, 3);
+                        LogWindow.addError("Failed to read file: " + fileName);
                         return;
                     }
                     SelectFolderWindow.open(fileName, extension, content);
                 }
             }
         } else {
-            System.err.println("File not found: " + file.getAbsolutePath());
+            CornerNotificationsHelper.addNotification("File not found: " + path, "failed to import file", Color.RED, 3);
+            LogWindow.addError("File not found: " + path);
         }
     }
 
     public static void openFile(Path filePath) {
         if (filePath == null || !Files.exists(filePath)) {
-            System.err.println("File not found: " + filePath);
+            LogWindow.addError("File not found: " + filePath);
             return;
         }
 
         String extension = getFileExtension(filePath.getFileName().toString());
 
-        if (extension == null) {
-            System.err.println("Unsupported Filetype: " + filePath);
+        if (extension.isBlank()) {
+            LogWindow.addError("Invalid file type: [BLANK EXTENSION ERROR] at -> " + filePath);
             return;
         }
 
         try (InputStream inputStream = Files.newInputStream(filePath)) {
-            String content = "";
+            String content;
             switch (extension) {
-                case ".json", ".txt", ".mcmeta", ".properties", ".vsh", ".fsh", ".bbmodel", ".bbmodel.json" -> {
-                    content = new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
-                    EditorWindow.openTextFile(filePath, content);
-                }
                 case ".png" -> {
                     BufferedImage image = ImageIO.read(inputStream);
                     if (image != null) {
                         EditorWindow.openImageFile(filePath, image);
                     } else {
-                        System.err.println("Failed to load image: " + filePath);
+                        LogWindow.addError("Failed to open image file: " + filePath);
                     }
                 }
                 case ".ogg" -> {
                     byte[] audioData = Files.readAllBytes(filePath);
                     EditorWindow.openAudioFile(filePath, audioData);
                 }
-                default -> System.err.println("Unsupported file type: " + extension);
+                default -> {  // json, txt, etc. basically just all text files
+                    content = new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
+                    EditorWindow.openTextFile(filePath, content);
+                }
             }
         } catch (IOException e) {
-            e.printStackTrace();
+            LogWindow.addError("Failed to open file: " + filePath + " - " + e.getMessage());
+            return;
         }
+
+        ImGui.setWindowFocus("File Editor");
     }
 
     public static void saveAllFiles() {
-        if (PackifiedClient.currentPack == null) {
-            System.err.println("No pack selected");
+        if (PackHelper.isInvalid()) {
+            LogWindow.addError("No resource pack is currently loaded.");
             return;
         }
-        File resourcePackFolder = new File("resourcepacks/" + PackifiedClient.currentPack.getDisplayName().getString());
+        File resourcePackFolder = new File("resourcepacks/" + PackHelper.getCurrentPack().getDisplayName().getString());
         makePackBackup(resourcePackFolder);
         for (PackFile file : EditorWindow.openFiles) {
-            System.out.println(file.getFileName());
             saveFile(file.getPath(), file.getExtension(), getContent(file));
+        }
+
+        if (ModelEditorWindow.isModelWindowOpen()) {
+            ModelEditorWindow.saveCurrentModel();
         }
     }
 
-    public static void saveSingleFile(Path path, String fileType, String content, ResourcePackProfile pack) {
+    public static boolean saveSingleFile(Path path, String fileType, String content, ResourcePackProfile pack) {
         // Before saving, make a backup of the file
         File resourcePackFolder = new File("resourcepacks/" + pack.getDisplayName().getString());
         if (!resourcePackFolder.exists()) {
@@ -201,10 +190,12 @@ public class FileUtils {
                 Files.createDirectories(resourcePackFolder.toPath());
             } catch (IOException e) {
                 LogWindow.addError("Failed to create resource pack folder: " + e.getMessage());
+                return false;
             }
         }
         makePackBackup(resourcePackFolder);
         saveFile(path, fileType, content);
+        return true;
     }
 
     private static void saveFile(Path path, String fileType, String content) {
@@ -213,7 +204,7 @@ public class FileUtils {
             Path resourcePackFolder = getPackFolderPath();
 
             if (resourcePackFolder == null || !Files.exists(resourcePackFolder)) {
-                System.err.println("Resource pack folder not found: " + resourcePackFolder);
+                LogWindow.addError("Resource pack folder does not exist.");
                 return;
             }
 
@@ -233,15 +224,18 @@ public class FileUtils {
             }
 
             // Handle different file types
-            if (fileType.equals(".json")) {
-                Files.write(targetFile, content.getBytes(StandardCharsets.UTF_8));
+            if (fileType.equals(".ogg")) {
+                byte[] audioData = Base64.getDecoder().decode(content);
+                Files.write(targetFile, audioData);
             } else if (fileType.equals(".png")) {
                 BufferedImage image = FileUtils.decodeBase64ToImage(content);
                 if (image != null) {
                     ImageIO.write(image, "png", targetFile.toFile());
                 } else {
-                    System.err.println("No image found for: " + path);
+                    LogWindow.addError("Failed to decode image for saving: " + path);
                 }
+            } else {  // json, txt, etc. basically just all text files
+                Files.write(targetFile, content.getBytes());
             }
 
             // Update the file in the editor if it's open
@@ -252,15 +246,15 @@ public class FileUtils {
                 }
             }
         } catch (IOException e) {
-            e.printStackTrace();
+            LogWindow.addError("Failed to save file: " + e.getMessage());
         }
     }
 
     public static Path getPackFolderPath() {
-        if (PackifiedClient.currentPack == null) return null;
+        if (PackHelper.isInvalid()) return null;
         return FabricLoader.getInstance().getGameDir()
                 .resolve("resourcepacks")
-                .resolve(PackifiedClient.currentPack.getDisplayName().getString());
+                .resolve(PackHelper.getCurrentPack().getDisplayName().getString());
     }
 
     public static void saveFolder(Path path) {
@@ -295,15 +289,13 @@ public class FileUtils {
             });
         }
         PackUtils.refresh();
-        PackifiedClient.currentPack = PackUtils.getPack(targetDir.getName().replace(".zip", ""));
-        ResourcePackManager resourcePackManager = MinecraftClient.getInstance().getResourcePackManager();
-        resourcePackManager.enable(PackifiedClient.currentPack.getId());
+        PackHelper.updateCurrentPack(PackUtils.getPack(targetDir.getName().replace(".zip", "")));
     }
 
     public static void zip(File targetDir, String fileName) throws IOException {
         // zips the resource pack
         File zipFile = new File(targetDir, fileName.replace(".zip", "") + ".zip");
-        File folder = new File("resourcepacks/" + PackifiedClient.currentPack.getDisplayName().getString());
+        File folder = new File("resourcepacks/" + PackHelper.getCurrentPack().getDisplayName().getString());
 
         // get everything in the folder and write it to the zip file
         try (FileSystem zipFileSystem = FileSystems.newFileSystem(URI.create("jar:" + zipFile.toURI()), Map.of("create", "true"))) {
@@ -323,13 +315,14 @@ public class FileUtils {
         }
     }
 
+    @Deprecated
     public static void removeZipFileFromOptions(File zipFile) {
         if (zipFile.exists()) {
             if (zipFile.canWrite()) {
                 try {
                     Files.delete(zipFile.toPath());
                 } catch (IOException e) {
-                    e.printStackTrace();
+                    LogWindow.addError("Failed to delete zip file: " + e.getMessage());
                 }
             } else {
                 zipFile.deleteOnExit();
@@ -427,13 +420,35 @@ public class FileUtils {
 
     public static void loadIdentifierPackAssets(ResourcePackProfile resourcePackProfile) {
         ResourcePack resourcePack = resourcePackProfile.createResourcePack();
+        Path base = FabricLoader.getInstance().getGameDir()
+                .resolve("resourcepacks")
+                .resolve(PackUtils.legalizeName(resourcePackProfile.getDisplayName().getString()));
+
         for (String namespace : resourcePack.getNamespaces(ResourceType.CLIENT_RESOURCES)) {
-            FabricLoader.getInstance().getGameDir().resolve("resourcepacks")
-                    .resolve(PackUtils.legalizeName(resourcePackProfile.getDisplayName().getString()))
-                    .resolve(namespace).toFile().mkdirs();
-            resourcePack.findResources(ResourceType.CLIENT_RESOURCES, namespace, "", (identifier, resourceSupplier) ->
-                    createFileFromIdentifier(resourcePackProfile, namespace, "", identifier)
-            );
+            System.out.println(namespace);
+            try {
+                Files.createDirectories(base.resolve(namespace));
+            } catch (IOException e) {
+                e.printStackTrace();
+                continue;
+            }
+
+            resourcePack.findResources(ResourceType.CLIENT_RESOURCES, namespace, "", ((identifier, inputStreamInputSupplier) -> {
+                System.out.println(identifier);
+            }));
+
+            resourcePack.findResources(ResourceType.CLIENT_RESOURCES, namespace, "", (identifier, resourceSupplier) -> {
+                // identifier.getPath() is the path inside the namespace (e.g. "textures/block/stone.png")
+                Path out = base.resolve(namespace).resolve(identifier.getPath());
+                try {
+                    Files.createDirectories(out.getParent());
+                    try (InputStream is = resourceSupplier.get()) {
+                        Files.copy(is, out, StandardCopyOption.REPLACE_EXISTING);
+                    }
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            });
         }
 
         constructPackMetaData(resourcePackProfile);
@@ -476,6 +491,7 @@ public class FileUtils {
         }
     }
 
+    @Deprecated
     private static void createFileFromIdentifier(ResourcePackProfile packProfile, String namespace, String prefix, Identifier identifier) {
         ResourcePack resourcePack = packProfile.createResourcePack();
         try {
@@ -499,7 +515,7 @@ public class FileUtils {
                 Files.delete(entry);
             }
         } catch (IOException e) {
-            e.printStackTrace();
+            LogWindow.addError("Failed to clear backups: " + e.getMessage());
         }
     }
 
@@ -535,6 +551,8 @@ public class FileUtils {
             case ".properties" -> "Properties";
             case ".vsh" -> "Vertex Shader";
             case ".fsh" -> "Fragment Shader";
+            case ".glsl" -> "OpenGL Shading Language";
+            case ".lang" -> "Language File";
             case ".bbmodel" -> "Blockbench Model";
             case ".bbmodel.json" -> "Blockbench Model JSON";
             default -> "Unknown";
@@ -545,15 +563,12 @@ public class FileUtils {
     public static String getContent(PackFile file) {
         String extension = file.getExtension();
 
-        if (extension.equals(".json") || extension.equals(".txt") || extension.equals(".mcmeta")) {
-            return file.getTextEditor().getText();
-        } else if (extension.equals(".png")) {
+        if (extension.equals(".png")) {
             return encodeImageToBase64(file.getImageEditorContent());
         } else if (extension.equals(".ogg")) {
             return ""; // TODO: Handle sound content if needed
-        } else {
-            Packified.LOGGER.error("Unsupported file type: {}", extension);
-            return "";
+        } else {  // json, txt, etc. basically just all text files
+            return file.getTextEditor().getText();
         }
     }
 
@@ -562,7 +577,7 @@ public class FileUtils {
             ImageIO.write(image, "png", outputStream);
             return Base64.getEncoder().encodeToString(outputStream.toByteArray());
         } catch (IOException e) {
-            e.printStackTrace();
+            LogWindow.addError("Failed to encode image to Base64: " + e.getMessage());
             return null;
         }
     }
@@ -573,14 +588,14 @@ public class FileUtils {
             ByteArrayInputStream inputStream = new ByteArrayInputStream(imageBytes);
             return ImageIO.read(inputStream);
         } catch (IOException e) {
-            e.printStackTrace();
+            LogWindow.addError("Failed to decode Base64 to image: " + e.getMessage());
             return null;
         }
     }
 
     public static String encodeSoundToString(byte[] audio) {
         if (audio == null || audio.length == 0) {
-            System.err.println("Error: Audio data is empty or null.");
+            LogWindow.addError("Audio data is null or empty.");
             return "";
         }
         return Base64.getEncoder().encodeToString(audio);
@@ -604,7 +619,7 @@ public class FileUtils {
             Files.write(targetFile.toPath(), content.getBytes(StandardCharsets.UTF_8));
             CompletableFuture.runAsync(PackUtils::reloadPack);
         } catch (IOException e) {
-            e.printStackTrace();
+            LogWindow.addError("Failed to write pack.mcmeta file: " + e.getMessage());
         }
     }
 
@@ -633,7 +648,7 @@ public class FileUtils {
         try {
             Files.write(mcmetaFile.toPath(), metadata.getBytes(StandardCharsets.UTF_8));
         } catch (IOException e) {
-            e.printStackTrace();
+            LogWindow.addError("Failed to write pack.mcmeta file: " + e.getMessage());
         }
 
         // Create the assets
@@ -666,16 +681,13 @@ public class FileUtils {
         List<ResourcePackProfile> profiles = PackUtils.refresh();
         for (ResourcePackProfile profile : profiles) {
             if (profile.getDisplayName().getString().equals(packName)) {
-                PackifiedClient.currentPack = profile;
+                PackHelper.updateCurrentPack(profile);
                 break;
             }
         }
-        if (!Objects.equals(PackifiedClient.currentPack.getDisplayName().getString(), packName)) {
+        if (!Objects.equals(PackHelper.getCurrentPack().getDisplayName().getString(), packName)) {
             LogWindow.addWarning("Pack with name '" + packName + "' not found in the list of resource packs.");
         }
-
-        // Reload the resource packs
-        CompletableFuture.runAsync(PackUtils::reloadPack);
     }
 
     public static Path validateIdentifier(String path) {
@@ -697,7 +709,7 @@ public class FileUtils {
             ProcessBuilder processBuilder = new ProcessBuilder("explorer.exe", "/select,", file.getAbsolutePath());
             processBuilder.start();
         } catch (IOException e) {
-            e.printStackTrace();
+            LogWindow.addError("Failed to open file in explorer: " + e.getMessage());
         }
     }
 
@@ -706,13 +718,13 @@ public class FileUtils {
         boolean wasOpen = EditorWindow.openFiles.stream().anyMatch(file -> file.getPath().equals(originalPath));
         EditorWindow.openFiles.removeIf(file -> file.getPath().equals(originalPath));
         if (newRelativePath.isEmpty()) {
-            System.out.println("New path is empty");
+            LogWindow.addError("New path is empty");
             return;
         }
 
         Path packFolderPath = getPackFolderPath();
         if (packFolderPath == null) {
-            System.err.println("Resource pack folder is not set.");
+            LogWindow.addError("Resource pack folder is not set.");
             return;
         }
 
@@ -736,7 +748,7 @@ public class FileUtils {
                 openFile(newFilePath);
             }
         } catch (IOException e) {
-            System.err.println("Failed to move file: " + e.getMessage());
+            LogWindow.addError("Failed to move file: " + e.getMessage());
             e.printStackTrace();
         }
     }
@@ -745,13 +757,13 @@ public class FileUtils {
         boolean wasOpen = EditorWindow.openFiles.stream().anyMatch(file -> file.getPath().equals(originalPath));
         EditorWindow.openFiles.removeIf(file -> file.getPath().equals(originalPath));
         if (newRelativePath.isEmpty()) {
-            System.out.println("New name is empty");
+            LogWindow.addError("New name is empty");
             return;
         }
 
         Path packFolderPath = getPackFolderPath();
         if (packFolderPath == null) {
-            System.err.println("Resource pack folder is not set.");
+            LogWindow.addError("Resource pack folder is not set.");
             return;
         }
 
@@ -761,7 +773,7 @@ public class FileUtils {
         try {
             // Ensure new file does not already exist
             if (Files.exists(newFilePath)) {
-                System.err.println("Cannot rename: File with new name already exists -> " + newFilePath);
+                LogWindow.addError("Cannot rename: File with new name already exists -> " + newFilePath);
                 return;
             }
 
@@ -776,7 +788,7 @@ public class FileUtils {
                 openFile(newFilePath);
             }
         } catch (IOException e) {
-            System.err.println("Failed to rename file: " + e.getMessage());
+            LogWindow.addError("Failed to rename file: " + e.getMessage());
             e.printStackTrace();
         }
     }
@@ -785,7 +797,7 @@ public class FileUtils {
         Path packFolderPath = getPackFolderPath();
 
         if (packFolderPath == null) {
-            System.err.println("Resource pack folder is not set.");
+            LogWindow.addError("Resource pack folder is not set.");
             return filePath.toString();
         }
 
@@ -843,13 +855,13 @@ public class FileUtils {
     public static String readFile(Path path) {
         // Read file content
         if (path == null || !Files.exists(path)) {
-            System.err.println("File not found: " + path);
+            LogWindow.addError("File not found: " + path);
             return "";
         }
         try {
             return Files.readString(path, StandardCharsets.UTF_8);
         } catch (IOException e) {
-            e.printStackTrace();
+            LogWindow.addError("Failed to read file: " + e.getMessage());
             return "";
         }
     }
@@ -898,8 +910,20 @@ public class FileUtils {
         // Generate folder structure based on the provided string
         Path currentPath = getPackFolderPath();
         currentPath = currentPath.resolve("assets/minecraft/").resolve(s);
-        System.out.println(currentPath);
+        LogWindow.addInfo("Generating folder: " + currentPath);
 
         currentPath.toFile().mkdirs();
+    }
+
+    public static String sha1(Path file) throws Exception {
+        MessageDigest digest = MessageDigest.getInstance("SHA-1");
+        byte[] bytes = Files.readAllBytes(file);
+        byte[] hash = digest.digest(bytes);
+
+        StringBuilder sb = new StringBuilder();
+        for (byte b : hash) {
+            sb.append(String.format("%02x", b));
+        }
+        return sb.toString();
     }
 }

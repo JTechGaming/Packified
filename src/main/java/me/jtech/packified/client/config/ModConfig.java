@@ -4,6 +4,7 @@ import com.google.common.reflect.TypeToken;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.resource.ResourcePackProfile;
 
 import java.io.IOException;
 import java.io.Reader;
@@ -16,6 +17,7 @@ import java.util.Map;
 
 public class ModConfig {
     private static final Path CONFIG_FILE = MinecraftClient.getInstance().runDirectory.toPath().resolve("config/packified/client_config.json");
+    private static final Path DOCK_FILE = MinecraftClient.getInstance().runDirectory.toPath().resolve("config/packified/dock_config.json");
     private static final Gson GSON = new GsonBuilder().create();
 
     public static void updateSettings(Map<String, Object> changedSettings) {
@@ -86,5 +88,54 @@ public class ModConfig {
     public static String getString(String key, String defaultValue) {
         Map<String, Object> settings = getSettings();
         return settings.containsKey(key) ? (String) settings.get(key) : defaultValue;
+    }
+
+    public static DockConfig getDockConfig() {
+        if (!Files.exists(DOCK_FILE)) {
+            DOCK_FILE.getParent().toFile().mkdirs(); // Ensure the directory exists
+            try {
+                Files.createFile(DOCK_FILE); // Create the file if it doesn't exist
+            } catch (IOException e) {
+                throw new RuntimeException("Failed to create dock config file", e);
+            }
+        }
+        try (Reader reader = Files.newBufferedReader(DOCK_FILE)) {
+            DockConfig config = GSON.fromJson(reader, DockConfig.class);
+            if (config == null) {
+                config = new DockConfig();
+            }
+            return config;
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to read dock config file", e);
+        }
+    }
+
+    public static void savePackStatus(ResourcePackProfile pack) {
+        DockConfig config = getDockConfig();
+        if (pack == null) {
+            config.lastOpenedPack = null;
+        } else {
+            config.lastOpenedPack = pack.getDisplayName().getString();
+        }
+        saveDockConfig(config);
+    }
+
+    public static void saveDockConfig(DockConfig config) {
+        try (Writer writer = Files.newBufferedWriter(DOCK_FILE)) {
+            GSON.toJson(config, writer);
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to write dock config file", e);
+        }
+    }
+
+    public static class DockConfig {
+        public Map<Integer, FileExplorerInfo> explorers = new HashMap<>();
+        public String layout;
+        public String lastOpenedPack;
+    }
+
+    public static class FileExplorerInfo {
+        public String lastDirectory;
+        public boolean isOpen;
     }
 }

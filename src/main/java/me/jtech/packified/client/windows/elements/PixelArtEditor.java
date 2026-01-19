@@ -8,8 +8,13 @@ import imgui.flag.ImGuiCol;
 import imgui.flag.ImGuiStyleVar;
 import imgui.flag.ImGuiWindowFlags;
 import imgui.type.ImInt;
+import me.jtech.packified.Packified;
+import me.jtech.packified.client.helpers.DisplayScaleHelper;
 import me.jtech.packified.client.imgui.ImGuiImplementation;
+import me.jtech.packified.client.util.SafeTextureLoader;
 import me.jtech.packified.client.windows.EditorWindow;
+import net.fabricmc.api.EnvType;
+import net.fabricmc.api.Environment;
 import net.minecraft.client.texture.GlTexture;
 import net.minecraft.client.texture.NativeImage;
 import net.minecraft.client.texture.NativeImageBackedTexture;
@@ -29,6 +34,7 @@ import java.util.Stack;
 
 import static org.lwjgl.opengl.GL11.*;
 
+@Environment(EnvType.CLIENT)
 public class PixelArtEditor {
     private BufferedImage image;
     private int textureId = -1;
@@ -233,12 +239,14 @@ public class PixelArtEditor {
         int width = image.getWidth();
         int height = image.getHeight();
 
+        int buttonSize = DisplayScaleHelper.getUIButtonSize();
+        
         // Tool Buttons
         if (currentTool == Tool.PEN) {
             ImGui.pushStyleVar(ImGuiStyleVar.FrameBorderSize, 2.0f);
             ImGui.pushStyleColor(ImGuiCol.Border, 0xFFFF0000);
         }
-        ImGui.imageButton(ImGuiImplementation.loadTextureFromOwnIdentifier("textures/ui/neu_pencil.png"), 14, 14);
+        ImGui.imageButton(SafeTextureLoader.loadFromIdentifier(Packified.identifier("textures/ui/neu_pencil.png")), buttonSize, buttonSize);
         if (currentTool == Tool.PEN) {
             ImGui.popStyleVar();
             ImGui.popStyleColor();
@@ -254,7 +262,7 @@ public class PixelArtEditor {
             ImGui.pushStyleVar(ImGuiStyleVar.FrameBorderSize, 2.0f);
             ImGui.pushStyleColor(ImGuiCol.Border, 0xFFFF0000);
         }
-        ImGui.imageButton(ImGuiImplementation.loadTextureFromOwnIdentifier("textures/ui/neu_bucket.png"), 14, 14);
+        ImGui.imageButton(SafeTextureLoader.loadFromIdentifier(Packified.identifier("textures/ui/neu_bucket.png")), buttonSize, buttonSize);
         if (currentTool == Tool.PAINT_BUCKET) {
             ImGui.popStyleVar();
             ImGui.popStyleColor();
@@ -270,7 +278,7 @@ public class PixelArtEditor {
             ImGui.pushStyleVar(ImGuiStyleVar.FrameBorderSize, 2.0f);
             ImGui.pushStyleColor(ImGuiCol.Border, 0xFFFF0000);
         }
-        ImGui.imageButton(ImGuiImplementation.loadTextureFromOwnIdentifier("textures/ui/neu_select.png"), 14, 14);
+        ImGui.imageButton(SafeTextureLoader.loadFromIdentifier(Packified.identifier("textures/ui/neu_select.png")), buttonSize, buttonSize);
         if (currentTool == Tool.SELECT) {
             ImGui.popStyleVar();
             ImGui.popStyleColor();
@@ -298,7 +306,7 @@ public class PixelArtEditor {
             ImGui.pushStyleVar(ImGuiStyleVar.FrameBorderSize, 2.0f);
             ImGui.pushStyleColor(ImGuiCol.Border, 0xFFFF0000);
         }
-        ImGui.imageButton(ImGuiImplementation.loadTextureFromOwnIdentifier("textures/ui/neu_eraser.png"), 14, 14);
+        ImGui.imageButton(SafeTextureLoader.loadFromIdentifier(Packified.identifier("textures/ui/neu_eraser.png")), buttonSize, buttonSize);
         if (currentTool == Tool.ERASER) {
             ImGui.popStyleVar();
             ImGui.popStyleColor();
