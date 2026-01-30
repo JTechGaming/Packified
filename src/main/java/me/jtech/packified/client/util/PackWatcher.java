@@ -1,6 +1,7 @@
 package me.jtech.packified.client.util;
 
 import me.jtech.packified.client.helpers.VersionControlHelper;
+import me.jtech.packified.client.imgui.ImGuiImplementation;
 import me.jtech.packified.client.windows.LogWindow;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
@@ -100,6 +101,9 @@ public class PackWatcher implements Runnable {
 
                 invalidated = true;
                 VersionControlHelper.stageFile(new VersionControlHelper.FileStage(child, kind));
+                if (FileUtils.getExtensionFromPath(child).equalsIgnoreCase(".png")) {
+                    SafeTextureLoader.reuploadTextureCacheEntry(child);
+                }
             }
 
             boolean valid = key.reset();

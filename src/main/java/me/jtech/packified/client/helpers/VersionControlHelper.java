@@ -5,15 +5,13 @@ import com.google.gson.GsonBuilder;
 import imgui.type.ImBoolean;
 import me.jtech.packified.client.util.FileUtils;
 import me.jtech.packified.client.windows.LogWindow;
+import me.jtech.packified.common.CommitDTO;
 import net.minecraft.client.MinecraftClient;
 
 import java.io.IOException;
 import java.io.Reader;
 import java.nio.file.*;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 //todo document this
 public class VersionControlHelper {
@@ -49,6 +47,8 @@ public class VersionControlHelper {
 
             fileStages.clear();
             Path root = FileUtils.getPackFolderPath();
+
+            if (meta.pendingStages == null) return;
 
             for (StagingEntry entry : meta.pendingStages()) {
                 fileStages.add(new FileStage(
@@ -100,9 +100,11 @@ public class VersionControlHelper {
 
         Map<String, String> hashes = computeFileHashes(packRoot);
 
-        for (String path : hashes.keySet()) {
+        for (Map.Entry<String, String> entry : hashes.entrySet()) {
             try {
-                storeObject(Path.of(path), hashes.get(path));
+                assert packRoot != null;
+                Path absolute = packRoot.resolve(entry.getKey());
+                storeObject(absolute, entry.getValue());
             } catch (IOException e) {
                 LogWindow.addError(e.getMessage());
             }
@@ -110,6 +112,7 @@ public class VersionControlHelper {
 
         VersionControlEntry entry = new VersionControlEntry(
                 version,
+                meta.currentVersion(),
                 message,
                 author,
                 System.currentTimeMillis(),
@@ -131,8 +134,13 @@ public class VersionControlHelper {
     }
 
     private static void storeObject(Path file, String hash) throws IOException {
+        if (!Files.exists(file)) {
+            throw new IOException("Source file does not exist: " + file);
+        }
+
         Path objectPath = FileUtils.getPackFolderPath()
-                .resolve(".packified/objects/" + hash);
+                .resolve(".packified/objects")
+                .resolve(hash);
 
         if (!Files.exists(objectPath)) {
             Files.createDirectories(objectPath.getParent());
@@ -140,32 +148,43 @@ public class VersionControlHelper {
         }
     }
 
-    public static void rollback(String targetVersion) {
-        VersionControlEntry entry = meta.versions().get(targetVersion);
-        if (entry == null) {
-            throw new IllegalArgumentException("Unknown version: " + targetVersion);
+    private static List<VersionControlEntry> buildChain(String targetVersion) {
+        List<VersionControlEntry> chain = new ArrayList<>();
+        VersionControlEntry current = meta.versions().get(targetVersion);
+
+        while (current != null) {
+            chain.add(current);
+            current = meta.versions().get(current.parentVersion);
         }
 
+        Collections.reverse(chain);
+        return chain;
+    }
+
+    public static void rollback(String targetVersion) {
         Path root = FileUtils.getPackFolderPath();
+        List<VersionControlEntry> chain = buildChain(targetVersion);
 
         try {
-            // Delete all files in pack (except vc metadata)
-            Files.walk(root)
-                    .filter(Files::isRegularFile)
-                    .filter(p -> !p.toString().contains(".packified"))
-                    .forEach(p -> {
-                        try { Files.delete(p); } catch (IOException ignored) {}
-                    });
+            for (VersionControlEntry commit : chain) {
+                for (Map.Entry<String, String> e : commit.getFileHashes().entrySet()) {
+                    Path dest = root.resolve(e.getKey());
 
-            // Restore files
-            for (Map.Entry<String, String> e : entry.getFileHashes().entrySet()) {
-                Path dest = root.resolve(e.getKey());
-                Path obj = root.resolve(".packified/objects/" + e.getValue());
+                    if (e.getValue() == null) {
+                        Files.deleteIfExists(dest);
+                        continue;
+                    }
 
-                Files.createDirectories(dest.getParent());
-                Files.copy(obj, dest, StandardCopyOption.REPLACE_EXISTING);
+                    Path obj = root.resolve(".packified/objects").resolve(e.getValue());
+
+                    if (!Files.exists(obj)) {
+                        throw new IllegalStateException("Missing object: " + e.getValue());
+                    }
+
+                    Files.createDirectories(dest.getParent());
+                    Files.copy(obj, dest, StandardCopyOption.REPLACE_EXISTING);
+                }
             }
-
         } catch (IOException e) {
             throw new RuntimeException("Rollback failed", e);
         }
@@ -186,24 +205,21 @@ public class VersionControlHelper {
     private static Map<String, String> computeFileHashes(Path root) {
         Map<String, String> hashes = new HashMap<>();
 
-        //try {
-            fileStages.stream().filter(fileStage -> fileStage.include.get()).map(fileStage -> fileStage.filePath)
-            //Files.walk(root)
-                    .filter(Files::isRegularFile)
-                    .filter(path -> !path.getFileName().toString().equals("meta.pkfvc"))
-                    .forEach(path -> {
-                        try {
-                            String relative = root.relativize(path).toString();
-                            String hash = FileUtils.sha1(path);
-                            hashes.put(relative, hash);
-                        } catch (Exception e) {
-                            throw new RuntimeException(e);
+        fileStages.stream().filter(fileStage -> fileStage.include.get())
+                .filter(stage -> Files.isRegularFile(stage.filePath))
+                .filter(stage -> !stage.filePath.getFileName().toString().equals("meta.pkfvc"))
+                .forEach(stage -> {
+                    try {
+                        String relative = root.relativize(stage.filePath).toString();
+                        String hash = FileUtils.sha1(stage.filePath);
+                        if (stage.getStageType() == StageType.DELETED) {
+                            hash = null;
                         }
-                    });
-//        } catch (IOException e) {
-//            throw new RuntimeException("Failed to compute file hashes", e);
-//        }
-
+                        hashes.put(relative, hash);
+                    } catch (Exception e) {
+                        throw new RuntimeException(e);
+                    }
+                });
         return hashes;
     }
 
@@ -228,6 +244,15 @@ public class VersionControlHelper {
         }
 
         return result;
+    }
+
+    public static List<VersionControlEntry> getCommitsDescending() {
+        if (meta == null) {
+            return List.of();
+        }
+        return meta.versions().values().stream()
+                .sorted(Comparator.comparingLong(v -> -v.timestamp))
+                .toList();
     }
 
     public static String getCurrentVersion() {
@@ -271,6 +296,52 @@ public class VersionControlHelper {
         save(meta.packName());
     }
 
+    public static void markAllAsPushedUpTo(String headVersion) {
+        List<String> pushed = new ArrayList<>(meta.pushedVersions());
+
+        VersionControlEntry current = meta.versions().get(headVersion);
+        while (current != null && !pushed.contains(current.getVersion())) {
+            pushed.add(current.getVersion());
+            current = meta.versions().get(current.parentVersion);
+        }
+
+        meta = new VersionControlMeta(
+                meta.packName(),
+                meta.currentVersion(),
+                meta.versions(),
+                meta.pendingStages(),
+                pushed
+        );
+
+        save(meta.packName());
+    }
+
+    // remoteHead argument will be removed in a future version
+    public static void integrateRemoteCommits(String remoteHead, List<CommitDTO> commits) {
+        boolean changed = false;
+
+        for (CommitDTO dto : commits) {
+            if (meta.versions().containsKey(dto.version)) continue;
+
+            meta.versions().put(
+                    dto.version,
+                    new VersionControlEntry(
+                            dto.version,
+                            dto.parentVersion,
+                            dto.message,
+                            dto.author,
+                            dto.timestamp,
+                            dto.fileChanges
+                    )
+            );
+            changed = true;
+        }
+
+        if (changed) {
+            save(meta.packName());
+        }
+    }
+
     public static boolean isPushed(String version) {
         return meta.pushedVersions().contains(version);
     }
@@ -286,7 +357,9 @@ public class VersionControlHelper {
 
         private final int color;
 
-        StageType(int color){ this.color = color; }
+        StageType(int color) {
+            this.color = color;
+        }
 
         public int getColor() {
             return color;
@@ -309,10 +382,12 @@ public class VersionControlHelper {
             Map<String, VersionControlEntry> versions,
             List<StagingEntry> pendingStages,
             List<String> pushedVersions
-    ) {}
+    ) {
+    }
 
     public static class VersionControlEntry {
         private String version;
+        private String parentVersion;
         private String description;
         private String author;
         private long timestamp;
@@ -320,9 +395,10 @@ public class VersionControlHelper {
         // Map<relativePath, sha1Hash>
         private Map<String, String> fileHashes;
 
-        public VersionControlEntry(String version, String description, String author,
+        public VersionControlEntry(String version, String parentVersion, String description, String author,
                                    long timestamp, Map<String, String> fileHashes) {
             this.version = version;
+            this.parentVersion = parentVersion;
             this.description = description;
             this.author = author;
             this.timestamp = timestamp;
@@ -331,6 +407,26 @@ public class VersionControlHelper {
 
         public Map<String, String> getFileHashes() {
             return fileHashes;
+        }
+
+        public String getVersion() {
+            return version;
+        }
+
+        public String getParentVersion() {
+            return parentVersion;
+        }
+
+        public String getDescription() {
+            return description;
+        }
+
+        public String getAuthor() {
+            return author;
+        }
+
+        public long getTimestamp() {
+            return timestamp;
         }
     }
 

@@ -15,7 +15,7 @@ import net.fabricmc.api.Environment;
 import net.minecraft.client.MinecraftClient;
 
 @Environment(EnvType.CLIENT)
-public class VersionControlWindow { // todo implement version control system for packs
+public class VersionControlWindow {
     private static final Gson GSON = new GsonBuilder().create();
 
     private static final ImBoolean commitAll = new ImBoolean(false);
@@ -111,6 +111,37 @@ public class VersionControlWindow { // todo implement version control system for
             if (commitVersion.isEmpty() || commitVersion.get().equalsIgnoreCase(VersionControlHelper.getCurrentVersion())) {
                 ImGui.textColored(0xff0033, "Provided version already exists, change to a higher one");
             }
+
+            ImGui.separator();
+            ImGui.text("Commit History");
+
+            ImGui.beginChild("CommitList", 0, 200, true);
+
+            for (VersionControlHelper.VersionControlEntry entry : VersionControlHelper.getCommitsDescending()) {
+                boolean pushed = VersionControlHelper.isPushed(entry.getVersion());
+
+                ImGui.pushID(entry.getVersion());
+
+                if (!pushed) {
+                    ImGui.textColored(0xFFAA33, "●");
+                    ImGui.sameLine();
+                }
+
+                ImGui.text(entry.getVersion());
+                ImGui.sameLine();
+                ImGui.textDisabled(entry.getAuthor());
+
+                ImGui.textWrapped(entry.getDescription());
+
+                if (ImGui.button("Rollback")) {
+                    VersionControlHelper.rollback(entry.getVersion());
+                }
+
+                ImGui.separator();
+                ImGui.popID();
+            }
+
+            ImGui.endChild();
         }
         ImGui.end();
     }

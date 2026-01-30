@@ -1,7 +1,8 @@
 package me.jtech.packified;
 
 import me.jtech.packified.client.networking.packets.*;
-import me.jtech.packified.client.util.SyncPacketData;
+import me.jtech.packified.common.CommitDTO;
+import me.jtech.packified.networking.packets.*;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
@@ -10,16 +11,18 @@ import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.util.Identifier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.spongepowered.asm.mixin.injection.struct.InjectorGroupInfo;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 public class Packified implements ModInitializer {
     public static final String MOD_ID = "packified";
     public static Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
 
-    public static final String version = "1.2+d404";
+    public static final String version = "1.2+d412";
 
     public static List<UUID> moddedPlayers = new ArrayList<>();
 
@@ -39,12 +42,15 @@ public class Packified implements ModInitializer {
         PayloadTypeRegistry.playS2C().register(S2CSendFullPack.ID, S2CSendFullPack.CODEC);
         PayloadTypeRegistry.playS2C().register(S2CPlayerHasMod.ID, S2CPlayerHasMod.CODEC);
         PayloadTypeRegistry.playS2C().register(S2CInfoPacket.ID, S2CInfoPacket.CODEC);
+        PayloadTypeRegistry.playS2C().register(S2CFetchResponsePacket.ID, S2CFetchResponsePacket.CODEC);
+        PayloadTypeRegistry.playS2C().register(S2CPushResponsePacket.ID, S2CPushResponsePacket.CODEC);
 
         PayloadTypeRegistry.playC2S().register(C2SRequestFullPack.ID, C2SRequestFullPack.CODEC);
         PayloadTypeRegistry.playC2S().register(C2SSendFullPack.ID, C2SSendFullPack.CODEC);
         PayloadTypeRegistry.playC2S().register(C2SSyncPackChanges.ID, C2SSyncPackChanges.CODEC);
         PayloadTypeRegistry.playC2S().register(C2SHasMod.ID, C2SHasMod.CODEC);
         PayloadTypeRegistry.playC2S().register(C2SInfoPacket.ID, C2SInfoPacket.CODEC);
+        PayloadTypeRegistry.playC2S().register(C2SPushRequestPacket.ID, C2SPushRequestPacket.CODEC);
 
         ServerPlayNetworking.registerGlobalReceiver(C2SSyncPackChanges.ID, (payload, context) -> {
             context.server().execute(() -> {
@@ -113,6 +119,46 @@ public class Packified implements ModInitializer {
                     }
                     ServerPlayNetworking.send(player, new S2CInfoPacket(payload.info(), payload.player()));
                 }
+            });
+        });
+
+        ServerPlayNetworking.registerGlobalReceiver(C2SPushRequestPacket.ID, (payload, context) -> {
+            context.server().execute(() -> {
+                ServerPlayerEntity player = context.player();
+                var repo = ServerVersionControlManager.getOrCreateRepo(payload.packName());
+                for (CommitDTO commit : payload.commits()) {
+                    if (repo.commits.containsKey(commit.version)) {
+                        continue;
+                    }
+
+                    if (commit.parentVersion != null && !repo.commits.containsKey(commit.parentVersion)) {
+                        ServerPlayNetworking.send(
+                                player,
+                                new S2CPushResponsePacket(false, "", "Unknown parent: " + commit.parentVersion)
+                        );
+                        return;
+                    }
+                }
+
+                for (Map.Entry<String, byte[]> blob : payload.blobs().entrySet()) {
+                    ServerVersionControlManager.storeObject(blob.getKey(), blob.getValue());
+                }
+
+                for (CommitDTO commit : payload.commits()) {
+                    repo.commits.put(commit.version, new ServerVersionControlManager.RemoteCommit(
+                            commit.version,
+                            commit.parentVersion,
+                            commit.author,
+                            commit.timestamp,
+                            commit.message,
+                            commit.fileChanges
+                    ));
+                    repo.headVersion = commit.version;
+                }
+
+                ServerVersionControlManager.saveRepo(repo);
+
+                ServerPlayNetworking.send(player, new S2CPushResponsePacket(true, repo.headVersion, ""));
             });
         });
 

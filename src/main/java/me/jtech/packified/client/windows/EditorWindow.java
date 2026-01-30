@@ -110,7 +110,7 @@ public class EditorWindow {
             }
 
             ImGui.pushStyleColor(ImGuiCol.FrameBg, 0x00000000);
-            if (TutorialHelper.beginTutorialFocus(TutorialHelper.EDITOR_STAGE, "This is the toolbar. Here you can save, reload, and manage your files.")) {
+            if (TutorialHelper.beginTutorialFocus(TutorialHelper.HIERARCHY_STAGE, "This is the toolbar. Here you can save, reload, and manage your files.")) {
                 ImGui.pushStyleVar(ImGuiStyleVar.FrameBorderSize, 4.0f);
                 ImGui.pushStyleColor(ImGuiCol.Border, 0xFFFF0000);
             }

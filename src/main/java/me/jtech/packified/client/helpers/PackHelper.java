@@ -11,6 +11,7 @@ import net.minecraft.resource.ResourcePackProfile;
 
 import java.io.IOException;
 
+// todo make PackHelper abstract so it can work for respack, shader pack, and datapack
 public class PackHelper {
     private static ResourcePackProfile currentPack;
     private static PackWatcher watcher;

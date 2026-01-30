@@ -203,4 +203,9 @@ public class SafeTextureLoader {
         }
         textureCache.clear();
     }
+
+    public static void reuploadTextureCacheEntry(Path child) {
+        textureCache.remove(child);
+        load(child);
+    }
 }

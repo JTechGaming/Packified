@@ -14,7 +14,6 @@ import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.resource.ResourceReloadLogger;
 import net.minecraft.resource.*;
-import net.minecraft.util.Util;
 
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;

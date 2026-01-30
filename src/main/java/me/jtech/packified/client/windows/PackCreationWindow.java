@@ -5,7 +5,6 @@ import imgui.ImVec2;
 import imgui.flag.ImGuiCol;
 import imgui.flag.ImGuiCond;
 import imgui.flag.ImGuiTreeNodeFlags;
-import imgui.flag.ImGuiWindowFlags;
 import imgui.type.ImBoolean;
 import imgui.type.ImInt;
 import imgui.type.ImString;
@@ -15,7 +14,6 @@ import me.jtech.packified.client.util.PackUtils;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.minecraft.SharedConstants;
-import net.minecraft.client.MinecraftClient;
 import net.minecraft.resource.ResourceType;
 
 import java.util.*;
@@ -131,9 +129,9 @@ public class PackCreationWindow {
         ImGui.end();
     }
 
-    static class FolderNode {
+    static class FolderNode { // todo move to global util class
         String name;
-        ImBoolean generate = new ImBoolean(false);
+        ImBoolean enabled = new ImBoolean(false);
         List<FolderNode> children = new ArrayList<>();
 
         FolderNode(String name) {
@@ -215,18 +213,19 @@ public class PackCreationWindow {
     }
 
     static void setRecursive(FolderNode node, boolean value) {
-        node.generate.set(value);
+        node.enabled.set(value);
         for (FolderNode child : node.children) {
             setRecursive(child, value);
         }
     }
 
-    static void renderFolderNode(FolderNode node) {
+    // todo move to global util class
+    public static void renderFolderNode(FolderNode node) {
         ImGui.pushID(node.name);
 
-        boolean changed = ImGui.checkbox("", node.generate);
+        boolean changed = ImGui.checkbox("", node.enabled);
         if (changed) {
-            setRecursive(node, node.generate.get());
+            setRecursive(node, node.enabled.get());
         }
         ImGui.sameLine();
 
@@ -249,7 +248,7 @@ public class PackCreationWindow {
     }
 
     static void generateSelected(FolderNode node, String path) {
-        if (node.generate.get()) {
+        if (node.enabled.get()) {
             FileUtils.generateFolderStructure(path);
         }
         for (FolderNode child : node.children) {

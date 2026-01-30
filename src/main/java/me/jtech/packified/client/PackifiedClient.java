@@ -4,14 +4,14 @@ import com.mojang.blaze3d.pipeline.RenderPipeline;
 import com.mojang.blaze3d.platform.DepthTestFunction;
 import com.mojang.blaze3d.vertex.VertexFormat;
 import imgui.ImGui;
-import imgui.ImGuiIO;
-import imgui.ImVec2;
-import imgui.flag.ImGuiConfigFlags;
 import me.jtech.packified.client.config.ModConfig;
 import me.jtech.packified.client.helpers.NotificationHelper;
 import me.jtech.packified.client.helpers.PackHelper;
 import me.jtech.packified.client.helpers.TutorialHelper;
 import me.jtech.packified.client.helpers.VersionControlHelper;
+import me.jtech.packified.client.networking.packets.C2SHasMod;
+import me.jtech.packified.client.networking.packets.C2SInfoPacket;
+import me.jtech.packified.client.networking.packets.C2SRequestFullPack;
 import me.jtech.packified.client.networking.PacketSender;
 import me.jtech.packified.Packified;
 import me.jtech.packified.client.util.SyncPacketData;
@@ -21,7 +21,7 @@ import me.jtech.packified.client.windows.ModelEditorWindow;
 import me.jtech.packified.client.windows.popups.ConfirmWindow;
 import me.jtech.packified.client.windows.EditorWindow;
 import me.jtech.packified.client.windows.LogWindow;
-import me.jtech.packified.client.networking.packets.*;
+import me.jtech.packified.networking.packets.*;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
@@ -201,6 +201,25 @@ public class PackifiedClient implements ClientModInitializer {
             } else {
                 markedPlayers.remove(payload.specificPlayer());
             }
+        });
+
+        ClientPlayNetworking.registerGlobalReceiver(S2CPushResponsePacket.ID, (payload, context) -> {
+            if (!payload.success()) {
+                LogWindow.addError("Push failed: " + payload.error());
+                return;
+            }
+
+            VersionControlHelper.markAllAsPushedUpTo(payload.newHeadVersion());
+            LogWindow.addInfo("Push successful!! New remote HEAD: " + payload.newHeadVersion());
+        });
+
+        ClientPlayNetworking.registerGlobalReceiver(S2CFetchResponsePacket.ID, (payload, context) -> {
+            VersionControlHelper.integrateRemoteCommits(
+                    payload.headVersion(),
+                    payload.commits()
+            );
+
+            LogWindow.addInfo("Fetched " + payload.commits().size() + " commits");
         });
 
         ClientPlayNetworking.registerGlobalReceiver(S2CInfoPacket.ID, (payload, context) -> {
