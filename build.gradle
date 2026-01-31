@@ -187,15 +187,18 @@ task updateModInfo {
         def currentVersion = versionFile.exists() ? versionFile.text.trim() : "1.0.0"
         def isDevBuild = devFile.exists() ? devFile.text.trim().toBoolean() : false
 
+        def baseAndMcVersion
         def baseVersion
+        def mcVersion
         def devVersion = 0
 
         // Parse version
         if (currentVersion.contains("+d")) {
-            (baseVersion, devVersion) = currentVersion.split("\\+d")
+            (baseAndMcVersion, devVersion) = currentVersion.split("\\+d")
+            (baseVersion, mcVersion) = baseAndMcVersion.split("-")
             devVersion = devVersion.toInteger()
         } else {
-            baseVersion = currentVersion
+            (baseVersion, mcVersion) = currentVersion.split("-")
         }
 
         def (major, minor, patch) = baseVersion.tokenize('.').collect { it.toInteger() }
@@ -206,7 +209,7 @@ task updateModInfo {
         }
 
         // Build new version
-        def newVersion = isDevBuild ? "${major}.${minor}.${patch}+d${devVersion}" : "${major}.${minor}.${patch}"
+        def newVersion = isDevBuild ? "${major}.${minor}.${patch}-${minecraft_version}+d${devVersion}" : "${major}.${minor}.${patch}"
         if (newVersion.contains(".null")) {
             newVersion = newVersion.replace(".null", "")
         }

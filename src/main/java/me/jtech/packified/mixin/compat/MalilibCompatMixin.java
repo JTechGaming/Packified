@@ -13,10 +13,10 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 @Pseudo
 @Mixin(targets = "fi.dy.masa.malilib.event.InputEventHandler")
 public class MalilibCompatMixin {
-    @Inject(method = "onKeyInput", at = @At("HEAD"), cancellable = true)
-    private static void onKeyInput(int keyCode, int scanCode, int modifiers, int action, MinecraftClient mc, CallbackInfoReturnable<Boolean> cir) {
-        if (ImGuiImplementation.isActiveInternal()) {
-            cir.setReturnValue(false);
-        }
-    }
+//    @Inject(method = "onKeyInput", at = @At("HEAD"), cancellable = true)
+//    private static void onKeyInput(int keyCode, int scanCode, int modifiers, int action, MinecraftClient mc, CallbackInfoReturnable<Boolean> cir) {
+//        if (ImGuiImplementation.isActiveInternal()) {
+//            cir.setReturnValue(false);
+//        }
+//    }
 }
