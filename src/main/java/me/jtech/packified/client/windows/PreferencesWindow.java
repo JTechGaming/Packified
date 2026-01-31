@@ -21,7 +21,7 @@ public class PreferencesWindow {
     public static ImBoolean stayInCreative = new ImBoolean(ModConfig.getBoolean("stayincreative", false));
     public static ImBoolean autoReloadAssets = new ImBoolean(ModConfig.getBoolean("autoreloadassets", false));
     public static ImBoolean dontSaveExplorerOnClose = new ImBoolean(ModConfig.getBoolean("dontsaveexploreronclose", false));
-    public static ImInt maxBackupCount = new ImInt(ModConfig.getInt("maxBackupCount", 10)); // Maximum number of backups to keep
+    public static ImInt maxBackupCount = new ImInt(ModConfig.getInt("maxBackupCount", 0)); // Maximum number of backups to keep
     public static ImBoolean logPackReloadData = new ImBoolean(ModConfig.getBoolean("packreloadlogging", true));
     public static ImBoolean logPackDownloadInfo = new ImBoolean(ModConfig.getBoolean("packdownloadlogging", true));
     public static ImInt fontSize = new ImInt(ModConfig.getInt("fontsize", DisplayScaleHelper.getIdealFontSize()));

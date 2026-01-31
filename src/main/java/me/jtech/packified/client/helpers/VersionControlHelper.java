@@ -178,7 +178,7 @@ public class VersionControlHelper {
                     Path obj = root.resolve(".packified/objects").resolve(e.getValue());
 
                     if (!Files.exists(obj)) {
-                        throw new IllegalStateException("Missing object: " + e.getValue()); //todo this always happens on rollback for some reason (might be a remnant of old version in the commit files?)
+                        throw new IllegalStateException("Missing object: " + e.getValue());
                     }
 
                     Files.createDirectories(dest.getParent());

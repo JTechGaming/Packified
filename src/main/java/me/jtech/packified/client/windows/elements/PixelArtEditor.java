@@ -10,7 +10,6 @@ import imgui.flag.ImGuiWindowFlags;
 import imgui.type.ImInt;
 import me.jtech.packified.Packified;
 import me.jtech.packified.client.helpers.DisplayScaleHelper;
-import me.jtech.packified.client.imgui.ImGuiImplementation;
 import me.jtech.packified.client.util.SafeTextureLoader;
 import me.jtech.packified.client.windows.EditorWindow;
 import net.fabricmc.api.EnvType;
@@ -21,6 +20,7 @@ import net.minecraft.client.texture.NativeImageBackedTexture;
 import org.lwjgl.BufferUtils;
 import org.lwjgl.glfw.GLFW;
 import org.lwjgl.opengl.GL11;
+import org.lwjgl.opengl.GL20;
 
 import javax.imageio.ImageIO;
 import java.awt.*;
@@ -38,14 +38,13 @@ import static org.lwjgl.opengl.GL11.*;
 public class PixelArtEditor {
     private BufferedImage image;
     private int textureId = -1;
-    private float imagePosX;
-    private float imagePosY;
+    private float cameraX;
+    private float cameraY;
 
     private float[] currentColor = {1.0f, 0.0f, 0.0f}; // Default color (red)
     private float[] currentAlpha = {1.0f}; // Default to fully opaque
     private float scale = 1.0f; // Initial zoom scale
 
-    private final float MIN_SCALE = 2.0f;
     private final float MAX_SCALE = 64.0f;
 
     private final Stack<BufferedImage> undoStack = new Stack<>();
@@ -74,6 +73,9 @@ public class PixelArtEditor {
     private float zoomSensitivity = 1.0f; // sensitivity for zooming
     private float panSensitivity = 10.0f; // sensitivity for panning
 
+    private boolean panning = false;
+    private float panStartX, panStartY;
+
     private ImInt magicWandTolerance = new ImInt(20); // Tolerance for flood fill color matching
 
     public boolean wasModified = false; // Track if the image was modified
@@ -82,6 +84,9 @@ public class PixelArtEditor {
 
     private Point selectionStart = null;
     private Point selectionEnd = null;
+
+    private boolean textureDirty = false;
+    private int dirtyMinX, dirtyMinY, dirtyMaxX, dirtyMaxY;
 
     // Load image and create OpenGL texture
     private NativeImageBackedTexture texture;
@@ -140,60 +145,10 @@ public class PixelArtEditor {
         GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MAG_FILTER, GL11.GL_NEAREST);
 
         // Prevent tiling if you pan/zoom past edges
-        GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_S, GL_CLAMP);
-        GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_T, GL_CLAMP);
+        GL11.glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL20.GL_CLAMP_TO_EDGE);
+        GL11.glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL20.GL_CLAMP_TO_EDGE);
 
         GL11.glBindTexture(GL11.GL_TEXTURE_2D, 0); // unbind for safety
-    }
-
-
-    public void updateTexture() {
-        if (image == null) {
-            System.err.println("No image to update texture from.");
-            return;
-        }
-        if (texture == null) {
-            System.err.println("Texture not initialized.");
-            return;
-        }
-
-        // Must be on render thread when calling texture.upload()
-        RenderSystem.assertOnRenderThread();
-
-        NativeImage nativeImage = texture.getImage();
-        if (nativeImage == null) {
-            // fallback: replace the texture's image
-            NativeImage newImg = new NativeImage(image.getWidth(), image.getHeight(), true);
-            for (int y = 0; y < image.getHeight(); y++) {
-                for (int x = 0; x < image.getWidth(); x++) {
-                    int argb = image.getRGB(x, y);
-                    int a = (argb >> 24) & 0xFF;
-                    int r = (argb >> 16) & 0xFF;
-                    int g2 = (argb >> 8) & 0xFF;
-                    int b = argb & 0xFF;
-                    int abgr = (a << 24) | (b << 16) | (g2 << 8) | r;
-                    newImg.setColor(x, y, abgr);
-                }
-            }
-            texture.setImage(newImg);
-            texture.upload();
-            return;
-        }
-
-        // Copy only once, not per pixel GL calls
-        for (int y = 0; y < image.getHeight(); y++) {
-            for (int x = 0; x < image.getWidth(); x++) {
-                int argb = image.getRGB(x, y);
-                int a = (argb >> 24) & 0xFF;
-                int r = (argb >> 16) & 0xFF;
-                int g2 = (argb >> 8) & 0xFF;
-                int b = argb & 0xFF;
-                int abgr = (a << 24) | (b << 16) | (g2 << 8) | r;
-                nativeImage.setColor(x, y, abgr);
-            }
-        }
-
-        texture.upload(); // push all changed pixels in one call
     }
 
     public BufferedImage getImage() {
@@ -230,8 +185,9 @@ public class PixelArtEditor {
 
         if (firstRender) {
             firstRender = false;
-            // Clamp initial image position to fit within the window
-            scale += zoomSensitivity;
+            scale = computeMinScale();
+            cameraX = 0;
+            cameraY = 0;
             clampImagePosition();
         }
 
@@ -330,39 +286,55 @@ public class PixelArtEditor {
         ImGui.beginChild("Canvas##", 0, 0, false, ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse);
 
         // Handle zoom with Ctrl + Scroll
-        if (ImGui.isWindowHovered()) {
-            float scrollDelta = io.getMouseWheel();
-            if (scrollDelta != 0.0f) {
-                if (io.getKeyCtrl()) {
-                    scale += scrollDelta * zoomSensitivity; // Adjust sensitivity as needed
-                    if (scale < MIN_SCALE) scale = MIN_SCALE;
-                    if (scale > MAX_SCALE) scale = MAX_SCALE;
+        if (ImGui.isWindowHovered() && io.getMouseWheel() != 0.0f && io.getKeyCtrl()) {
+            float oldScale = scale;
+            float zoom = io.getMouseWheel() * zoomSensitivity;
 
-                    clampImagePosition();
-                } else if (io.getKeyShift()) {
-                    // Adjust image position with Shift + Scroll
-                    imagePosX += scrollDelta * panSensitivity * scale; // Adjust sensitivity as needed
-                    if (imagePosX > 0 ) imagePosX = 0; // Prevent scrolling out of bounds
-                    if (imagePosX < (-width * scale + ImGui.getWindowWidth())) {
-                        imagePosX = -width * scale + ImGui.getWindowWidth(); // Prevent scrolling out of bounds
-                    }
-                } else {
-                    // Adjust image position with regular scroll
-                    imagePosY += scrollDelta * panSensitivity * scale; // Adjust sensitivity as needed
-                    if (imagePosY > 0) imagePosY = 0; // Prevent scrolling out of bounds
-                    if (imagePosY < (-height * scale + ImGui.getWindowHeight())) {
-                        imagePosY = -height * scale + ImGui.getWindowHeight(); // Prevent scrolling out of bounds
-                    }
-                }
-            }
+            float minScale = computeMinScale();
+            scale = Math.max(minScale, Math.min(MAX_SCALE, scale + zoom));
+            float scaleRatio = scale / oldScale;
+
+            float mouseX = io.getMousePosX();
+            float mouseY = io.getMousePosY();
+
+            float imageX = mouseX - ImGui.getItemRectMinX() - cameraX;
+            float imageY = mouseY - ImGui.getItemRectMinY() - cameraY;
+
+            cameraX -= imageX * (scaleRatio - 1.0f);
+            cameraY -= imageY * (scaleRatio - 1.0f);
+
+            clampImagePosition();
         }
 
-        ImVec2 canvasPos = new ImVec2(ImGui.getCursorPosX() + imagePosX, ImGui.getCursorPosY() + imagePosY);
+        if (ImGui.isWindowHovered() && ImGui.isMouseDown(2)) { // middle mouse
+            if (!panning) {
+                panning = true;
+                panStartX = io.getMousePosX();
+                panStartY = io.getMousePosY();
+            } else {
+                float dx = io.getMousePosX() - panStartX;
+                float dy = io.getMousePosY() - panStartY;
+
+                cameraX += dx;
+                cameraY += dy;
+
+                panStartX = io.getMousePosX();
+                panStartY = io.getMousePosY();
+
+                clampImagePosition();
+            }
+        } else {
+            panning = false;
+        }
+
+        ImVec2 canvasPos = new ImVec2(ImGui.getCursorPosX() + cameraX, ImGui.getCursorPosY() + cameraY);
         ImGui.setCursorPos(canvasPos.x, canvasPos.y);
 
         ImGui.image(textureId, width * scale, height * scale);
 
         renderPixelGuidelineGrid(canvasPos);
+
+        renderBrushPreview();
 
         boolean mouseHovered = ImGui.isItemHovered();
         boolean leftMouseDown = ImGui.isMouseDown(0);
@@ -389,9 +361,16 @@ public class PixelArtEditor {
 
             if (currentTool == Tool.PEN || currentTool == Tool.ERASER) {
                 drawInterpolatedLine(lastPixelX, lastPixelY, pixelX, pixelY);
+
+                markDirtyRect(
+                        Math.max(0, Math.min(lastPixelX, pixelX)),
+                        Math.max(0, Math.min(lastPixelY, pixelY)),
+                        Math.min(image.getWidth() - 1, Math.max(lastPixelX, pixelX)),
+                        Math.min(image.getHeight() - 1, Math.max(lastPixelY, pixelY))
+                );
+
                 lastPixelX = pixelX;
                 lastPixelY = pixelY;
-                updateTexture();
             }
             if (currentTool == Tool.PAINT_BUCKET) {
                 floodFill(pixelX, pixelY);
@@ -416,6 +395,11 @@ public class PixelArtEditor {
         }
 
         ImGui.endChild();
+
+        if (textureDirty) {
+            texture.upload();
+            textureDirty = false;
+        }
     }
 
     private void renderPixelGuidelineGrid(ImVec2 canvasPos) {
@@ -427,9 +411,9 @@ public class PixelArtEditor {
         // Draw vertical lines
         for (int x = 0; x < width; x += toolSize.get()) {
             ImGui.getWindowDrawList().addLine(
-                    ImGui.getItemRectMinX() + x * scale - imagePosX,
+                    ImGui.getItemRectMinX() + x * scale - cameraX,
                     ImGui.getItemRectMinY(),
-                    ImGui.getItemRectMinX() + x * scale - imagePosX,
+                    ImGui.getItemRectMinX() + x * scale - cameraX,
                     ImGui.getItemRectMinY() + height * scale,
                     setColorOpacity(0xFF000000, scaleLineOpacity()), 1.0f);
         }
@@ -438,9 +422,9 @@ public class PixelArtEditor {
         for (int y = 0; y < height; y += toolSize.get()) {
             ImGui.getWindowDrawList().addLine(
                     ImGui.getItemRectMinX(),
-                    ImGui.getItemRectMinY() + y * scale - imagePosY,
+                    ImGui.getItemRectMinY() + y * scale - cameraY,
                     ImGui.getItemRectMinX() + width * scale,
-                    ImGui.getItemRectMinY() + y * scale - imagePosY,
+                    ImGui.getItemRectMinY() + y * scale - cameraY,
                     setColorOpacity(0xFF000000, scaleLineOpacity()), 1.0f);
         }
     }
@@ -458,18 +442,23 @@ public class PixelArtEditor {
     }
 
     private void clampImagePosition() {
-        int width = image.getWidth();
-        int height = image.getHeight();
-        float windowWidth = ImGui.getWindowWidth();
-        float windowHeight = ImGui.getWindowHeight();
+        float imgW = image.getWidth() * scale;
+        float imgH = image.getHeight() * scale;
 
-        // Clamp X position
-        if (imagePosX > 0) imagePosX = 0;
-        if (imagePosX < windowWidth - width * scale) imagePosX = Math.min(0, windowWidth - width * scale);
+        float winW = ImGui.getWindowWidth();
+        float winH = ImGui.getWindowHeight();
 
-        // Clamp Y position
-        if (imagePosY > 0) imagePosY = 0;
-        if (imagePosY < windowHeight - height * scale) imagePosY = Math.min(0, windowHeight - height * scale);
+        if (imgW <= winW) {
+            cameraX = (winW - imgW) * 0.5f;
+        } else {
+            cameraX = Math.min(0, Math.max(winW - imgW, cameraX));
+        }
+
+        if (imgH <= winH) {
+            cameraY = (winH - imgH) * 0.5f;
+        } else {
+            cameraY = Math.min(0, Math.max(winH - imgH, cameraY));
+        }
     }
 
     private void renderSelection() {
@@ -480,10 +469,10 @@ public class PixelArtEditor {
             int y2 = Math.max(selectionStart.y, selectionEnd.y);
 
             ImGui.getWindowDrawList().addRect(
-                    ImGui.getItemRectMinX() + x1 * scale - imagePosX,
-                    ImGui.getItemRectMinY() + y1 * scale - imagePosY,
-                    ImGui.getItemRectMinX() + x2 * scale - imagePosX,
-                    ImGui.getItemRectMinY() + y2 * scale - imagePosY,
+                    ImGui.getItemRectMinX() + x1 * scale - cameraX,
+                    ImGui.getItemRectMinY() + y1 * scale - cameraY,
+                    ImGui.getItemRectMinX() + x2 * scale - cameraX,
+                    ImGui.getItemRectMinY() + y2 * scale - cameraY,
                     0xFF00FF00, // Green color
                     0.0f,       // No rounding
                     0           // Thickness
@@ -540,10 +529,10 @@ public class PixelArtEditor {
             for (int x = x1; x <= x2; x++) {
                 if (x >= 0 && x < image.getWidth() && y >= 0 && y < image.getHeight()) {
                     image.setRGB(x, y, 0x00000000);
+                    markDirty(x, y);
                 }
             }
         }
-        updateTexture();
     }
 
     private void drawInterpolatedLine(int x0, int y0, int x1, int y1) {
@@ -589,19 +578,19 @@ public class PixelArtEditor {
 
         NativeImage nativeImage = texture.getImage();
         if (nativeImage == null) {
-            // fallback: do everything on BufferedImage then call updateTexture()
             while (!queue.isEmpty()) {
                 Point p = queue.remove();
                 int x = p.x, y = p.y;
                 if (x < 0 || x >= width || y < 0 || y >= height) continue;
                 if (!colorsMatch(image.getRGB(x, y), targetColor, magicWandTolerance.get())) continue;
                 image.setRGB(x, y, fillColor);
+                markDirty(x, y);
+
                 queue.add(new Point(x + 1, y));
                 queue.add(new Point(x - 1, y));
                 queue.add(new Point(x, y + 1));
                 queue.add(new Point(x, y - 1));
             }
-            updateTexture();
             return;
         }
 
@@ -619,15 +608,13 @@ public class PixelArtEditor {
             int b = fillColor & 0xFF;
             int abgr = (a << 24) | (b << 16) | (g2 << 8) | r;
             nativeImage.setColor(x, y, abgr);
+            markDirty(x, y);
 
             queue.add(new Point(x + 1, y));
             queue.add(new Point(x - 1, y));
             queue.add(new Point(x, y + 1));
             queue.add(new Point(x, y - 1));
         }
-
-        // upload only once when done
-        texture.upload();
     }
 
 
@@ -667,10 +654,10 @@ public class PixelArtEditor {
                 for (int x = centerX - halfSize; x <= centerX + halfSize; x++) {
                     if (x >= 0 && x < width && y >= 0 && y < height) {
                         image.setRGB(x, y, drawColor);
+                        markDirty(x, y);
                     }
                 }
             }
-            updateTexture();
             return;
         }
 
@@ -691,12 +678,10 @@ public class PixelArtEditor {
                     int abgr = (a << 24) | (b << 16) | (g2 << 8) | r;
 
                     nativeImage.setColor(x, y, abgr);
+                    markDirty(x, y);
                 }
             }
         }
-
-        // Don't upload per-pixel — upload once after the stroke segment
-        texture.upload();
     }
 
 
@@ -716,7 +701,9 @@ public class PixelArtEditor {
         int blendedRed = (int) (red * alphaFactor + existingRed * inverseAlpha);
         int blendedGreen = (int) (green * alphaFactor + existingGreen * inverseAlpha);
         int blendedBlue = (int) (blue * alphaFactor + existingBlue * inverseAlpha);
-        int blendedAlpha = Math.min(255, (int) (alpha + existingAlpha * inverseAlpha));
+        float aSrc = alpha / 255f;
+        float aDst = existingAlpha / 255f;
+        int blendedAlpha = (int)((aSrc + aDst * (1 - aSrc)) * 255);
 
         return (blendedAlpha << 24) | (blendedRed << 16) | (blendedGreen << 8) | blendedBlue;
     }
@@ -743,7 +730,7 @@ public class PixelArtEditor {
         if (!undoStack.isEmpty()) {
             redoStack.push(copyImage(image));
             image = undoStack.pop();
-            updateTexture();
+            rebuildNativeImageFromBuffered();
         }
     }
 
@@ -751,7 +738,7 @@ public class PixelArtEditor {
         if (!redoStack.isEmpty()) {
             undoStack.push(copyImage(image));
             image = redoStack.pop();
-            updateTexture();
+            rebuildNativeImageFromBuffered();
         }
     }
 
@@ -775,5 +762,114 @@ public class PixelArtEditor {
         } catch (IOException e) {
             e.printStackTrace();
         }
+    }
+
+    private void markDirty(int x, int y) {
+        if (!textureDirty) {
+            dirtyMinX = dirtyMaxX = x;
+            dirtyMinY = dirtyMaxY = y;
+            textureDirty = true;
+        } else {
+            dirtyMinX = Math.min(dirtyMinX, x);
+            dirtyMinY = Math.min(dirtyMinY, y);
+            dirtyMaxX = Math.max(dirtyMaxX, x);
+            dirtyMaxY = Math.max(dirtyMaxY, y);
+        }
+    }
+
+    private void markDirtyRect(int x0, int y0, int x1, int y1) {
+        if (!textureDirty) {
+            dirtyMinX = x0;
+            dirtyMinY = y0;
+            dirtyMaxX = x1;
+            dirtyMaxY = y1;
+            textureDirty = true;
+        } else {
+            dirtyMinX = Math.min(dirtyMinX, x0);
+            dirtyMinY = Math.min(dirtyMinY, y0);
+            dirtyMaxX = Math.max(dirtyMaxX, x1);
+            dirtyMaxY = Math.max(dirtyMaxY, y1);
+        }
+    }
+
+    private boolean getMousePixel(ImVec2 outPixel) {
+        ImGuiIO io = ImGui.getIO();
+
+        if (!ImGui.isItemHovered()) return false;
+
+        float imageScreenX = ImGui.getItemRectMinX();
+        float imageScreenY = ImGui.getItemRectMinY();
+
+        float localX = (io.getMousePosX() - imageScreenX) / scale;
+        float localY = (io.getMousePosY() - imageScreenY) / scale;
+
+        int px = (int) Math.floor(localX);
+        int py = (int) Math.floor(localY);
+
+        if (px < 0 || py < 0 || px >= image.getWidth() || py >= image.getHeight())
+            return false;
+
+        outPixel.x = px;
+        outPixel.y = py;
+        return true;
+    }
+
+    private void renderBrushPreview() {
+        if (currentTool != Tool.PEN && currentTool != Tool.ERASER) return;
+
+        ImVec2 pixel = new ImVec2();
+        if (!getMousePixel(pixel)) return;
+
+        int half = toolSize.get() / 2;
+
+        float x0 = ImGui.getItemRectMinX() + (pixel.x - half) * scale;
+        float y0 = ImGui.getItemRectMinY() + (pixel.y - half) * scale;
+        float x1 = ImGui.getItemRectMinX() + (pixel.x + half + 1) * scale;
+        float y1 = ImGui.getItemRectMinY() + (pixel.y + half + 1) * scale;
+
+        int color = (currentTool == Tool.ERASER)
+                ? 0x80FF0000   // semi-transparent red
+                : 0x8000FF00;  // semi-transparent green
+
+        ImGui.getWindowDrawList().addRect(
+                x0, y0, x1, y1,
+                color,
+                0.0f,
+                0,
+                2.0f
+        );
+    }
+
+    private void rebuildNativeImageFromBuffered() {
+        NativeImage nativeImage = texture.getImage();
+        if (nativeImage == null) return;
+
+        int w = image.getWidth();
+        int h = image.getHeight();
+
+        for (int y = 0; y < h; y++) {
+            for (int x = 0; x < w; x++) {
+                int argb = image.getRGB(x, y);
+                int a = (argb >> 24) & 0xFF;
+                int r = (argb >> 16) & 0xFF;
+                int g = (argb >> 8) & 0xFF;
+                int b = argb & 0xFF;
+
+                int abgr = (a << 24) | (b << 16) | (g << 8) | r;
+                nativeImage.setColor(x, y, abgr);
+            }
+        }
+
+        markDirtyRect(0, 0, w - 1, h - 1);
+    }
+
+    private float computeMinScale() {
+        float winW = ImGui.getWindowWidth();
+        float winH = ImGui.getWindowHeight();
+
+        float scaleX = winW / image.getWidth();
+        float scaleY = winH / image.getHeight();
+
+        return Math.min(scaleX, scaleY);
     }
 }
