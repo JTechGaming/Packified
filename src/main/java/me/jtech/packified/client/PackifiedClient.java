@@ -61,7 +61,7 @@ public class PackifiedClient implements ClientModInitializer {
     private static final String version = Packified.version;
 
     public static boolean shouldRender = false;
-    private static KeyBinding keyBinding;
+    private static KeyBinding openMenuKeybind;
 
     public static List<UUID> markedPlayers = new ArrayList<>();
     public static Map<UUID, String> playerPacks = new HashMap<>();
@@ -87,14 +87,14 @@ public class PackifiedClient implements ClientModInitializer {
 
     @Override
     public void onInitializeClient() {
-        keyBinding = KeyBindingHelper.registerKeyBinding(new KeyBinding(
+        openMenuKeybind = KeyBindingHelper.registerKeyBinding(new KeyBinding(
                 "key.packified.menu", // The translation key of the keybinding's name
                 InputUtil.Type.KEYSYM, // The type of the keybinding, KEYSYM for keyboard, MOUSE for mouse.
                 GLFW.GLFW_KEY_F8, // The keycode of the key
                 "category.packified.editor" // The translation key of the keybinding's category.
         ));
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
-            if (keyBinding.wasPressed()) {
+            if (openMenuKeybind.wasPressed()) {
                 toggleVisibility();
             }
             PacketSender.processQueue();
@@ -111,7 +111,7 @@ public class PackifiedClient implements ClientModInitializer {
         // Prevent Minecraft from locking the cursor when clicking
         ClientTickEvents.START_CLIENT_TICK.register(client -> {
             if (shouldRender) {
-                if (keyBinding.wasPressed()) {
+                if (openMenuKeybind.wasPressed()) {
                     toggleVisibility();
                 }
                 if (!ImGuiImplementation.grabbed) {

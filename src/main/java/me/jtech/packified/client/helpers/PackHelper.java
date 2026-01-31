@@ -7,9 +7,11 @@ import me.jtech.packified.client.util.PackWatcher;
 import me.jtech.packified.client.windows.EditorWindow;
 import me.jtech.packified.client.windows.FileHierarchyWindow;
 import me.jtech.packified.client.windows.LogWindow;
+import net.minecraft.client.MinecraftClient;
 import net.minecraft.resource.ResourcePackProfile;
 
 import java.io.IOException;
+import java.util.concurrent.CompletableFuture;
 
 // todo make PackHelper abstract so it can work for respack, shader pack, and datapack
 public class PackHelper {
@@ -30,19 +32,16 @@ public class PackHelper {
 
         PackHelper.currentPack = currentPack;
 
-        ModConfig.savePackStatus(currentPack);
+        CompletableFuture.runAsync(() ->
+                ModConfig.savePackStatus(currentPack)
+        );
         PackUtils.loadPack(currentPack); // This also sends packet, enables pack, and reloads packs
         PackUtils.checkPackType(currentPack);
 
         VersionControlHelper.init(currentPack.getDisplayName().getString());
 
         if (watcher == null) {
-            try {
-                watcher = new PackWatcher(FileUtils.getPackFolderPath());
-                watcher.start();
-            } catch (IOException e) {
-                LogWindow.addError(e.getMessage());
-            }
+            startWatcherAsync();
 
             Runtime.getRuntime().addShutdownHook(new Thread(() -> {
                 try {
@@ -52,6 +51,19 @@ public class PackHelper {
                 }
             }));
         }
+    }
+
+    private static void startWatcherAsync() {
+        CompletableFuture.runAsync(() -> {
+            try {
+                watcher = new PackWatcher(FileUtils.getPackFolderPath());
+                watcher.start();
+            } catch (IOException e) {
+                MinecraftClient.getInstance().execute(() ->
+                        LogWindow.addError(e.getMessage())
+                );
+            }
+        });
     }
 
     public static void closePack() {

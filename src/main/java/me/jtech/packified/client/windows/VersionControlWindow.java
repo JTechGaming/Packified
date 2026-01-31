@@ -79,10 +79,10 @@ public class VersionControlWindow {
                         VersionControlHelper.commit(PackHelper.getCurrentPack().getDisplayName().getString(), commitVersion.get(), commitMessage.get(), MinecraftClient.getInstance().player.getUuidAsString());
                         commitMessage.clear();
                     } else {
-                        ImGui.textColored(0xff0033, "You must provide a commit message");
+                        ImGui.textColored(0xff0033ff, "You must provide a commit message");
                     }
                 } else {
-                    ImGui.textColored(0xff0033, "Provided version already exists, change to a higher one");
+                    ImGui.textColored(0xff0033ff, "Provided version already exists, change to a higher one");
                 }
             }
             if (!canCommit) {
@@ -106,16 +106,16 @@ public class VersionControlWindow {
             }
 
             if (commitMessage.isEmpty()) {
-                ImGui.textColored(0xff0033, "You must provide a commit message");
+                ImGui.textColored(0xff0033ff, "You must provide a commit message");
             }
             if (commitVersion.isEmpty() || commitVersion.get().equalsIgnoreCase(VersionControlHelper.getCurrentVersion())) {
-                ImGui.textColored(0xff0033, "Provided version already exists, change to a higher one");
+                ImGui.textColored(0xff0033ff, "Provided version already exists, change to a higher one");
             }
 
             ImGui.separator();
             ImGui.text("Commit History");
 
-            ImGui.beginChild("CommitList", 0, 200, true);
+            ImGui.beginChild("CommitList", 0, ImGui.getContentRegionAvailY(), true);
 
             for (VersionControlHelper.VersionControlEntry entry : VersionControlHelper.getCommitsDescending()) {
                 boolean pushed = VersionControlHelper.isPushed(entry.getVersion());
@@ -123,7 +123,7 @@ public class VersionControlWindow {
                 ImGui.pushID(entry.getVersion());
 
                 if (!pushed) {
-                    ImGui.textColored(0xFFAA33, "●");
+                    ImGui.textColored(0xFFAA33FF, "●");
                     ImGui.sameLine();
                 }
 

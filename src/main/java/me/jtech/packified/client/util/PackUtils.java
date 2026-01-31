@@ -28,6 +28,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 public class PackUtils {
@@ -65,25 +66,36 @@ public class PackUtils {
     }
 
     public static List<ResourcePackProfile> refresh() {
-        ResourcePackManager resourcePackManager = MinecraftClient.getInstance().getResourcePackManager();
+        ResourcePackManager resourcePackManager =
+                MinecraftClient.getInstance().getResourcePackManager();
+
         resourcePackManager.scanPacks();
-        Path resourcePacksPath = FabricLoader.getInstance().getGameDir().resolve("resourcepacks");
+
+        Path resourcePacksPath =
+                FabricLoader.getInstance().getGameDir().resolve("resourcepacks");
+
+        Set<String> existingPackNames;
+        try (Stream<Path> paths = Files.list(resourcePacksPath)) {
+            existingPackNames = paths
+                    .map(path -> path.getFileName().toString())
+                    .collect(Collectors.toSet());
+        } catch (IOException e) {
+            e.printStackTrace();
+            // keep all profiles if filesystem read fails
+            resourcePacks = List.copyOf(resourcePackManager.getProfiles());
+            return resourcePacks;
+        }
 
         resourcePacks = resourcePackManager.getProfiles().stream()
                 .filter(pack -> {
-                    String legalizedName = legalizeName(pack.getDisplayName().getString());
-                    try (Stream<Path> paths = Files.walk(resourcePacksPath)) {
-                        return paths.anyMatch(path -> path.getFileName().toString().equals(legalizedName));
-                    } catch (IOException e) {
-                        e.printStackTrace();
-                        return true;
-                    }
+                    String legalizedName =
+                            legalizeName(pack.getDisplayName().getString());
+                    return existingPackNames.contains(legalizedName);
                 })
                 .toList();
 
         return resourcePacks;
     }
-
 
     public static List<ResourcePackProfile> refreshInternalPacks() {
         ResourcePackManager resourcePackManager = MinecraftClient.getInstance().getResourcePackManager();
@@ -300,10 +312,16 @@ public class PackUtils {
         ResourcePackManager resourcePackManager = MinecraftClient.getInstance().getResourcePackManager();
         resourcePackManager.enable(currentPack.getId());
 
-        CompletableFuture.runAsync(PackUtils::reloadPack);
-        if (PackHelper.isValid() && MinecraftClient.getInstance().player != null) {
-            ClientPlayNetworking.send(new C2SInfoPacket(PackHelper.getCurrentPack().getDisplayName().getString(), MinecraftClient.getInstance().player.getUuid()));
-        }
+        CompletableFuture
+                .runAsync(PackUtils::reloadPack)
+                .thenRun(() ->
+                        MinecraftClient.getInstance().execute(() -> {
+                                    if (PackHelper.isValid() && MinecraftClient.getInstance().player != null) {
+                                        ClientPlayNetworking.send(new C2SInfoPacket(PackHelper.getCurrentPack().getDisplayName().getString(), MinecraftClient.getInstance().player.getUuid()));
+                                    }
+                                }
+                        )
+                );
     }
 
     public static void unloadPack(ResourcePackProfile currentPack) {
@@ -359,16 +377,20 @@ public class PackUtils {
     }
 
     public static void exportPack() {
+        exportPackWith(List.of());
+    }
+
+    public static void exportPackWith(List<String> enabledPaths) {
         String defaultFolder = FabricLoader.getInstance().getConfigDir().resolve("packified/exports").toString();
         File folderFile = Path.of(defaultFolder).toFile();
         folderFile.mkdirs();
-        FileDialog.saveFileDialog(defaultFolder, PackHelper.getCurrentPack().getDisplayName().getString() + ".zip", "json", "png").thenAccept(pathStr -> {
+        FileDialog.saveFileDialog(defaultFolder, PackHelper.getCurrentPack().getDisplayName().getString() + ".zip", "").thenAccept(pathStr -> {
             if (pathStr != null) {
                 Path path = Path.of(pathStr);
                 Path folderPath = path.getParent();
                 MinecraftClient.getInstance().submit(() -> {
                     try {
-                        FileUtils.zip(folderPath.toFile(), path.getFileName().toString());
+                        FileUtils.zip(folderPath.toFile(), path.getFileName().toString(), enabledPaths);
                     } catch (IOException e) {
                         e.printStackTrace();
                     }

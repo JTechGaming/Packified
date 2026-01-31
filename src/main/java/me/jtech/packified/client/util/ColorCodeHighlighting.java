@@ -1,8 +1,6 @@
 package me.jtech.packified.client.util;
 
-import imgui.ImColor;
 import imgui.ImGui;
-import imgui.flag.ImGuiWindowFlags;
 
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -91,7 +89,11 @@ public class ColorCodeHighlighting {
         }
 
         // Add to drawlist
-        int color = ImColor.intToColor((int)(r*255), (int)(g*255), (int)(b*255), (int)(a*255)); // this is deprecated so might wanna find an alternative in the future
+        int color = intToColor((int)(r*255), (int)(g*255), (int)(b*255), (int)(a*255));
         ImGui.getWindowDrawList().addRectFilled(xPos, yPos, xPos + lineHeight - padding*2.5f, yPos + lineHeight - padding, color);
+    }
+
+    public static int intToColor(int r, int g, int b, int a) {
+        return a << 24 | b << 16 | g << 8 | r;
     }
 }

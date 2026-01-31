@@ -22,7 +22,6 @@ import me.jtech.packified.client.config.ModConfig;
 import me.jtech.packified.client.helpers.CornerNotificationsHelper;
 import me.jtech.packified.client.helpers.NotificationHelper;
 import me.jtech.packified.client.helpers.PackHelper;
-import me.jtech.packified.client.util.FileUtils;
 import me.jtech.packified.client.util.PackUtils;
 import me.jtech.packified.client.util.SafeTextureLoader;
 import me.jtech.packified.client.windows.elements.MenuBar;
@@ -96,10 +95,11 @@ public class ImGuiImplementation {
     public static List<String> loadedFontNames = new ArrayList<>();
     public static ImFont currentFont = null;
 
-    private static final Map<String, Integer> textureCache = new HashMap<>();
+    private static final Map<String, Integer> textureCache = Collections.synchronizedMap(new HashMap<>());
     public static boolean enterGameKeyToggled = false;
 
     public static boolean firstFrameAfterInit = true;
+    private static boolean runGarbageCollectionNextFrame;
 
     /**
      * PLEASE DO NOT CALL THIS METHOD!
@@ -250,6 +250,21 @@ public class ImGuiImplementation {
             return;
         }
 
+        if (firstFrameAfterInit) {
+            firstFrameAfterInit = false;
+
+            // Load last opened pack
+            String lastPackName = ModConfig.getDockConfig().lastOpenedPack;
+            if (lastPackName != null && !lastPackName.isBlank()) {
+                ResourcePackProfile pack = PackUtils.getPack(lastPackName);
+                if (pack != null) {
+                    MinecraftClient.getInstance().execute(() ->
+                            PackHelper.updateCurrentPack(pack)
+                    );
+                }
+            }
+        }
+
         // start frame
         imGuiImplGl3.newFrame();
         imGuiImplGlfw.newFrame(); // Handle keyboard and mouse interactions
@@ -366,8 +381,6 @@ public class ImGuiImplementation {
             } else {
                 if (MinecraftClient.getInstance().currentScreen != null) {
                     GLFW.glfwSetInputMode(client.getWindow().getHandle(), GLFW_CURSOR, GLFW_CURSOR_NORMAL);
-//                    ImGuiIO io = ImGui.getIO();
-//                    io.removeConfigFlags(ImGuiConfigFlags.NoMouse);
                 } else {
                     GLFW.glfwSetInputMode(client.getWindow().getHandle(), GLFW_CURSOR, GLFW_CURSOR_DISABLED);
                 }
@@ -379,7 +392,10 @@ public class ImGuiImplementation {
         }
         ImGui.end();
 
-        SafeTextureLoader.garbageCollect();
+        if (runGarbageCollectionNextFrame) {
+            SafeTextureLoader.garbageCollect();
+            runGarbageCollectionNextFrame = false;
+        }
 
         // Window rendering
         LogWindow.render();
@@ -397,6 +413,7 @@ public class ImGuiImplementation {
         CornerNotificationsHelper.render();
         PreferencesWindow.render();
         PackCreationWindow.render();
+        PackExporterWindow.render();
         AssetInspectorWindow.render();
         FileExplorerWindow.renderAll();
         ModelEditorWindow.render();
@@ -405,20 +422,6 @@ public class ImGuiImplementation {
         TutorialHelper.render();
 
         ImGui.popFont();
-
-        if (firstFrameAfterInit) {
-            firstFrameAfterInit = false;
-            ImGui.setWindowFocus("Main");
-
-            // Load last opened pack
-            String lastPackName = ModConfig.getDockConfig().lastOpenedPack;
-            if (lastPackName != null && !lastPackName.isBlank()) {
-                ResourcePackProfile pack = PackUtils.getPack(lastPackName);
-                if (pack != null) {
-                    PackHelper.updateCurrentPack(pack);
-                }
-            }
-        }
 
         // end frame
         ImGui.render();
@@ -492,7 +495,7 @@ public class ImGuiImplementation {
 
             return textureId;
         } catch (IOException e) {
-            e.printStackTrace();
+            LogWindow.addError(e.getMessage());
             return -1;
         }
     }
@@ -511,7 +514,7 @@ public class ImGuiImplementation {
             Resource resource = MinecraftClient.getInstance().getResourceManager().getResource(identifier).get();
             return ImageIO.read(resource.getInputStream());
         } catch (IOException e) {
-            e.printStackTrace();
+            LogWindow.addError(e.getMessage());
         }
         return null;
     }
@@ -521,7 +524,7 @@ public class ImGuiImplementation {
             BufferedImage image = ImageIO.read(filePath.toFile());
             return fromBufferedImage(image);
         } catch (IOException e) {
-            e.printStackTrace();
+            LogWindow.addError(e.getMessage());
             return -1;
         }
     }
@@ -530,7 +533,7 @@ public class ImGuiImplementation {
         try {
             return ImageIO.read(filePath.toFile());
         } catch (IOException e) {
-            e.printStackTrace();
+            LogWindow.addError(e.getMessage());
             return null;
         }
     }
@@ -580,7 +583,7 @@ public class ImGuiImplementation {
         GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_S, GL30.GL_CLAMP_TO_EDGE);
         GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_T, GL30.GL_CLAMP_TO_EDGE);
 
-        GL11.glTexImage2D(GL11.GL_TEXTURE_2D, 0, GL11.GL_RGBA16, image.getWidth(), image.getHeight(), 0, GL11.GL_RGBA, GL11.GL_UNSIGNED_BYTE, buffer);
+        GL11.glTexImage2D(GL11.GL_TEXTURE_2D, 0, GL11.GL_RGBA8, image.getWidth(), image.getHeight(), 0, GL11.GL_RGBA, GL11.GL_UNSIGNED_BYTE, buffer);
 
         return texture;
     }
@@ -692,8 +695,7 @@ public class ImGuiImplementation {
         if (gameMode == null) return false;
         if (MinecraftClient.getInstance().world == null) return false;
         if (MinecraftClient.getInstance().player == null) return false;
-        if (MinecraftClient.getInstance().getOverlay() != null) return false;
-        return true;
+        return MinecraftClient.getInstance().getOverlay() == null;
     }
 
     public static int getFrameX() {
@@ -820,5 +822,9 @@ public class ImGuiImplementation {
                 return SafeTextureLoader.loadFromIdentifier(Packified.identifier("textures/ui/neu_file.png"), true);
             }
         }
+    }
+
+    public static void runGarbageCollection() {
+        runGarbageCollectionNextFrame = true;
     }
 }

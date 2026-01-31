@@ -22,7 +22,7 @@ public class Packified implements ModInitializer {
     public static final String MOD_ID = "packified";
     public static Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
 
-    public static final String version = "1.2+d412";
+    public static final String version = "1.2+d451";
 
     public static List<UUID> moddedPlayers = new ArrayList<>();
 

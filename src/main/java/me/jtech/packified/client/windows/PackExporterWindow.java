@@ -10,10 +10,14 @@ import me.jtech.packified.client.util.FileUtils;
 import me.jtech.packified.client.util.PackUtils;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
+import net.fabricmc.loader.api.FabricLoader;
 
+import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Stream;
@@ -47,7 +51,12 @@ public class PackExporterWindow {
         PackCreationWindow.renderFolderNode(root);
 
         if (ImGui.button("Export Pack")) {
-            PackUtils.exportPackWith();
+            List<String> enabledPaths = collectFolders(root, "resourcepacks\\" + packName + "\\");
+            for (int i=0; i<enabledPaths.size();i++) {
+                String path = enabledPaths.get(i);
+                enabledPaths.set(i, path.substring(0, path.lastIndexOf("\\"))); // Get rid of last backslash
+            }
+            PackUtils.exportPackWith(enabledPaths);
             isOpen.set(false); // Close the window after exporting
         }
 
@@ -55,7 +64,8 @@ public class PackExporterWindow {
     }
 
     private static void insertPath(Path path) {
-        String[] parts = path.toString().split("/");
+        String[] parts = path.toString().replace(FabricLoader.getInstance().getGameDir()
+                .resolve("resourcepacks").resolve(PackHelper.getCurrentPack().getDisplayName().getString()).toString(), "").split("\\\\"); // backslash bc of filesystem path
         PackCreationWindow.FolderNode current = root;
 
         for (String part : parts) {
@@ -77,19 +87,21 @@ public class PackExporterWindow {
     }
 
     private static List<String> collectFolders(PackCreationWindow.FolderNode node, String path) {
+        List<String> enabledPaths = new ArrayList<>();
         if (node.enabled.get()) {
-
+            enabledPaths.add(path);
         }
         for (PackCreationWindow.FolderNode child : node.children) {
-            collectFolders(child, path + child.name + "/");
+            enabledPaths.addAll(collectFolders(child, path + child.name + "\\"));
         }
+        return enabledPaths;
     }
 
     private static void buildTree(Path rootPath) {
         try (Stream<Path> paths = Files.walk(rootPath)) {
             List<Path> sortedPaths = paths
                     .filter(Files::exists)
-                    .filter(Files::isDirectory)
+                    //.filter(Files::isDirectory) // kinda want to give control over individual files
                     .sorted(Comparator.comparing(Path::toString))
                     .toList();
             for (Path path : sortedPaths) {

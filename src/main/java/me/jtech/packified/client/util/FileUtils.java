@@ -2,7 +2,6 @@ package me.jtech.packified.client.util;
 
 import imgui.ImGui;
 import me.jtech.packified.Packified;
-import me.jtech.packified.client.PackifiedClient;
 import me.jtech.packified.client.helpers.CornerNotificationsHelper;
 import me.jtech.packified.client.helpers.PackHelper;
 import me.jtech.packified.client.imgui.ImGuiImplementation;
@@ -10,7 +9,6 @@ import me.jtech.packified.client.windows.*;
 import me.jtech.packified.client.windows.popups.SelectFolderWindow;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.SharedConstants;
-import net.minecraft.client.MinecraftClient;
 import net.minecraft.resource.*;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.InvalidIdentifierException;
@@ -292,7 +290,7 @@ public class FileUtils {
         PackHelper.updateCurrentPack(PackUtils.getPack(targetDir.getName().replace(".zip", "")));
     }
 
-    public static void zip(File targetDir, String fileName) throws IOException {
+    public static void zip(File targetDir, String fileName, List<String> enabledPaths) throws IOException {
         // zips the resource pack
         File zipFile = new File(targetDir, fileName.replace(".zip", "") + ".zip");
         File folder = new File("resourcepacks/" + PackHelper.getCurrentPack().getDisplayName().getString());
@@ -300,7 +298,14 @@ public class FileUtils {
         // get everything in the folder and write it to the zip file
         try (FileSystem zipFileSystem = FileSystems.newFileSystem(URI.create("jar:" + zipFile.toURI()), Map.of("create", "true"))) {
             Path root = zipFileSystem.getPath("/");
-            Files.walk(folder.toPath()).forEach(path -> {
+            for (String file : enabledPaths) {
+                System.out.println(file);
+            }
+            Files.walk(folder.toPath())
+                            .forEach((System.out::println));
+            Files.walk(folder.toPath())
+                    .filter(path -> enabledPaths.contains(path.toString()))
+                    .forEach(path -> {
                 try {
                     Path destPath = root.resolve(folder.toPath().relativize(path).toString());
                     if (Files.isDirectory(path)) {
@@ -429,7 +434,7 @@ public class FileUtils {
             try {
                 Files.createDirectories(base.resolve(namespace));
             } catch (IOException e) {
-                e.printStackTrace();
+                LogWindow.addError(e.getMessage());
                 continue;
             }
 
@@ -446,7 +451,7 @@ public class FileUtils {
                         Files.copy(is, out, StandardCopyOption.REPLACE_EXISTING);
                     }
                 } catch (Exception e) {
-                    e.printStackTrace();
+                    LogWindow.addError(e.getMessage());
                 }
             });
         }
@@ -616,7 +621,7 @@ public class FileUtils {
         try {
             File resourcePackFolder = new File("resourcepacks/" + PackUtils.legalizeName(pack.getDisplayName().getString()));
             File targetFile = new File(resourcePackFolder, "pack.mcmeta");
-            Files.write(targetFile.toPath(), content.getBytes(StandardCharsets.UTF_8));
+            Files.writeString(targetFile.toPath(), content);
             CompletableFuture.runAsync(PackUtils::reloadPack);
         } catch (IOException e) {
             LogWindow.addError("Failed to write pack.mcmeta file: " + e.getMessage());
@@ -646,7 +651,7 @@ public class FileUtils {
         // Create the pack.mcmeta file
         File mcmetaFile = new File(resourcePackFolder, "pack.mcmeta");
         try {
-            Files.write(mcmetaFile.toPath(), metadata.getBytes(StandardCharsets.UTF_8));
+            Files.writeString(mcmetaFile.toPath(), metadata);
         } catch (IOException e) {
             LogWindow.addError("Failed to write pack.mcmeta file: " + e.getMessage());
         }
@@ -659,7 +664,7 @@ public class FileUtils {
             if (asset.extension().equals(".json")) {
                 // Save JSON file
                 try {
-                    Files.write(targetFile.toPath(), asset.assetData().getBytes(StandardCharsets.UTF_8));
+                    Files.writeString(targetFile.toPath(), asset.assetData());
                 } catch (IOException e) {
                     LogWindow.addError("Failed to write JSON file for: " + asset.path() + " - " + e.getMessage());
                 }
@@ -749,7 +754,6 @@ public class FileUtils {
             }
         } catch (IOException e) {
             LogWindow.addError("Failed to move file: " + e.getMessage());
-            e.printStackTrace();
         }
     }
 
@@ -789,7 +793,6 @@ public class FileUtils {
             }
         } catch (IOException e) {
             LogWindow.addError("Failed to rename file: " + e.getMessage());
-            e.printStackTrace();
         }
     }
 

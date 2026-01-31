@@ -8,7 +8,6 @@ import imgui.flag.ImGuiInputTextFlags;
 import imgui.type.ImBoolean;
 import imgui.type.ImInt;
 import imgui.type.ImString;
-import me.jtech.packified.client.PackifiedClient;
 import me.jtech.packified.client.config.ModConfig;
 import me.jtech.packified.client.helpers.ExternalEditorHelper;
 import me.jtech.packified.client.helpers.PackHelper;
@@ -22,12 +21,12 @@ import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.minecraft.client.MinecraftClient;
 
+import java.io.File;
 import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Objects;
+import java.util.*;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
 import java.util.function.Consumer;
 
 @Environment(EnvType.CLIENT)
@@ -36,12 +35,37 @@ public class FileExplorerWindow {
 
     public ImBoolean isOpen = new ImBoolean(false);
     private Path currentDirectory;
-    private Object lastPack = null;
     public final int i;
     private final ImString searchInput = new ImString(100);
     private final ImInt extensionFilter = new ImInt(0); // 0: All, 1: Models, 2: Textures, 3: Sounds
     public final boolean allowFolderSelection;
     private final Consumer<Path> onSelect;
+
+    private File[] cachedFiles;
+    private Path cachedDirectory;
+
+    private static final Set<String> MODEL_EXTS = Set.of(".json", ".obj", ".bbmodel");
+    private static final Set<String> IMAGE_EXTS = Set.of(".png", ".jpg", ".jpeg", ".bmp");
+    private static final Set<String> SOUND_EXTS = Set.of(".ogg", ".wav", ".mp3");
+
+    private void refreshDirectoryCache() {
+        if (!Objects.equals(cachedDirectory, currentDirectory)) {
+            cachedDirectory = currentDirectory;
+            cachedFiles = currentDirectory.toFile().listFiles(f -> !f.isHidden());
+        }
+    }
+
+    private static final Map<Path, FileTooltipData> TOOLTIP_CACHE = new HashMap<>();
+
+    private static FileTooltipData getTooltipData(Path path, boolean isFolder) {
+        return TOOLTIP_CACHE.computeIfAbsent(path, p -> FileTooltipData.compute(p, isFolder));
+    }
+
+    private static final Executor IO_EXECUTOR = Executors.newSingleThreadExecutor(r -> {
+        Thread t = new Thread(r, "FileExplorer-IO");
+        t.setDaemon(true);
+        return t;
+    });
 
     public FileExplorerWindow(int i, Path startingDirectory) {
         this.i = i;
@@ -64,8 +88,8 @@ public class FileExplorerWindow {
     }
 
     public static void renderAll() {
-        for (FileExplorerWindow explorer : new ArrayList<>(explorers)) {
-            explorer.render();
+        for (int idx = explorers.size() - 1; idx >= 0; idx--) {
+            explorers.get(idx).render();
         }
     }
 
@@ -90,19 +114,20 @@ public class FileExplorerWindow {
 
         ImGuiImplementation.saveExplorers();
 
+        var currentPack = PackHelper.getCurrentPack().createResourcePack();
+
         if (PackHelper.isValid()) {
-            Path packFolder = PackUtils.getPackFolder(PackHelper.getCurrentPack().createResourcePack());
+            Path packFolder = PackUtils.getPackFolder(currentPack);
             // Only initialize/reset when there's no current directory or the pack changed
             if (currentDirectory == null) {
                 currentDirectory = packFolder;
-                lastPack = PackHelper.getCurrentPack();
             }
         }
 
         if (ImGui.begin("File Explorer " + (i + 1), isOpen) && PackHelper.isValid()) {
             if (ImGui.beginChild("Left Panel##" + i, 220f, 0f, true)) {
                 Path tempPath = currentDirectory;
-                Path packPath = PackUtils.getPackFolder(PackHelper.getCurrentPack().createResourcePack());
+                Path packPath = PackUtils.getPackFolder(currentPack);
                 if (packPath != null) {
                     Path root = packPath.getParent();
                     List<Path> ancestors = new ArrayList<>();
@@ -123,34 +148,19 @@ public class FileExplorerWindow {
             ImGui.sameLine();
 
             if (ImGui.beginChild("Center Panel##" + i, 0f, 0f, true)) {
-                if (Objects.requireNonNull(currentDirectory.toFile().listFiles()).length == 0) {
+                refreshDirectoryCache();
+                if (cachedFiles == null || cachedFiles.length == 0) {
                     ImGuiImplementation.centeredText("This folder is empty.");
                 }
                 ImGui.inputText("Search##" + i, searchInput, ImGuiInputTextFlags.None);
                 ImGui.sameLine();
                 ImGui.combo("Extensions##" + i, extensionFilter, new String[]{"All", "Models", "Textures", "Sounds"}, 0);
                 ImGui.separator();
-                Arrays.stream(Objects.requireNonNull(currentDirectory.toFile().listFiles(file -> !file.isHidden()))).filter(file -> {
-                    String search = searchInput.get().toLowerCase();
-                    if (extensionFilter.get() == 1) { // Models
-                        String ext = FileUtils.getFileExtension(file.getName()).toLowerCase();
-                        if (!ext.equals(".json") && !ext.equals(".obj") && !ext.equals(".bbmodel")) {
-                            return false;
-                        }
-                    } else if (extensionFilter.get() == 2) { // Textures
-                        String ext = FileUtils.getFileExtension(file.getName()).toLowerCase();
-                        if (!ext.equals(".png") && !ext.equals(".jpg") && !ext.equals(".jpeg") && !ext.equals(".bmp")) {
-                            return false;
-                        }
-                    } else if (extensionFilter.get() == 3) { // Sounds
-                        String ext = FileUtils.getFileExtension(file.getName()).toLowerCase();
-                        if (!ext.equals(".ogg") && !ext.equals(".wav") && !ext.equals(".mp3")) {
-                            return false;
-                        }
-                    } // There is probably a better way to do this but oh well
 
-                    return search.isEmpty() || file.getName().toLowerCase().contains(search); // If searching, filter files/folders
-                }).forEach(file -> { // Display each file/folder
+                String search = searchInput.get().toLowerCase(Locale.ROOT);
+
+                for (File file : cachedFiles) {
+                    if (!passesFilter(file, search)) continue;
                     if (file.isDirectory()) {
                         if (ImGuiImplementation.menuItemWithIcon(ImGuiImplementation.getFileIconTextureId("folder"), file.getName(), 16, 16)) {
                             currentDirectory = file.toPath();
@@ -191,7 +201,7 @@ public class FileExplorerWindow {
                             ImGui.endDragDropSource();
                         }
                     }
-                });
+                }
 
                 if (allowFolderSelection) {
                     ImGui.separator();
@@ -212,47 +222,71 @@ public class FileExplorerWindow {
         ImGui.end();
     }
 
-    private static float itemHoverTime = 0.0f;
-    private static String selectedFileName = null;
-    private static boolean alreadyRenderedHoverThisFrame = false;
+    private void invalidateCache() {
+        cachedDirectory = null;
+    }
 
-    private static void renderHoverTooltip(String name, Path filePath, boolean isFolder) {
+    public static void invalidateAllCaches() { // Called when PackWatcher detects a filesystem change in pack directory
+        for (int idx = explorers.size() - 1; idx >= 0; idx--) {
+            explorers.get(idx).invalidateCache();
+        }
+        TOOLTIP_CACHE.clear();
+    }
+
+    private boolean passesFilter(File file, String search) {
+        if (!search.isEmpty() && !file.getName().toLowerCase().contains(search)) {
+            return false;
+        }
+
+        String ext = FileUtils.getFileExtension(file.getName());
+        return switch (extensionFilter.get()) {
+            case 1 -> MODEL_EXTS.contains(ext);
+            case 2 -> IMAGE_EXTS.contains(ext);
+            case 3 -> SOUND_EXTS.contains(ext);
+            default -> true;
+        };
+    }
+
+    private Path hoveredPath;
+    private float hoverTime;
+    private String selectedFileName = null;
+    private boolean alreadyRenderedHoverThisFrame = false;
+
+    private void renderHoverTooltip(String name, Path filePath, boolean isFolder) {
         if (alreadyRenderedHoverThisFrame) return; // Prevent multiple tooltips from rendering in the same frame
         if (!name.equals(selectedFileName) && selectedFileName != null) {
             return;
         }
 
+        FileTooltipData tooltipData = getTooltipData(filePath, isFolder);
+
         if (ImGui.isItemHovered(ImGuiHoveredFlags.AllowWhenBlockedByPopup) && !ImGui.isPopupOpen(name)) {
-            itemHoverTime += ImGui.getIO().getDeltaTime();
+            if (!filePath.equals(hoveredPath)) {
+                hoveredPath = filePath;
+                hoverTime = 0f;
+            }
 
-            if (itemHoverTime > 1.1f) itemHoverTime = 1.0f;
-
-            if (itemHoverTime >= 1.0f) {
                 alreadyRenderedHoverThisFrame = true;
 
                 ImGui.beginTooltip();
 
                 ImGui.setNextWindowSize(200, 200);
                 if (FileUtils.getFileExtension(filePath.getFileName().toString()).equalsIgnoreCase(".png")) {
-                    int textureId = SafeTextureLoader.load(filePath);
-                    if (textureId != -1) {
-                        ImGui.image(textureId, 100, 100);
+                    if (tooltipData.textureId != -1) {
+                        ImGui.image(tooltipData.textureId, 100, 100);
                     }
                 }
                 ImGui.text(String.format("Path: %s\nSize: %s" + (isFolder ? "\nType: %s\nFiles: %s" : "\nType: %s%s"),
                         FileUtils.getRelativePackPath(filePath),
-                        isFolder ? FileUtils.formatFileSize(FileUtils.getFolderSize(filePath)) : FileUtils.formatFileSize(FileUtils.getFileSize(filePath)),
-                        isFolder ? "Folder" : FileUtils.formatExtension(FileUtils.getFileExtension(name)),
-                        isFolder ? FileUtils.getFolderFileCount(filePath) : ""));
+                        tooltipData.size,
+                        tooltipData.type,
+                        tooltipData.fileCount
+                ));
 
                 ImGui.endTooltip();
-            } else {
-                itemHoverTime += ImGui.getIO().getDeltaTime();
-            }
-        } else {
-            if (itemHoverTime >= 1.0f && itemHoverTime < 2.5f) {
-                itemHoverTime += ImGui.getIO().getDeltaTime();
-            }
+        } else if (filePath.equals(hoveredPath)) {
+            hoveredPath = null;
+            hoverTime = 0f;
         }
     }
 
@@ -402,7 +436,7 @@ public class FileExplorerWindow {
                 if (ImGui.menuItem("Reload")) {
                     selectedFile = path;
                     // Reload the current pack
-                    CompletableFuture.runAsync(PackUtils::reloadPack);
+                    CompletableFuture.runAsync(PackUtils::reloadPack, IO_EXECUTOR);
                 }
                 ImGui.separator();
                 if (ImGui.menuItem("Export")) {
@@ -507,6 +541,24 @@ public class FileExplorerWindow {
                 });
             }
             ImGui.endPopup();
+        }
+    }
+
+    record FileTooltipData(
+            String size,
+            String type,
+            String fileCount,
+            int textureId
+    ) {
+        static FileTooltipData compute(Path filePath, boolean isFolder) {
+            return new FileTooltipData(
+                    isFolder ? FileUtils.formatFileSize(FileUtils.getFolderSize(filePath)) : FileUtils.formatFileSize(FileUtils.getFileSize(filePath)),
+                    isFolder ? "Folder" : FileUtils.formatExtension(FileUtils.getFileExtension(filePath.getFileName().toString())),
+                    isFolder ? FileUtils.getFolderFileCount(filePath) + "" : "",
+                    isFolder || !FileUtils.getFileExtension(filePath.getFileName().toString()).equals(".png")
+                            ? -1
+                            : SafeTextureLoader.load(filePath)
+            );
         }
     }
 
