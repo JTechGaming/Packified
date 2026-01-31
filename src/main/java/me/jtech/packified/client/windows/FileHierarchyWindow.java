@@ -70,6 +70,7 @@ public class FileHierarchyWindow {
     }
 
     public static FileHierarchyWindow getCachedHierarchy(Path rootPath) {
+        if (PackHelper.getWatcher() == null) return cachedHierarchy;
         if (cachedHierarchy == null || PackHelper.getWatcher().isInvalidated() || !lastFrameSearch.equals(searchQuery.get()) || !selectedExtension.equals(lastFrameExtension)) {
             LogWindow.addDebugInfo("PackWatcher: Successfully rebuilt file hierarchy");
             cachedHierarchy = buildFileHierarchy(rootPath);
@@ -310,7 +311,7 @@ public class FileHierarchyWindow {
 
         int buttonSize = DisplayScaleHelper.getUIButtonSize();
 
-        if (PackHelper.isValid()) {
+        if (PackHelper.isValid() && getCachedHierarchy(getPackFolderPath()) != null) {
             ImGui.imageButton(inportIcon, buttonSize, buttonSize);
             if (ImGui.isItemClicked()) {
                 // Logic to import a file
@@ -550,8 +551,7 @@ public class FileHierarchyWindow {
                 ImGui.separator();
                 if (ImGui.menuItem("Export")) {
                     selectedFile = path;
-                    // Export the current pack
-                    PackUtils.exportPack();
+                    PackExporterWindow.isOpen.set(!PackExporterWindow.isOpen.get());
                 }
                 ImGui.endMenu();
             }

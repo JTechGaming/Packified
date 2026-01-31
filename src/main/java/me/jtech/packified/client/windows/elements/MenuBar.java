@@ -193,7 +193,7 @@ public class MenuBar {
             if (Packified.debugMode) {
                 if (ImGui.beginMenu("Debug")) {
                     if (ImGui.menuItem("Send pack to self") && PackHelper.isValid()) {
-                        PackUtils.sendFullPack(PackHelper.getCurrentPack(), MinecraftClient.getInstance().player.getUuid());
+                        PackUtils.sendFullPackZipped(PackHelper.getCurrentPack(), MinecraftClient.getInstance().player.getUuid());
                     }
                     if (ImGui.isItemHovered()) {
                         ImGui.setTooltip("Please do not use this......");

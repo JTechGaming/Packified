@@ -2,88 +2,35 @@ package me.jtech.packified.client.util;
 
 import net.minecraft.network.PacketByteBuf;
 import net.minecraft.network.codec.PacketCodec;
-import net.minecraft.network.codec.PacketCodecs;
 
-import java.nio.file.Path;
-import java.util.List;
-
-public record SyncPacketData(String packName, List<AssetData> assets, String metadata, boolean finalChunk, boolean lastData, int packetAmount) {
-
-    public static final class AssetData {
-
-        public static final PacketCodec<PacketByteBuf, AssetData> PACKET_CODEC = new PacketCodec<PacketByteBuf, AssetData>() {
-            public AssetData decode(PacketByteBuf byteBuf) {
-                Path path = Path.of(byteBuf.readString());
-                String extension = byteBuf.readString();
-                String assetData = byteBuf.readString();
-                boolean finalChunk = byteBuf.readBoolean();
-                return new AssetData(path, extension, assetData, finalChunk);
-            }
-
-            public void encode(PacketByteBuf byteBuf, AssetData assetData) {
-                byteBuf.writeString(assetData.path.toString());
-                byteBuf.writeString(assetData.extension);
-                byteBuf.writeString(assetData.assetData);
-                byteBuf.writeBoolean(assetData.finalChunk);
-            }
-        };
-
-
-        public static final PacketCodec<PacketByteBuf, List<AssetData>> LIST_PACKET_CODEC = PACKET_CODEC.collect(PacketCodecs.toList());
-        private final Path path;
-        private final String extension;
-        private String assetData;
-        private boolean finalChunk;
-
-        public AssetData(Path path, String extension, String assetData, boolean finalChunk) {
-            this.path = path;
-            this.extension = extension;
-            this.assetData = assetData;
-            this.finalChunk = finalChunk;
-        }
-
-        public Path path() {
-            return path;
-        }
-
-        public String extension() {
-            return extension;
-        }
-
-        public String assetData() {
-            return assetData;
-        }
-
-        public boolean finalChunk() {
-            return finalChunk;
-        }
-
-        public void setAssetData(String assetData) {
-            this.assetData = assetData;
-        }
-    }
+public record SyncPacketData(
+        String packName,
+        byte[] zipChunk,      // Byte array for binary data
+        int chunkIndex,
+        int totalChunks,
+        boolean lastChunk,
+        String metadata       // Only used in first chunk
+) {
 
     public static final PacketCodec<PacketByteBuf, SyncPacketData> PACKET_CODEC = new PacketCodec<PacketByteBuf, SyncPacketData>() {
         public SyncPacketData decode(PacketByteBuf byteBuf) {
             String packName = byteBuf.readString();
-            List<AssetData> assets = byteBuf.readList(AssetData.PACKET_CODEC);
+            int chunkIndex = byteBuf.readInt();
+            int totalChunks = byteBuf.readInt();
+            boolean lastChunk = byteBuf.readBoolean();
             String metadata = byteBuf.readString();
-            boolean finalChunk = byteBuf.readBoolean();
-            boolean lastData = byteBuf.readBoolean();
-            int packetAmount = byteBuf.readInt();
+            byte[] zipChunk = byteBuf.readByteArray();
 
-            return new SyncPacketData(packName, assets, metadata, finalChunk, lastData, packetAmount);
+            return new SyncPacketData(packName, zipChunk, chunkIndex, totalChunks, lastChunk, metadata);
         }
 
-        public void encode(PacketByteBuf byteBuf, SyncPacketData selectionData) {
-            byteBuf.writeString(selectionData.packName);
-            byteBuf.writeCollection(selectionData.assets, AssetData.PACKET_CODEC);
-            byteBuf.writeString(selectionData.metadata);
-            byteBuf.writeBoolean(selectionData.finalChunk);
-            byteBuf.writeBoolean(selectionData.lastData);
-            byteBuf.writeInt(selectionData.packetAmount);
+        public void encode(PacketByteBuf byteBuf, SyncPacketData data) {
+            byteBuf.writeString(data.packName);
+            byteBuf.writeInt(data.chunkIndex);
+            byteBuf.writeInt(data.totalChunks);
+            byteBuf.writeBoolean(data.lastChunk);
+            byteBuf.writeString(data.metadata);
+            byteBuf.writeByteArray(data.zipChunk);
         }
     };
-
-    public static final PacketCodec<PacketByteBuf, List<SyncPacketData>> LIST_PACKET_CODEC = PACKET_CODEC.collect(PacketCodecs.toList());
 }

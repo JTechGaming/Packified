@@ -755,7 +755,7 @@ public class ImGuiImplementation {
     }
 
     public static ImVec2 getCenterViewportPos() {
-        return new ImVec2(frameX + frameWidth / 2f, frameY + frameHeight / 2f);
+        return ImGui.getMainViewport().getCenter();
     }
 
     private static ImVec2 lastCenterPos = null;

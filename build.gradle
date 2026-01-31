@@ -206,6 +206,8 @@ task updateModInfo {
         // Increment version based on dev mode
         if (isDevBuild) {
             devVersion++ // Increment dev version
+        } else {
+            devVersion = 0
         }
 
         // Build new version

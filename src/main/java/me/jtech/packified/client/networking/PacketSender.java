@@ -1,5 +1,6 @@
 package me.jtech.packified.client.networking;
 
+import me.jtech.packified.Packified;
 import me.jtech.packified.client.windows.LogWindow;
 import me.jtech.packified.client.networking.packets.C2SSendFullPack;
 import me.jtech.packified.client.networking.packets.C2SSyncPackChanges;
@@ -21,7 +22,7 @@ public class PacketSender {
         for (int i = 0; i < PPT && !packetQueue.isEmpty(); i++) {
             CustomPayload packet = packetQueue.poll();
             if (packet != null) {
-                sendPacket(packet, i);
+                sendPacket(packet);
             }
 
             if (packetQueue.isEmpty()) {
@@ -30,14 +31,15 @@ public class PacketSender {
         }
     }
 
-    private static void sendPacket(CustomPayload packet, int i) {
+    private static void sendPacket(CustomPayload packet) {
         ClientPlayNetworking.send(packet);
-        LogWindow.addLog("Packet sent: " + packet.getId().toString(), LogWindow.LogType.INFO.getColor());
-        if (packet instanceof C2SSendFullPack fullPackPacket) {
-            LogWindow.addLog(i + " / " + fullPackPacket.packetData().packetAmount() + " packets sent.", LogWindow.LogType.INFO.getColor());
-        }
-        if (packet instanceof C2SSyncPackChanges packChangesPacket) {
-            LogWindow.addLog(i + " / " + packChangesPacket.packetData().packetAmount() + " packets sent.", LogWindow.LogType.INFO.getColor());
+        if (Packified.debugMode) {
+            if (packet instanceof C2SSendFullPack fullPackPacket) {
+                LogWindow.addLog(fullPackPacket.packetData().chunkIndex() + " / " + fullPackPacket.packetData().totalChunks() + " packets sent.", LogWindow.LogType.INFO.getColor());
+            }
+            if (packet instanceof C2SSyncPackChanges packChangesPacket) {
+                LogWindow.addLog(packChangesPacket.packetData().chunkIndex() + " / " + packChangesPacket.packetData().totalChunks() + " packets sent.", LogWindow.LogType.INFO.getColor());
+            }
         }
     }
 }

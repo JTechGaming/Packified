@@ -441,8 +441,7 @@ public class FileExplorerWindow {
                 ImGui.separator();
                 if (ImGui.menuItem("Export")) {
                     selectedFile = path;
-                    // Export the current pack
-                    PackUtils.exportPack();
+                    PackExporterWindow.isOpen.set(!PackExporterWindow.isOpen.get());
                 }
                 ImGui.endMenu();
             }

@@ -18,6 +18,7 @@ import net.minecraft.resource.*;
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
@@ -30,6 +31,9 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+import java.util.zip.Deflater;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 
 public class PackUtils {
     private static List<ResourcePackProfile> resourcePacks;
@@ -117,9 +121,9 @@ public class PackUtils {
             return;
         }
         List<PackFile> changedAssets = EditorWindow.changedAssets;
-        accumulatePacketData(currentPack, changedAssets, data -> {
-            PacketSender.queuePacket(new C2SSyncPackChanges(data, List.of(new UUID(0, 0))));
-        });
+//        accumulatePacketData(currentPack, changedAssets, data -> {
+//            PacketSender.queuePacket(new C2SSyncPackChanges(data, List.of(new UUID(0, 0))));
+//        });
     }
 
     public static void sendPackChangesToPlayers(ResourcePackProfile currentPack) {
@@ -127,43 +131,94 @@ public class PackUtils {
             return;
         }
         List<PackFile> changedAssets = EditorWindow.changedAssets;
-        accumulatePacketData(currentPack, changedAssets, data -> {
-            PacketSender.queuePacket(new C2SSyncPackChanges(data, PackifiedClient.markedPlayers));
-        });
+//        accumulatePacketData(currentPack, changedAssets, data -> {
+//            PacketSender.queuePacket(new C2SSyncPackChanges(data, PackifiedClient.markedPlayers));
+//        });
     }
 
-    private static void accumulatePacketData(ResourcePackProfile currentPack, List<PackFile> changedAssets, PacketAction action) {
-        List<SyncPacketData.AssetData> assets = new ArrayList<>();
-        int predictedPacketAmount = (int) Math.ceil((double) changedAssets.stream().mapToInt(asset -> Math.toIntExact(asset.getPath().toFile().length())).sum() / Packified.MAX_PACKET_SIZE);
-        for (int i = 0; i < changedAssets.size(); i++) {
-            PackFile asset = changedAssets.get(i);
-            String content = FileUtils.getContent(asset);
-            Path path = asset.getPath();
-            String extension = FileUtils.getFileExtension(path.getFileName().toString());
-            boolean finalAsset = i == changedAssets.size() - 1;
-            if (content.length() > Packified.MAX_PACKET_SIZE) {
-                // split the asset into multiple chunks
-                int requiredChunks = (int) Math.ceil((double) content.length() / Packified.MAX_PACKET_SIZE);
-                for (int a = 0; a < requiredChunks; a++) {
-                    int start = a * Packified.MAX_PACKET_SIZE;
-                    int end = Math.min((a + 1) * Packified.MAX_PACKET_SIZE, content.length());
-                    String chunk = content.substring(start, end);
-                    SyncPacketData data = new SyncPacketData(currentPack.getDisplayName().getString(), List.of(new SyncPacketData.AssetData(path, extension, chunk, a == requiredChunks - 1)), FileUtils.getMCMetaContent(currentPack), (a == requiredChunks - 1), false, predictedPacketAmount);
-                    action.execute(data);
-                }
-                continue;
+    public static void sendFullPackZipped(ResourcePackProfile pack, UUID player) {
+        Path packPath = getPackFolderPath(pack);
+
+        if (packPath == null || !Files.exists(packPath)) {
+            LogWindow.addError("Invalid resource pack path: " + packPath);
+            return;
+        }
+
+        try {
+            // Create a temporary zip file
+            Path tempZipPath = Files.createTempFile("pack_transfer_", ".zip");
+
+            // Zip the entire pack folder
+            try (FileOutputStream fos = new FileOutputStream(tempZipPath.toFile());
+                 ZipOutputStream zos = new ZipOutputStream(fos)) {
+
+                // Set compression level for better speed/size balance
+                zos.setLevel(Deflater.BEST_SPEED);
+
+                Files.walk(packPath)
+                        .filter(Files::isRegularFile)
+                        .forEach(path -> {
+                            try {
+                                Path relativePath = packPath.relativize(path);
+                                ZipEntry zipEntry = new ZipEntry(relativePath.toString().replace("\\", "/"));
+                                zos.putNextEntry(zipEntry);
+                                Files.copy(path, zos);
+                                zos.closeEntry();
+                            } catch (IOException e) {
+                                LogWindow.addError("Failed to add file to zip: " + path + " - " + e.getMessage());
+                            }
+                        });
             }
-            if (content.length() + assets.stream().mapToInt(cAsset -> cAsset.assetData().length()).sum() > Packified.MAX_PACKET_SIZE) {
-                SyncPacketData data = new SyncPacketData(currentPack.getDisplayName().getString(), assets, FileUtils.getMCMetaContent(currentPack), true, false, predictedPacketAmount);
-                action.execute(data);
-                assets.clear();
+
+            // Read the zip file as bytes
+            byte[] zipData = Files.readAllBytes(tempZipPath);
+
+            // Delete temp file
+            Files.delete(tempZipPath);
+
+            // Calculate chunks needed
+            int totalChunks = (int) Math.ceil((double) zipData.length / Packified.MAX_PACKET_SIZE);
+
+            LogWindow.addInfo("Sending pack as zip: " + pack.getDisplayName().getString() +
+                    " (" + formatFileSize(zipData.length) + " in " + totalChunks + " chunks)");
+
+            // Send chunks
+            for (int i = 0; i < totalChunks; i++) {
+                int start = i * Packified.MAX_PACKET_SIZE;
+                int end = Math.min((i + 1) * Packified.MAX_PACKET_SIZE, zipData.length);
+
+                byte[] chunk = new byte[end - start];
+                System.arraycopy(zipData, start, chunk, 0, end - start);
+
+                String metadata = (i == 0) ? FileUtils.getMCMetaContent(pack) : "";
+
+                SyncPacketData data = new SyncPacketData(
+                        pack.getDisplayName().getString(),
+                        chunk,
+                        i,
+                        totalChunks,
+                        i == totalChunks - 1,
+                        metadata
+                );
+
+                sendFullPackPacket(data, player);
             }
-            assets.add(new SyncPacketData.AssetData(path, extension, content, true));
-            if (finalAsset) {
-                SyncPacketData data = new SyncPacketData(currentPack.getDisplayName().getString(), assets, FileUtils.getMCMetaContent(currentPack), true, true, predictedPacketAmount);
-                action.execute(data);
-                assets.clear();
-            }
+
+            LogWindow.addInfo("Pack zip sent successfully: " + totalChunks + " chunks");
+
+        } catch (IOException e) {
+            LogWindow.addError("Failed to zip and send pack: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
+    private static String formatFileSize(int size) {
+        if (size < 1024) {
+            return size + " B";
+        } else if (size < 1024 * 1024) {
+            return String.format("%.2f KB", size / 1024.0);
+        } else {
+            return String.format("%.2f MB", size / (1024.0 * 1024.0));
         }
     }
 
@@ -174,91 +229,6 @@ public class PackUtils {
             }
         }
         return null;
-    }
-
-    public static void sendFullPack(ResourcePackProfile pack, UUID player) {
-        List<SyncPacketData.AssetData> assets = new CopyOnWriteArrayList<>();
-
-        Path packPath = getPackFolderPath(pack);
-
-        if (packPath == null || !Files.exists(packPath)) {
-            System.err.println("Invalid resource pack path: " + packPath);
-            return;
-        }
-
-        boolean first = true;
-        int predictPacketAmount = predictPacketAmount(packPath);
-
-        try (Stream<Path> paths = Files.walk(packPath)) {
-            for (Path path : paths.toList()) {
-                if (!Files.isRegularFile(path)) {
-                    continue;
-                }
-
-                try (InputStream inputStream = Files.newInputStream(path)) {
-                    String content;
-                    String extension = FileUtils.getFileExtension(path.getFileName().toString());
-
-                    if (extension.equals(".png")) {
-                        BufferedImage image = ImageIO.read(inputStream);
-                        if (image == null) {
-                            LogWindow.addError("Failed to read image: " + path);
-                        }
-                        content = FileUtils.encodeImageToBase64(image);
-                    } else if (extension.equals(".ogg")) {
-                        content = new String(inputStream.readAllBytes());
-                    } else {
-                        content = new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
-                    }
-
-                    Path relativePath = packPath.relativize(path); // Get relative path from root (root being the pack folder)
-
-                    if (content.length() >= Packified.MAX_PACKET_SIZE) {
-                        // Split the asset into multiple chunks
-                        int requiredChunks = (int) Math.ceil((double) content.length() / Packified.MAX_PACKET_SIZE);
-                        for (int a = 0; a < requiredChunks; a++) {
-                            int start = a * Packified.MAX_PACKET_SIZE;
-                            int end = Math.min((a + 1) * Packified.MAX_PACKET_SIZE, content.length());
-                            String chunk = content.substring(start, end);
-                            String meta = "";
-                            if (first) {
-                                meta = FileUtils.getMCMetaContent(pack);
-                                first = false;
-                            }
-                            SyncPacketData data = new SyncPacketData(pack.getDisplayName().getString(), List.of(new SyncPacketData.AssetData(relativePath, extension, chunk, a == requiredChunks - 1)), meta, a == requiredChunks - 1, false, predictPacketAmount);
-                            sendFullPackPacket(data, player);
-                        }
-                        continue;
-                    }
-
-                    if (content.length() + assets.stream().mapToInt(cAsset -> cAsset.assetData().length()).sum() >= Packified.MAX_PACKET_SIZE) {
-                        List<SyncPacketData.AssetData> finalAssets = new ArrayList<>(assets);
-                        Collections.copy(finalAssets, assets);
-                        String meta = "";
-                        if (first) {
-                            meta = FileUtils.getMCMetaContent(pack);
-                            first = false;
-                        }
-                        SyncPacketData data = new SyncPacketData(pack.getDisplayName().getString(), finalAssets, meta, true, false, predictPacketAmount);
-                        sendFullPackPacket(data, player);
-                        assets.clear();
-                    }
-
-                    assets.add(new SyncPacketData.AssetData(relativePath, extension, content, true));
-                } catch (IOException e) {
-                    System.err.println("Error processing file: " + path);
-                    e.printStackTrace();
-                }
-            }
-
-            List<SyncPacketData.AssetData> finalAssets = new ArrayList<>(assets);
-            Collections.copy(finalAssets, assets);
-            SyncPacketData data = new SyncPacketData(pack.getDisplayName().getString(), finalAssets, FileUtils.getMCMetaContent(pack), true, true, 0);
-            sendFullPackPacket(data, player);
-            assets.clear();
-        } catch (IOException e) {
-            LogWindow.addError("Failed to access resource pack files: " + pack.getDisplayName().getString() + e);
-        }
     }
 
     private static int predictPacketAmount(Path packPath) {

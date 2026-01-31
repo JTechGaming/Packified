@@ -22,7 +22,7 @@ public class Packified implements ModInitializer {
     public static final String MOD_ID = "packified";
     public static Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
 
-    public static final String version = "1.2-1.21.7+d466";
+    public static final String version = "1.2-1.21.7+d485";
 
     public static List<UUID> moddedPlayers = new ArrayList<>();
 
@@ -52,6 +52,10 @@ public class Packified implements ModInitializer {
         PayloadTypeRegistry.playC2S().register(C2SInfoPacket.ID, C2SInfoPacket.CODEC);
         PayloadTypeRegistry.playC2S().register(C2SPushRequestPacket.ID, C2SPushRequestPacket.CODEC);
 
+        if (version.contains("+d")) {
+            debugMode = true;
+        }
+
         ServerPlayNetworking.registerGlobalReceiver(C2SSyncPackChanges.ID, (payload, context) -> {
             context.server().execute(() -> {
                 if (payload.markedPlayers().getFirst().getLeastSignificantBits() == 0 && payload.markedPlayers().getFirst().getMostSignificantBits() == 0) {
@@ -73,12 +77,13 @@ public class Packified implements ModInitializer {
 
         ServerPlayNetworking.registerGlobalReceiver(C2SSendFullPack.ID, (payload, context) -> {
             context.server().execute(() -> {
-                // Send the full pack to all players
                 ServerPlayerEntity player = context.server().getPlayerManager().getPlayer(payload.player());
                 if (player == null) {
                     return;
                 }
-                LOGGER.info(payload.packetData().lastData() ? "Last data chunk received" : "Receiving full pack from player: {}", player.getUuid());
+                if (debugMode) {
+                    LOGGER.info(payload.packetData().lastChunk() ? "Last data chunk received" : "Receiving full pack from player: {}", player.getUuid());
+                }
                 ServerPlayNetworking.send(player, new S2CSendFullPack(payload.packetData()));
             });
         });

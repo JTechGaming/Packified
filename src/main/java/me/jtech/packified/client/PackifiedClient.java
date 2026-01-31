@@ -48,10 +48,17 @@ import org.lwjgl.glfw.GLFW;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
 
 @Environment(EnvType.CLIENT)
 public class PackifiedClient implements ClientModInitializer {
@@ -66,7 +73,6 @@ public class PackifiedClient implements ClientModInitializer {
     public static List<UUID> markedPlayers = new ArrayList<>();
     public static Map<UUID, String> playerPacks = new HashMap<>();
 
-    private static final List<SyncPacketData.AssetData> chunkedAssetsBuffer = new ArrayList<>();
     private static boolean isFirstPacket = true;
 
     public static boolean reloaded = false;
@@ -153,27 +159,29 @@ public class PackifiedClient implements ClientModInitializer {
             PackHelper.updateCurrentPack(pack);
 
             SyncPacketData data = payload.packetData();
-            accumulativeAssetDownload(data, pack, notification.get());
+            accumulativeZipDownload(data, notification.get());
         });
 
         ClientPlayNetworking.registerGlobalReceiver(S2CSendFullPack.ID, (payload, context) -> {
-            // Logic to fully download, add and apply the pack
             CompletableFuture.runAsync(() -> {
                 SyncPacketData data = payload.packetData();
+
                 if (isFirstPacket) {
                     isFirstPacket = false;
-                    // Create the pack
-                    FileUtils.createPack(data.packName(), List.of(), data.metadata());
-
-                    notification.set(NotificationHelper.addNotification("Loading pack: " + data.packName(), "Downloading assets...", 5000, 0, data.packetAmount()));
+                    notification.set(NotificationHelper.addNotification(
+                            "Loading pack: " + data.packName(),
+                            "Downloading...",
+                            5000,
+                            0,
+                            data.totalChunks()
+                    ));
                 }
-                if (notification.get() != null) {
-                    notification.get().setProgress(notification.get().getProgress() + 1);
-                }
 
-                LogWindow.addPackDownloadInfo("Downloading pack from server: " + payload.packetData().packName());
-                LogWindow.addPackDownloadInfo(notification.get().getProgress() + " / " + notification.get().getMaxProgress());
-                accumulativeAssetDownload(data, PackHelper.getCurrentPack(), notification.get());
+                accumulativeZipDownload(data, notification.get());
+
+                if (data.lastChunk()) {
+                    isFirstPacket = true;
+                }
             });
         });
 
@@ -189,7 +197,7 @@ public class PackifiedClient implements ClientModInitializer {
             if (pack == null) {
                 return;
             }
-            PackUtils.sendFullPack(pack, payload.player());
+            PackUtils.sendFullPackZipped(pack, payload.player());
         });
 
         ClientPlayNetworking.registerGlobalReceiver(S2CPlayerHasMod.ID, (payload, context) -> {
@@ -256,59 +264,158 @@ public class PackifiedClient implements ClientModInitializer {
         }
     }
 
-    private static void accumulativeAssetDownload(SyncPacketData data, ResourcePackProfile pack, NotificationHelper.Notification notification) {
-        for (SyncPacketData.AssetData asset : data.assets()) {
-            if (!asset.finalChunk()) {
-                if (bufferContainsAsset(asset.path())) {
-                    int index = bufferGetAsset(asset.path());
-                    chunkedAssetsBuffer.get(index).setAssetData(chunkedAssetsBuffer.get(index).assetData() + asset.assetData());
-                } else {
-                    chunkedAssetsBuffer.add(asset);
+    private static final Map<String, Map<Integer, byte[]>> zipChunksMap = new HashMap<>();
+    private static String currentPackName = null;
+
+    private static void accumulativeZipDownload(SyncPacketData data, NotificationHelper.Notification notification) {
+        String packName = data.packName();
+
+        // Initialize tracking for this pack if first chunk
+        if (data.chunkIndex() == 0) {
+            currentPackName = packName;
+            zipChunksMap.put(packName, new HashMap<>());
+
+            // Create the pack folder if it doesn't exist
+            File packFolder = new File("resourcepacks/" + packName);
+            if (!packFolder.exists()) {
+                packFolder.mkdirs();
+            }
+
+            if (notification == null) {
+                notification = NotificationHelper.addNotification(
+                        "Loading pack: " + packName,
+                        "Downloading...",
+                        5000,
+                        0,
+                        data.totalChunks()
+                );
+            }
+        }
+
+        // Store this chunk
+        zipChunksMap.get(packName).put(data.chunkIndex(), data.zipChunk());
+
+        // Update progress
+        if (notification != null) {
+            notification.setProgress(data.chunkIndex() + 1);
+        }
+
+        if (Packified.debugMode) {
+            LogWindow.addPackDownloadInfo("Received chunk " + (data.chunkIndex() + 1) + " / " + data.totalChunks());
+        }
+
+        // Check if we have all chunks
+        Map<Integer, byte[]> chunks = zipChunksMap.get(packName);
+        if (chunks.size() == data.totalChunks() || data.lastChunk()) {
+            System.out.println("Last chunk, assembling zip");
+            // Reassemble the zip file
+            try {
+                // Calculate total size
+                int totalSize = 0;
+                for (byte[] chunk : chunks.values()) {
+                    totalSize += chunk.length;
                 }
-                continue;
+
+                // Combine all chunks in order
+                byte[] completeZip = new byte[totalSize];
+                int offset = 0;
+                for (int i = 0; i < data.totalChunks(); i++) {
+                    byte[] chunk = chunks.get(i);
+                    if (chunk == null) {
+                        LogWindow.addWarning("Potentially missing chunks " + i + " for pack: " + packName);
+                    }
+                    System.arraycopy(chunk, 0, completeZip, offset, chunk.length);
+                    offset += chunk.length;
+                }
+
+                // Save to temp file and unzip
+                Path tempZipPath = Files.createTempFile("received_pack_", ".zip");
+                Files.write(tempZipPath, completeZip);
+
+                // Unzip to pack folder
+                File packFolder = new File("resourcepacks/" + packName);
+                unzipPack(tempZipPath.toFile(), packFolder);
+
+                // Delete temp zip
+                Files.delete(tempZipPath);
+
+                // Save metadata
+                if (!data.metadata().isEmpty()) {
+                    FileUtils.setMCMetaContent(PackUtils.getPack(packName), data.metadata());
+                }
+
+                // Clean up
+                zipChunksMap.remove(packName);
+                currentPackName = null;
+
+                // Reload pack
+                CompletableFuture.runAsync(PackUtils::reloadPack);
+
+                if (notification != null) {
+                    notification.setProgress(notification.getMaxProgress());
+                }
+
+                LogWindow.addInfo("Pack " + packName + " downloaded and extracted successfully!");
+
+            } catch (IOException e) {
+                LogWindow.addError("Failed to reassemble and extract pack: " + e.getMessage());
+                e.printStackTrace();
+                zipChunksMap.remove(packName);
             }
-            SyncPacketData.AssetData assetData;
-            if (bufferContainsAsset(asset.path())) {
-                int index = bufferGetAsset(asset.path());
-                assetData = chunkedAssetsBuffer.get(index);
-                assetData.setAssetData(assetData.assetData() + asset.assetData());
-                chunkedAssetsBuffer.remove(index);
-            } else {
-                assetData = asset;
-            }
-            FileUtils.saveSingleFile(assetData.path(), assetData.extension(), assetData.assetData(), pack);
-        }
-        if (data.finalChunk()) {
-            chunkedAssetsBuffer.clear();
-        }
-        if (data.lastData()) {
-            PackifiedClient.LOGGER.info("lastData");
-            FileUtils.setMCMetaContent(pack, data.metadata());
-            CompletableFuture.runAsync(PackUtils::reloadPack);
-            if (notification != null) {
-                notification.setProgress(notification.getMaxProgress());
-            }
-            isFirstPacket = true;
-            LogWindow.addInfo("Pack " + pack.getDisplayName().getString() + " downloaded successfully!");
         }
     }
 
-    public static int bufferGetAsset(Path path) {
-        for (SyncPacketData.AssetData asset : chunkedAssetsBuffer) {
-            if (asset.path().equals(path)) {
-                return chunkedAssetsBuffer.indexOf(asset);
+    private static void unzipPack(File zipFile, File targetDir) throws IOException {
+        // Clear existing files in target directory (except pack.mcmeta which will be overwritten)
+        if (targetDir.exists()) {
+            File[] files = targetDir.listFiles();
+            if (files != null) {
+                for (File file : files) {
+                    if (!file.getName().equals("pack.mcmeta")) {
+                        deleteRecursively(file);
+                    }
+                }
             }
         }
-        return 0;
+        targetDir.mkdirs();
+
+        try (ZipInputStream zis = new ZipInputStream(new FileInputStream(zipFile))) {
+            ZipEntry zipEntry;
+            while ((zipEntry = zis.getNextEntry()) != null) {
+                File destFile = new File(targetDir, zipEntry.getName());
+
+                if (zipEntry.isDirectory()) {
+                    destFile.mkdirs();
+                } else {
+                    // Create parent directories
+                    destFile.getParentFile().mkdirs();
+
+                    // Write file
+                    try (FileOutputStream fos = new FileOutputStream(destFile)) {
+                        byte[] buffer = new byte[8192];
+                        int len;
+                        while ((len = zis.read(buffer)) > 0) {
+                            fos.write(buffer, 0, len);
+                        }
+                    }
+                }
+                zis.closeEntry();
+            }
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
     }
 
-    public static boolean bufferContainsAsset(Path path) {
-        for (SyncPacketData.AssetData asset : chunkedAssetsBuffer) {
-            if (asset.path().equals(path)) {
-                return true;
+    private static void deleteRecursively(File file) {
+        if (file.isDirectory()) {
+            File[] files = file.listFiles();
+            if (files != null) {
+                for (File f : files) {
+                    deleteRecursively(f);
+                }
             }
         }
-        return false;
+        file.delete();
     }
 
     private boolean saveKeyPressed = false;
