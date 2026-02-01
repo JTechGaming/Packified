@@ -6,6 +6,7 @@ import com.mojang.blaze3d.opengl.GlStateManager;
 import com.mojang.blaze3d.systems.ProjectionType;
 import com.mojang.blaze3d.systems.RenderPass;
 import com.mojang.blaze3d.systems.RenderSystem;
+import com.mojang.blaze3d.textures.FilterMode;
 import com.mojang.blaze3d.textures.GpuTexture;
 import com.mojang.blaze3d.vertex.VertexFormat;
 import imgui.*;
@@ -37,6 +38,7 @@ import net.fabricmc.api.Environment;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gl.Framebuffer;
 import net.minecraft.client.gl.SimpleFramebuffer;
+import net.minecraft.client.input.SystemKeycodes;
 import net.minecraft.client.network.ClientPlayerInteractionManager;
 import net.minecraft.client.render.*;
 import net.minecraft.resource.Resource;
@@ -45,6 +47,7 @@ import net.minecraft.util.Identifier;
 import org.jetbrains.annotations.ApiStatus;
 import org.joml.Matrix4f;
 import org.joml.Matrix4fStack;
+import org.joml.Vector3f;
 import org.joml.Vector4f;
 import org.lwjgl.BufferUtils;
 import org.lwjgl.glfw.GLFW;
@@ -173,7 +176,7 @@ public class ImGuiImplementation {
         currentFont = loadedFonts.get(PreferencesWindow.selectedFont.get());
 
         data.setConfigFlags(ImGuiConfigFlags.DockingEnable | ImGuiConfigFlags.ViewportsEnable);
-        data.setConfigMacOSXBehaviors(MinecraftClient.IS_SYSTEM_MAC);
+        data.setConfigMacOSXBehaviors(SystemKeycodes.IS_MAC_OS);
 
         imGuiImplGlfw.init(MinecraftClient.getInstance().getWindow().getHandle(), true);
         imGuiImplGl3.init();
@@ -634,7 +637,7 @@ public class ImGuiImplementation {
             GpuBuffer vertexBuffer = VertexFormats.POSITION_TEXTURE.uploadImmediateVertexBuffer(meshData.getBuffer());
 
             GpuBufferSlice gpuBufferSlice = RenderSystem.getDynamicUniforms().write(RenderSystem.getModelViewMatrix(), new Vector4f(1.0F, 1.0F, 1.0F, 1.0F),
-                    RenderSystem.getModelOffset(), RenderSystem.getTextureMatrix(), RenderSystem.getShaderLineWidth());
+                    new Vector3f(), new Matrix4f());
 
             try (RenderPass renderPass = RenderSystem.getDevice().createCommandEncoder().createRenderPass(() -> "Blit render target", outputFramebuffer.getColorAttachmentView(), OptionalInt.empty())) {
                 renderPass.setPipeline(PackifiedClient.VIEWPORT_RESIZE_PIPELINE);
@@ -642,7 +645,7 @@ public class ImGuiImplementation {
                 renderPass.setUniform("DynamicTransforms", gpuBufferSlice);
                 renderPass.setVertexBuffer(0, vertexBuffer);
                 renderPass.setIndexBuffer(gpuBuffer, shapeIndexBuffer.getIndexType());
-                renderPass.bindSampler("InSampler", framebuffer.getColorAttachmentView());
+                renderPass.bindTexture("InSampler", framebuffer.getColorAttachmentView(), RenderSystem.getSamplerCache().getRepeated(FilterMode.NEAREST));
                 renderPass.drawIndexed(0, 0, 6, 1);
             }
             // -------------------------------------------------------

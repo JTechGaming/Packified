@@ -62,8 +62,8 @@ public class MultiplayerWindow {
                     ImGui.tableHeadersRow();
                     ImGui.tableNextRow();
                     MinecraftClient.getInstance().getNetworkHandler().getPlayerList().forEach(p -> {
-                        UUID uuid = p.getProfile().getId();
-                        String displayName = p.getProfile().getName();
+                        UUID uuid = p.getProfile().id();
+                        String displayName = p.getProfile().name();
                         ImGui.tableNextRow();
                         ImGui.tableSetColumnIndex(0);
                         boolean greyedOut = !Packified.moddedPlayers.contains(uuid);

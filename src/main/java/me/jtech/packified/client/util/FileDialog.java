@@ -3,6 +3,7 @@ package me.jtech.packified.client.util;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.input.SystemKeycodes;
 import org.lwjgl.PointerBuffer;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.util.nfd.NFDFilterItem;
@@ -78,7 +79,7 @@ public class FileDialog {
             }
         };
 
-        if (MinecraftClient.IS_SYSTEM_MAC) {
+        if (SystemKeycodes.IS_MAC_OS) {
             // MacOS needs dialogs to be run from the main thread
             MinecraftClient.getInstance().submit(runnable);
         } else {
@@ -137,7 +138,7 @@ public class FileDialog {
             }
         };
 
-        if (MinecraftClient.IS_SYSTEM_MAC) {
+        if (SystemKeycodes.IS_MAC_OS) {
             // MacOS needs dialogs to be run from the main thread
             MinecraftClient.getInstance().submit(runnable);
         } else {

@@ -38,6 +38,7 @@ import net.minecraft.client.network.ClientPlayerInteractionManager;
 import net.minecraft.client.option.KeyBinding;
 import net.minecraft.client.render.VertexFormats;
 import net.minecraft.client.util.InputUtil;
+import net.minecraft.client.util.Window;
 import net.minecraft.resource.ResourcePackProfile;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.Util;
@@ -91,13 +92,15 @@ public class PackifiedClient implements ClientModInitializer {
                     .build()
     );
 
+    private static final KeyBinding.Category PACKIFIED_EDITOR_CATEGORY = KeyBinding.Category.create(Packified.identifier("editor"));
+
     @Override
     public void onInitializeClient() {
         openMenuKeybind = KeyBindingHelper.registerKeyBinding(new KeyBinding(
                 "key.packified.menu", // The translation key of the keybinding's name
                 InputUtil.Type.KEYSYM, // The type of the keybinding, KEYSYM for keyboard, MOUSE for mouse.
                 GLFW.GLFW_KEY_F8, // The keycode of the key
-                "category.packified.editor" // The translation key of the keybinding's category.
+                PACKIFIED_EDITOR_CATEGORY // The translation key of the keybinding's category.
         ));
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             if (openMenuKeybind.wasPressed()) {
@@ -247,7 +250,7 @@ public class PackifiedClient implements ClientModInitializer {
 
     public static void sendBlockUpdateToLoadedChunks() {
         MinecraftClient client = MinecraftClient.getInstance();
-        if (client.player != null && client.player.clientWorld == null) return;
+        if (client.player != null && client.world == null) return;
 
         int renderDistance = client.options.getViewDistance().getValue() * 2 + 2;
         ChunkPos chunkPos = client.player.getChunkPos();
@@ -256,7 +259,7 @@ public class PackifiedClient implements ClientModInitializer {
             for (int j = 0; j < renderDistance; j++) {
                 int chunkX = chunkPos.x + i - renderDistance / 2;
                 int chunkZ = chunkPos.z + j - renderDistance / 2;
-                int ySections = ChunkSectionPos.getSectionCoord(client.player.clientWorld.getHeight());
+                int ySections = ChunkSectionPos.getSectionCoord(client.world.getHeight());
                 for (int chunkY = 0; chunkY < ySections; chunkY++) {
                     client.worldRenderer.scheduleChunkRender(chunkX, chunkY, chunkZ);
                 }
@@ -424,12 +427,12 @@ public class PackifiedClient implements ClientModInitializer {
     private boolean enterGameKeyPressed = false;
 
     private void handleKeypresses() {
-        long windowHandle = MinecraftClient.getInstance().getWindow().getHandle();
-        boolean ctrlPressed = InputUtil.isKeyPressed(windowHandle, GLFW.GLFW_KEY_LEFT_CONTROL) || InputUtil.isKeyPressed(windowHandle, GLFW.GLFW_KEY_RIGHT_CONTROL);
-        boolean shiftPressed = InputUtil.isKeyPressed(windowHandle, GLFW.GLFW_KEY_LEFT_SHIFT) || InputUtil.isKeyPressed(windowHandle, GLFW.GLFW_KEY_RIGHT_SHIFT);
+        Window window = MinecraftClient.getInstance().getWindow();
+        boolean ctrlPressed = InputUtil.isKeyPressed(window, GLFW.GLFW_KEY_LEFT_CONTROL) || InputUtil.isKeyPressed(window, GLFW.GLFW_KEY_RIGHT_CONTROL);
+        boolean shiftPressed = InputUtil.isKeyPressed(window, GLFW.GLFW_KEY_LEFT_SHIFT) || InputUtil.isKeyPressed(window, GLFW.GLFW_KEY_RIGHT_SHIFT);
 
         if (ctrlPressed) {
-            if (InputUtil.isKeyPressed(windowHandle, GLFW.GLFW_KEY_F6)) {
+            if (InputUtil.isKeyPressed(window, GLFW.GLFW_KEY_F6)) {
                 if (enterGameKeyPressed) {
                     return;
                 }
@@ -443,7 +446,7 @@ public class PackifiedClient implements ClientModInitializer {
                 return;
             }
 
-            if (InputUtil.isKeyPressed(windowHandle, GLFW.GLFW_KEY_R)) {
+            if (InputUtil.isKeyPressed(window, GLFW.GLFW_KEY_R)) {
                 if (reloadKeyPressed) {
                     return;
                 }
@@ -453,7 +456,7 @@ public class PackifiedClient implements ClientModInitializer {
                 reloadKeyPressed = false;
             }
 
-            if (InputUtil.isKeyPressed(windowHandle, GLFW.GLFW_KEY_S)) {
+            if (InputUtil.isKeyPressed(window, GLFW.GLFW_KEY_S)) {
                 if (saveKeyPressed) {
                     return;
                 }
@@ -475,7 +478,7 @@ public class PackifiedClient implements ClientModInitializer {
             } else {
                 saveKeyPressed = false;
             }
-            if (InputUtil.isKeyPressed(windowHandle, GLFW.GLFW_KEY_W)) {
+            if (InputUtil.isKeyPressed(window, GLFW.GLFW_KEY_W)) {
                 if (closeKeyPressed) {
                     return;
                 }
@@ -546,18 +549,16 @@ public class PackifiedClient implements ClientModInitializer {
 
     public static void changeGameMode(GameMode gameMode) {
         MinecraftClient client = MinecraftClient.getInstance();
-        if (client.player.hasPermissionLevel(2)) {
-            if (gameMode.equals(GameMode.CREATIVE)) {
-                client.player.networkHandler.sendChatCommand("gamemode creative");
-            } else if (gameMode.equals(GameMode.SURVIVAL)) {
-                client.player.networkHandler.sendChatCommand("gamemode survival");
-            } else if (gameMode.equals(GameMode.SPECTATOR)) {
-                client.player.networkHandler.sendChatCommand("gamemode spectator");
-            } else if (gameMode.equals(GameMode.ADVENTURE)) {
-                client.player.networkHandler.sendChatCommand("gamemode adventure");
-            } else {
-                LOGGER.error("Unknown game mode: {}", gameMode);
-            }
+        if (gameMode.equals(GameMode.CREATIVE)) {
+            client.player.networkHandler.sendChatCommand("gamemode creative");
+        } else if (gameMode.equals(GameMode.SURVIVAL)) {
+            client.player.networkHandler.sendChatCommand("gamemode survival");
+        } else if (gameMode.equals(GameMode.SPECTATOR)) {
+            client.player.networkHandler.sendChatCommand("gamemode spectator");
+        } else if (gameMode.equals(GameMode.ADVENTURE)) {
+            client.player.networkHandler.sendChatCommand("gamemode adventure");
+        } else {
+            LOGGER.error("Unknown game mode: {}", gameMode);
         }
     }
 
