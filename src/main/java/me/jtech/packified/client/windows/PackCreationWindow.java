@@ -296,7 +296,7 @@ public class PackCreationWindow {
     }
 
     private static String getCurrentVersion() {
-        return SharedConstants.getGameVersion().packVersion(ResourceType.CLIENT_RESOURCES) + "";
+        return SharedConstants.getGameVersion().getResourceVersion(ResourceType.CLIENT_RESOURCES) + "";
     }
 
     private static Map<String, String> assemblePackVersions() {

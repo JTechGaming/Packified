@@ -1,7 +1,6 @@
 package me.jtech.packified.client.imgui;
 
 import com.mojang.blaze3d.buffers.GpuBuffer;
-import com.mojang.blaze3d.buffers.GpuBufferSlice;
 import com.mojang.blaze3d.opengl.GlStateManager;
 import com.mojang.blaze3d.systems.ProjectionType;
 import com.mojang.blaze3d.systems.RenderPass;
@@ -588,17 +587,10 @@ public class ImGuiImplementation {
         return texture;
     }
 
-    private static ProjectionMatrix2 projectionBuffers = null;
     private static Framebuffer outputFramebuffer = null;
 
     public static void blit(Framebuffer framebuffer, int width, int height, float x1, float y1, float x2, float y2) {
-        if (projectionBuffers == null) {
-            projectionBuffers = new ProjectionMatrix2("Blit render target", 1000.0f, 3000.0f, true);
-        }
-        if (outputFramebuffer == null) {
-            outputFramebuffer = new SimpleFramebuffer(null, 1, 1, true);
-        }
-
+        if (!initialized || !isActiveInternal()) return;
         GlStateManager._viewport(0, 0, width, height); // Resize the viewport itself
 
         // Resize the framebuffer if the viewport size has changed
@@ -618,7 +610,8 @@ public class ImGuiImplementation {
         Matrix4fStack modelViewStack = RenderSystem.getModelViewStack();
         modelViewStack.pushMatrix();
         modelViewStack.set(new Matrix4f().translation(0.0f, 0.0f, -1500.0f)); // Ensure the following will be visible within the orthographic projection
-        RenderSystem.setProjectionMatrix(projectionBuffers.set(width, height), ProjectionType.ORTHOGRAPHIC); // Update the projection matrix to the new size
+
+        RenderSystem.setProjectionMatrix(new Matrix4f().setOrtho(0.0f, width, height, 0.0f, 1000.0f, 3000.0f), ProjectionType.ORTHOGRAPHIC); // Update the projection matrix to the new size
 
         BufferBuilder builder = Tessellator.getInstance().begin(VertexFormat.DrawMode.QUADS, VertexFormats.POSITION_TEXTURE);
         // Draw a quad that fills up the area where the viewport needs to be
@@ -633,22 +626,17 @@ public class ImGuiImplementation {
             GpuBuffer gpuBuffer = shapeIndexBuffer.getIndexBuffer(6);
             GpuBuffer vertexBuffer = VertexFormats.POSITION_TEXTURE.uploadImmediateVertexBuffer(meshData.getBuffer());
 
-            GpuBufferSlice gpuBufferSlice = RenderSystem.getDynamicUniforms().write(RenderSystem.getModelViewMatrix(), new Vector4f(1.0F, 1.0F, 1.0F, 1.0F),
-                    RenderSystem.getModelOffset(), RenderSystem.getTextureMatrix(), RenderSystem.getShaderLineWidth());
-
-            try (RenderPass renderPass = RenderSystem.getDevice().createCommandEncoder().createRenderPass(() -> "Blit render target", outputFramebuffer.getColorAttachmentView(), OptionalInt.empty())) {
+            try (RenderPass renderPass = RenderSystem.getDevice().createCommandEncoder().createRenderPass(outputFramebuffer.getColorAttachment(), OptionalInt.empty())) {
                 renderPass.setPipeline(PackifiedClient.VIEWPORT_RESIZE_PIPELINE);
-                RenderSystem.bindDefaultUniforms(renderPass);
-                renderPass.setUniform("DynamicTransforms", gpuBufferSlice);
                 renderPass.setVertexBuffer(0, vertexBuffer);
                 renderPass.setIndexBuffer(gpuBuffer, shapeIndexBuffer.getIndexType());
-                renderPass.bindSampler("InSampler", framebuffer.getColorAttachmentView());
-                renderPass.drawIndexed(0, 0, 6, 1);
+                renderPass.bindSampler("InSampler", framebuffer.getColorAttachment());
+                renderPass.drawIndexed(0, 6);
             }
             // -------------------------------------------------------
         }
 
-        RenderSystem.setProjectionMatrix(RenderSystem.getProjectionMatrixBuffer(), RenderSystem.getProjectionType());
+        RenderSystem.setProjectionMatrix(RenderSystem.getProjectionMatrix(), RenderSystem.getProjectionType());
         modelViewStack.popMatrix();
 
         outputFramebuffer.blitToScreen(); // Blit the temporary framebuffer to the screen instead of the main framebuffer

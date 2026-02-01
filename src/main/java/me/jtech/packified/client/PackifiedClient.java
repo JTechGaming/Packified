@@ -29,8 +29,6 @@ import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
-import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
-import net.fabricmc.fabric.api.client.rendering.v1.hud.VanillaHudElements;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gl.RenderPipelines;
 import net.minecraft.client.gl.UniformType;
@@ -85,7 +83,7 @@ public class PackifiedClient implements ClientModInitializer {
                     .withFragmentShader(Identifier.of("packified", "core/blit_screen"))
                     .withSampler("InSampler")
                     .withDepthWrite(false)
-                    .withUniform("DynamicTransforms", UniformType.UNIFORM_BUFFER)
+                    .withUniform("DynamicTransforms", UniformType.MATRIX4X4)
                     .withDepthTestFunction(DepthTestFunction.NO_DEPTH_TEST)
                     .withVertexFormat(VertexFormats.POSITION_TEXTURE, VertexFormat.DrawMode.QUADS)
                     .build()
@@ -126,24 +124,6 @@ public class PackifiedClient implements ClientModInitializer {
                 }
 
                 handleKeypresses();
-            }
-        });
-
-        HudElementRegistry.attachElementBefore(VanillaHudElements.CHAT, Identifier.of(MOD_ID, "before_chat"), (context, tickCounter) -> {
-            if (loading) {
-                int x = 10, y = 10; // Position on screen
-                int width = 24, height = 24; // Size of the icon
-                float angle = ((float) Util.getMeasuringTimeMs() / 8) % 360;
-
-                context.getMatrices().pushMatrix();
-                context.getMatrices().translate(x + (float) width /2, y + (float) height /2); // Move to the center of the icon
-                context.getMatrices().rotate(angle); // Rotate around the center
-                context.getMatrices().translate((float) -width /2, (float) -height /2);
-
-                Identifier texture = Identifier.of(MOD_ID, "textures/ui/reload.png");
-                context.drawTexture(RenderPipelines.GUI_TEXTURED, texture, 0, 0, 0, 0, width, height, width, height);
-
-                context.getMatrices().popMatrix();
             }
         });
 
