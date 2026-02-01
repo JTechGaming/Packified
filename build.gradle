@@ -1,17 +1,6 @@
-buildscript {
-    repositories {
-        mavenCentral()
-        maven { url 'https://jitpack.io' }
-        maven { url "https://plugins.gradle.org/m2/" }
-    }
-    dependencies {
-        classpath "gradle.plugin.com.github.johnrengelman:shadow:7.1.0"
-    }
-}
-
 plugins {
-    id 'fabric-loom' version '1.10.1'
-    id 'com.github.johnrengelman.shadow' version "7.1.2"
+    id 'fabric-loom' version '1.15-SNAPSHOT'
+    id 'com.gradleup.shadow' version "8.3.5"
     id 'maven-publish'
 }
 
@@ -211,7 +200,7 @@ task updateModInfo {
         }
 
         // Build new version
-        def newVersion = isDevBuild ? "${major}.${minor}.${patch}-${minecraft_version}+d${devVersion}" : "${major}.${minor}.${patch}"
+        def newVersion = isDevBuild ? "${major}.${minor}.${patch}-${minecraft_version}+d${devVersion}" : "${major}.${minor}.${patch}-${minecraft_version}"
         if (newVersion.contains(".null")) {
             newVersion = newVersion.replace(".null", "")
         }
