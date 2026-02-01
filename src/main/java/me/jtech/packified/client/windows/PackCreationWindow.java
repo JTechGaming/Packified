@@ -371,6 +371,17 @@ public class PackCreationWindow {
         resourcePackVersions.put("68.0", "25w36a - 25w36b");
         resourcePackVersions.put("69.0", "25w37a - 1.21.10");
         resourcePackVersions.put("70.0", "25w41a");
+        resourcePackVersions.put("70.1", "25w42a");
+        resourcePackVersions.put("71.0", "25w43a");
+        resourcePackVersions.put("72.0", "25w44a");
+        resourcePackVersions.put("73.0", "25w45a");
+        resourcePackVersions.put("74.0", "25w46a");
+        resourcePackVersions.put("75.0", "1.21.11");
+        resourcePackVersions.put("76.0", "26.1 Snapshot 1");
+        resourcePackVersions.put("77.0", "26.1 Snapshot 2");
+        resourcePackVersions.put("78.0", "26.1 Snapshot 3");
+        resourcePackVersions.put("78.1", "26.1 Snapshot 4");
+        resourcePackVersions.put("79.0", "26.1 Snapshot 5");
 
         return resourcePackVersions;
     }

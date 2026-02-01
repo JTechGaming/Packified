@@ -85,7 +85,7 @@ public class FileHierarchyWindow {
 
     public static void clearCache() {
         textureCache.clear();
-        if (PackHelper.isValid()) {
+        if (PackHelper.isValid() && PackHelper.getWatcher() != null) {
             PackHelper.disposeWatcher();
         }
         LogWindow.addDebugInfo("PackWatcher: Cache cleared and watcher reset.");

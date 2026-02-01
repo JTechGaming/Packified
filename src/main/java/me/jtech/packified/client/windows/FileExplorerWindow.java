@@ -106,7 +106,7 @@ public class FileExplorerWindow {
             return;
         }
 
-        if (PackHelper.isValid() && !this.currentDirectory.toString().contains(FileUtils.getPackFolderPath().toString())) {
+        if (PackHelper.isValid() && currentDirectory != null && !this.currentDirectory.toString().contains(FileUtils.getPackFolderPath().toString())) {
             currentDirectory = null;
         }
 
@@ -114,9 +114,9 @@ public class FileExplorerWindow {
 
         ImGuiImplementation.saveExplorers();
 
-        var currentPack = PackHelper.getCurrentPack().createResourcePack();
 
         if (PackHelper.isValid()) {
+            var currentPack = PackHelper.getCurrentPack().createResourcePack();
             Path packFolder = PackUtils.getPackFolder(currentPack);
             // Only initialize/reset when there's no current directory or the pack changed
             if (currentDirectory == null) {
@@ -127,6 +127,7 @@ public class FileExplorerWindow {
         if (ImGui.begin("File Explorer " + (i + 1), isOpen) && PackHelper.isValid()) {
             if (ImGui.beginChild("Left Panel##" + i, 220f, 0f, true)) {
                 Path tempPath = currentDirectory;
+                var currentPack = PackHelper.getCurrentPack().createResourcePack();
                 Path packPath = PackUtils.getPackFolder(currentPack);
                 if (packPath != null) {
                     Path root = packPath.getParent();

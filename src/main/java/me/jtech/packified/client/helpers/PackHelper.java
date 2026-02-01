@@ -26,7 +26,9 @@ public class PackHelper {
         EditorWindow.openFiles.clear();
         if (PackHelper.isValid()) {
             PackUtils.unloadPack(PackHelper.getCurrentPack());
-            disposeWatcher();
+            if (PackHelper.getWatcher() != null) {
+                disposeWatcher();
+            }
         }
         PackUtils.refresh();
 

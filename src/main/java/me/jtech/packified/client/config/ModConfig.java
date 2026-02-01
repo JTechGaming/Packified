@@ -3,6 +3,8 @@ package me.jtech.packified.client.config;
 import com.google.common.reflect.TypeToken;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import com.google.gson.JsonSyntaxException;
+import com.google.gson.stream.MalformedJsonException;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.resource.ResourcePackProfile;
 
@@ -100,7 +102,12 @@ public class ModConfig {
             }
         }
         try (Reader reader = Files.newBufferedReader(DOCK_FILE)) {
-            DockConfig config = GSON.fromJson(reader, DockConfig.class);
+            DockConfig config;
+            try {
+                 config = GSON.fromJson(reader, DockConfig.class);
+            } catch (JsonSyntaxException e) {
+                throw new RuntimeException("FAILED TO PARSE DOCKCONFIG: This is likely because you loaded a pack with a name containing special characters! " + e.getMessage());
+            }
             if (config == null) {
                 config = new DockConfig();
             }
