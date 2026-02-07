@@ -22,12 +22,12 @@ public class SpriteAtlasInfoMixin {
 
     @Shadow private Map<Identifier, Sprite> sprites;
 
-    @Inject(method = "upload", at = @At("HEAD"))
+    @Inject(method = "create", at = @At("HEAD"))
     private void packified$notifyOnAtlasUpload(CallbackInfo ci, @Local(argsOnly = true) SpriteLoader.StitchResult stitchResult) {
         LogWindow.addPackReloadInfo(String.format("Created: %sx%sx%s %s-atlas", stitchResult.width(), stitchResult.height(), stitchResult.mipLevel(), this.id));
     }
 
-    @Inject(method = "upload", at = @At(value = "INVOKE", target = "Ljava/lang/String;valueOf(Ljava/lang/Object;)Ljava/lang/String;"))
+    @Inject(method = "create", at = @At(value = "INVOKE", target = "Ljava/lang/String;valueOf(Ljava/lang/Object;)Ljava/lang/String;"))
     private void packified$notifyOnAtlasMissingTextureSprite(CallbackInfo ci, @Local(argsOnly = true) SpriteLoader.StitchResult stitchResult) {
         String idValue = String.valueOf(this.id);
         LogWindow.addWarning("Atlas '" + idValue + "' (" + this.sprites.size() + " sprites) has no missing texture sprite");

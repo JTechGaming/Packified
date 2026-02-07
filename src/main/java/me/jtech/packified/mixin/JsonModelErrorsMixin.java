@@ -13,10 +13,10 @@ import java.awt.*;
 @Mixin(ModelTextures.class)
 public class JsonModelErrorsMixin {
     @Inject(method = "add", at = @At(value = "INVOKE", target = "Lnet/minecraft/util/Identifier;tryParse(Ljava/lang/String;)Lnet/minecraft/util/Identifier;"), cancellable = true)
-    private static void packified$add(Identifier atlasTexture, String textureId, String value, ModelTextures.Textures.Builder builder, CallbackInfo ci) {
-        Identifier identifier = Identifier.tryParse(value);
+    private static void packified$add(String textureId, String spriteId, ModelTextures.Textures.Builder builder, CallbackInfo ci) {
+        Identifier identifier = Identifier.tryParse(spriteId);
         if (identifier == null) {
-            CornerNotificationsHelper.addNotification("Error loading file", value + " is not valid resource location", new Color(0xff0033), 5.0f);
+            CornerNotificationsHelper.addNotification("Error loading file", spriteId + " is not valid resource location", new Color(0xff0033), 5.0f);
         }
     }
 }
