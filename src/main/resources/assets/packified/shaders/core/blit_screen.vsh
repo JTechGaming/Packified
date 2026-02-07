@@ -3,8 +3,8 @@
 in vec3 Position;
 in vec2 UV;
 
-#moj_import <minecraft:dynamictransforms.glsl>
-#moj_import <minecraft:projection.glsl>
+uniform mat4 ModelViewMat;
+uniform mat4 ProjMat;
 
 out vec2 texCoord;
 

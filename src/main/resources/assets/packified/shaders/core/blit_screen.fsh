@@ -2,7 +2,7 @@
 
 uniform sampler2D InSampler;
 
-#moj_import <minecraft:dynamictransforms.glsl>
+uniform vec4 ColorModulator;
 
 in vec2 texCoord;
 

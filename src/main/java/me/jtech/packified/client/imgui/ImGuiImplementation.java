@@ -591,6 +591,9 @@ public class ImGuiImplementation {
 
     public static void blit(Framebuffer framebuffer, int width, int height, float x1, float y1, float x2, float y2) {
         if (!initialized || !isActiveInternal()) return;
+        if (outputFramebuffer == null) {
+            outputFramebuffer = new SimpleFramebuffer(null, 1, 1, true);
+        }
         GlStateManager._viewport(0, 0, width, height); // Resize the viewport itself
 
         // Resize the framebuffer if the viewport size has changed
