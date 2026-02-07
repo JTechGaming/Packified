@@ -18,7 +18,7 @@ import java.util.Map;
 
 @Environment(EnvType.CLIENT)
 public class PreferencesWindow {
-    public static ImBoolean stayInCreative = new ImBoolean(ModConfig.getBoolean("stayincreative", false));
+    public static ImBoolean stayInCreative = new ImBoolean(ModConfig.getBoolean("stayincreative", true));
     public static ImBoolean autoReloadAssets = new ImBoolean(ModConfig.getBoolean("autoreloadassets", false));
     public static ImBoolean dontSaveExplorerOnClose = new ImBoolean(ModConfig.getBoolean("dontsaveexploreronclose", false));
     public static ImInt maxBackupCount = new ImInt(ModConfig.getInt("maxBackupCount", 0)); // Maximum number of backups to keep
