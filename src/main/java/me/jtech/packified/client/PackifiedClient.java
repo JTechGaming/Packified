@@ -548,17 +548,9 @@ public class PackifiedClient implements ClientModInitializer {
     }
 
     public static void changeGameMode(GameMode gameMode) {
-        MinecraftClient client = MinecraftClient.getInstance();
-        if (gameMode.equals(GameMode.CREATIVE)) {
-            client.player.networkHandler.sendChatCommand("gamemode creative");
-        } else if (gameMode.equals(GameMode.SURVIVAL)) {
-            client.player.networkHandler.sendChatCommand("gamemode survival");
-        } else if (gameMode.equals(GameMode.SPECTATOR)) {
-            client.player.networkHandler.sendChatCommand("gamemode spectator");
-        } else if (gameMode.equals(GameMode.ADVENTURE)) {
-            client.player.networkHandler.sendChatCommand("gamemode adventure");
-        } else {
-            LOGGER.error("Unknown game mode: {}", gameMode);
+        ClientPlayerInteractionManager interactionManager = MinecraftClient.getInstance().interactionManager;
+        if (interactionManager != null) {
+            interactionManager.setGameMode(gameMode);
         }
     }
 
